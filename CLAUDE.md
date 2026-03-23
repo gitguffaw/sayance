@@ -1,0 +1,62 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Purpose
+
+**posix** is a benchmarking and measurement tool that quantifies how many tokens LLMs burn when reasoning about POSIX shell commands. The goal is to determine whether a hyper-efficient POSIX command reference is worth building.
+
+The canonical source of truth is **POSIX.1-2024 (Issue 8)**: https://pubs.opengroup.org/onlinepubs/9799919799/idx/utilities.html — which defines **155 utilities**.
+
+## Running the Benchmark
+
+```bash
+# Dry run (no API calls)
+python3 run_benchmark.py --dry-run
+
+# Run specific LLMs
+python3 run_benchmark.py --llms gemini
+python3 run_benchmark.py --llms gemini claude codex
+
+# Run specific questions
+python3 run_benchmark.py --questions Q1 Q2 Q16
+
+# Change the grading judge
+python3 run_benchmark.py --judge claude
+```
+
+No virtual environment or dependencies needed — pure stdlib Python 3.
+
+## Architecture
+
+Single-file CLI tool (`run_benchmark.py`) that:
+1. Calls LLM CLIs via `subprocess.run()` (list form, no shell injection)
+2. Parses JSON output from each CLI for token usage data
+3. Uses LLM-as-judge for accuracy grading (secondary metric)
+4. Saves results to `results/` as JSON
+
+**CLI invocation patterns:**
+- Claude: `claude -p "prompt" --output-format json`
+- Gemini: `gemini -p "prompt" -o json`
+- Codex: `codex exec --json --skip-git-repo-check "prompt"`
+
+## Key Files
+
+- `posix-utilities.txt` — All 155 POSIX Issue 8 utilities (source of truth)
+- `benchmark_data.json` — Structured questions with expected answers and required concepts
+- `run_benchmark.py` — Benchmark runner (being rebuilt for token measurement)
+- `docs/plans/` — Implementation plans (the deepened plan is the current roadmap)
+- `docs/brainstorms/` — Design exploration documents
+
+## Known Issues
+
+- **Gemini MCP prefix**: Gemini CLI prepends "MCP issues detected..." to output. Must strip before any JSON parsing.
+- **Codex needs git**: Requires `--skip-git-repo-check` flag since this directory isn't a git repo.
+- **POSIX Issue 8 vs 7**: `readlink`, `realpath`, and `timeout` are now POSIX (Issue 8, 2024). LLMs trained on older data will incorrectly call these "not POSIX." `c99` is now `c17`. The batch `q*` utilities and `fort77` were removed.
+
+## Important Context
+
+- The primary metric is **token cost**, not accuracy. Accuracy is secondary.
+- Token counts differ across providers (different tokenizers). Use native tokens for cost, tiktoken o200k_base for cross-model comparison.
+- Cache state (cold vs warm) creates 10x cost difference on Anthropic. Track per result.
+- LLM-as-judge is susceptible to prompt injection. Never use the same model as both test subject and judge.
