@@ -1,0 +1,97 @@
+{
+  "sort": [
+    "Order by second column only: sort -t',' -k2,2 file.csv",
+    "Sort numeric: sort -n file",
+    "Unique sort: sort -u file"
+  ],
+  "find": [
+    "Find files modified in last 24h: find / -name '*.conf' -mtime -1"
+  ],
+  "sed": [
+    "Replace all occurrences: sed 's/foo/bar/g' file > tmp && mv tmp file",
+    "DO NOT USE -i (not POSIX). Always use redirect and mv."
+  ],
+  "cut": [
+    "Extract 3rd column: cut -d: -f3 /etc/passwd"
+  ],
+  "uniq": [
+    "Count unique lines (must sort first): sort file | uniq | wc -l"
+  ],
+  "pax": [
+    "Create portable archive: pax -w -f archive.pax directory/",
+    "Copy directory tree: pax -rw src/ dest/",
+    "DO NOT USE tar (not guaranteed POSIX)."
+  ],
+  "grep": [
+    "Case-insensitive search: grep -i 'error' *.log"
+  ],
+  "test": [
+    "Check if file is readable: test -r file"
+  ],
+  "cp": [
+    "Recursive copy: cp -R src/ dest/"
+  ],
+  "comm": [
+    "Compare sorted files: comm file1 file2",
+    "Show lines unique to file1: comm -23 file1 file2"
+  ],
+  "od": [
+    "Hex dump: od -A x -t x1z file",
+    "DO NOT USE xxd or hexdump."
+  ],
+  "paste": [
+    "Combine side-by-side: paste file1 file2"
+  ],
+  "tr": [
+    "Uppercase to lowercase: tr '[:upper:]' '[:lower:]' < file"
+  ],
+  "nohup": [
+    "Run in background safely: nohup ./script.sh &"
+  ],
+  "readlink": [
+    "Resolve symlink: readlink symlink"
+  ],
+  "realpath": [
+    "Get absolute canonical path: realpath file"
+  ],
+  "timeout": [
+    "Kill command if slower than 30s: timeout 30 command"
+  ],
+  "split": [
+    "Split into 1000 line chunks: split -l 1000 largefile chunk_"
+  ],
+  "at": [
+    "Schedule one-time job: echo './script.sh' | at 0300 tomorrow"
+  ],
+  "join": [
+    "Merge on shared key: join -t',' file1 file2"
+  ],
+  "nl": [
+    "Add line numbers: nl file"
+  ],
+  "pathchk": [
+    "Check if filename is portable: pathchk -p filename"
+  ],
+  "tsort": [
+    "Topological sort: tsort < dependency_pairs.txt"
+  ],
+  "cksum": [
+    "Compute checksum: cksum file",
+    "DO NOT USE md5sum."
+  ],
+  "iconv": [
+    "Convert encoding: iconv -f ISO-8859-1 -t UTF-8 file"
+  ],
+  "mkfifo": [
+    "Create named pipe: mkfifo mypipe"
+  ],
+  "pr": [
+    "Paginate and number lines: pr -n file"
+  ],
+  "expr": [
+    "Arithmetic: expr '(' 3 + 5 ')' '*' 2"
+  ],
+  "uuencode": [
+    "Encode binary for email: uuencode file file | mail user@example.com"
+  ]
+}

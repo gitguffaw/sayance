@@ -1,31 +1,35 @@
 #!/usr/bin/env python3
-"""POSIX Token Efficiency Benchmark v0.2
+"""POSIX Token Efficiency Benchmark v0.4
 
 Measures how many tokens LLMs burn when reasoning about POSIX shell commands.
-Captures token usage from CLI JSON output, tracks accuracy as a secondary metric.
+Captures token, latency, and failure-mode data for shell tasks that already have
+short POSIX-native answers.
 
 Usage:
     python3 run_benchmark.py                        # Run all LLMs, all questions
     python3 run_benchmark.py --llms gemini           # Run only Gemini (free, validate first)
     python3 run_benchmark.py --judge claude           # Use Claude as grader
-    python3 run_benchmark.py --questions Q1 Q5        # Run specific questions only
+    python3 run_benchmark.py --questions T01 T17      # Run specific questions only
     python3 run_benchmark.py --dry-run                # Show what would be run
     python3 run_benchmark.py --no-grade               # Skip accuracy grading, tokens only
     python3 run_benchmark.py --delay 2                # 2-second pause between calls
-    python3 run_benchmark.py --max-workers 2           # Limit concurrency per provider
+    python3 run_benchmark.py --max-workers 2          # Limit concurrency per provider
 """
 
 import json
-import subprocess
-import sys
 import re
+import shlex
+import subprocess
 import argparse
+import threading
+import time
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from datetime import datetime
 from enum import StrEnum
+from html import escape
 from pathlib import Path
-from typing import TypedDict
 
 SCRIPT_DIR = Path(__file__).parent
 DATA_FILE = SCRIPT_DIR / "benchmark_data.json"
@@ -60,17 +64,50 @@ class AccuracyGrade:
 
 
 @dataclass(frozen=True)
+class ExecutionMetrics:
+    latency_ms: int
+    step_count: int
+    tool_call_count: int
+    tool_calls_by_type: dict[str, int] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class ResponseAnalysis:
+    minimal_answer: str
+    minimal_word_count: int
+    minimal_shell_token_count: int
+    response_word_count: int
+    minimal_answer_gap_words: int
+    verbosity_ratio: float
+    expected_command_hits: list[str] = field(default_factory=list)
+    trap_hits: list[str] = field(default_factory=list)
+    missing_required_concepts: list[str] = field(default_factory=list)
+    posix_compliant: bool = False
+    issue8_refusal: bool = False
+    failure_mode: str = "unknown"
+    estimated_excess_output_tokens: int = 0
+
+
+@dataclass(frozen=True)
 class QuestionResult:
     id: str
     llm: str
     model: str                   # e.g. "claude-opus-4-6", "gemini-3.1-pro-preview", "gpt-5.4"
     run_k: int
     question: str
-    response: str                # truncated to 500 chars
+    response: str                # full response text
     tokens: TokenUsage
+    execution: ExecutionMetrics
+    analysis: ResponseAnalysis
     accuracy: AccuracyGrade | None
     cache_state: str             # "cold" or "warm"
     timestamp: str
+
+
+@dataclass(frozen=True)
+class CLIInvocation:
+    stdout: str
+    latency_ms: int
 
 
 # ---------------------------------------------------------------------------
@@ -82,12 +119,6 @@ LLM_COMMANDS: dict[str, list[str]] = {
     "gemini": ["gemini", "-o", "json", "-p"],
     "codex": ["codex", "exec", "--json", "--skip-git-repo-check"],
 }
-
-SYSTEM_PROMPT = (
-    "You are answering questions about POSIX shell utilities. "
-    "Be specific about what is POSIX-compliant versus GNU/BSD extensions. "
-    "Be concise but precise."
-)
 
 
 NOISE_PREFIXES = (
@@ -105,6 +136,60 @@ NOISE_PREFIXES = (
     "Skill ",
     "[MCP error]",
 )
+
+
+_TRAP_PATTERNS_RAW: dict[str, list[str]] = {
+    "T02": [r"-newermt\b", r"-mmin\b"],
+    "T03": [r"sed\s+-i\b"],
+    "T06": [r"\btar\b"],
+    "T07": [r"grep\s+-r\b", r"grep\s+-P\b"],
+    "T08": [r"\becho\b", r"\[\["],
+    "T09": [r"cp\s+-a\b", r"cp\s+-r\b"],
+    "T10": [r"\bdiff\b"],
+    "T11": [r"\bxxd\b", r"\bhexdump\b"],
+    "T14": [r"\bscreen\b", r"\btmux\b", r"\bdisown\b"],
+    "T21": [r"cat\s+-n\b"],
+    "T23": [r"<\("],
+    "T25": [r"\bmd5sum\b", r"\bsha256sum\b"],
+    "T29": [r"\blet\b"],
+    "T30": [r"\bbase64\b"],
+}
+
+TRAP_PATTERNS_BY_ID: dict[str, list[re.Pattern]] = {
+    qid: [re.compile(p, re.IGNORECASE) for p in patterns]
+    for qid, patterns in _TRAP_PATTERNS_RAW.items()
+}
+
+_ISSUE8_REFUSAL_PATTERNS: list[re.Pattern] = [
+    re.compile(p) for p in (
+        r"there is no dedicated posix(?: shell)? utility",
+        r"not\W+posix(?:-compliant)?",
+        r"not in the posix standard",
+    )
+]
+
+ISSUE8_COMMANDS = {"readlink", "realpath", "timeout"}
+
+_posix_core_cache: str | None = None
+_posix_tldr_cache: dict | None = None
+
+
+def _load_posix_core() -> str | None:
+    global _posix_core_cache
+    if _posix_core_cache is None:
+        try:
+            _posix_core_cache = (SCRIPT_DIR / "posix-core.md").read_text()
+        except (FileNotFoundError, OSError) as e:
+            print(f"  WARNING: Could not load posix-core.md: {e}")
+            return None
+    return _posix_core_cache
+
+
+def _load_posix_tldr() -> dict:
+    global _posix_tldr_cache
+    if _posix_tldr_cache is None:
+        _posix_tldr_cache = json.loads((SCRIPT_DIR / "posix-tldr.json").read_text())
+    return dict(_posix_tldr_cache)
 
 
 def strip_cli_noise(output: str) -> str:
@@ -131,11 +216,48 @@ def strip_cli_noise(output: str) -> str:
     return "\n".join(cleaned).strip()
 
 
-def invoke_cli(llm: str, prompt: str, *, timeout_seconds: int = 90) -> str:
-    """Send a prompt to an LLM CLI and return raw stdout."""
+def count_words(text: str) -> int:
+    return len(re.findall(r"\S+", text))
+
+
+def count_shell_tokens(command: str) -> int:
+    try:
+        return len(shlex.split(command))
+    except ValueError:
+        return len(command.split())
+
+
+def flatten_numeric_metrics(
+    data: object,
+    *,
+    prefix: str = "",
+) -> dict[str, int]:
+    """Flatten nested numeric metrics into a single-level dict."""
+    flattened: dict[str, int] = {}
+    if isinstance(data, bool):
+        return flattened
+    if isinstance(data, int):
+        key = prefix or "value"
+        flattened[key] = data
+        return flattened
+    if isinstance(data, float):
+        key = prefix or "value"
+        flattened[key] = int(data)
+        return flattened
+    if isinstance(data, dict):
+        for key, value in data.items():
+            nested_prefix = f"{prefix}.{key}" if prefix else str(key)
+            for nested_key, nested_value in flatten_numeric_metrics(value, prefix=nested_prefix).items():
+                flattened[nested_key] = flattened.get(nested_key, 0) + nested_value
+    return flattened
+
+
+def invoke_cli(llm: str, prompt: str, *, timeout_seconds: int = 90) -> CLIInvocation:
+    """Send a prompt to an LLM CLI and return raw stdout plus latency."""
     cmd = LLM_COMMANDS[llm].copy()
     cmd.append(prompt)
 
+    started = time.perf_counter()
     try:
         result = subprocess.run(
             cmd,
@@ -143,13 +265,25 @@ def invoke_cli(llm: str, prompt: str, *, timeout_seconds: int = 90) -> str:
             text=True,
             timeout=timeout_seconds,
         )
+        latency_ms = int((time.perf_counter() - started) * 1000)
         if result.returncode != 0 and not result.stdout.strip():
-            return f'{{"error": "exit code {result.returncode}", "stderr": {json.dumps(result.stderr.strip()[:200])}}}'
-        return strip_cli_noise(result.stdout)
+            return CLIInvocation(
+                stdout=(
+                    f'{{"error": "exit code {result.returncode}", '
+                    f'"stderr": {json.dumps(result.stderr.strip()[:200])}}}'
+                ),
+                latency_ms=latency_ms,
+            )
+        return CLIInvocation(stdout=strip_cli_noise(result.stdout), latency_ms=latency_ms)
     except subprocess.TimeoutExpired:
-        return '{"error": "timeout"}'
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        return CLIInvocation(stdout='{"error": "timeout"}', latency_ms=latency_ms)
     except FileNotFoundError:
-        return f'{{"error": "{llm} CLI not found"}}'
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        return CLIInvocation(
+            stdout=f'{{"error": "{llm} CLI not found"}}',
+            latency_ms=latency_ms,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -250,8 +384,63 @@ def _detect_codex_model() -> str:
     return "unknown"
 
 
-def parse_response(llm: str, raw_stdout: str) -> tuple[str, TokenUsage, str]:
-    """Parse CLI output into (response_text, token_usage, model_name)."""
+def parse_codex_execution(raw_stdout: str, latency_ms: int) -> ExecutionMetrics:
+    event_count = 0
+    tool_calls: dict[str, int] = {}
+    for line in raw_stdout.strip().splitlines():
+        try:
+            event = json.loads(line.strip())
+        except json.JSONDecodeError:
+            continue
+        event_count += 1
+        event_type = event.get("type", "")
+        if "tool" in event_type.lower():
+            tool_calls[event_type] = tool_calls.get(event_type, 0) + 1
+        item = event.get("item", {})
+        item_type = item.get("type", "")
+        if "tool" in item_type.lower():
+            tool_name = item.get("name") or item.get("tool_name") or item_type
+            tool_calls[tool_name] = tool_calls.get(tool_name, 0) + 1
+
+    return ExecutionMetrics(
+        latency_ms=latency_ms,
+        step_count=max(event_count, 1),
+        tool_call_count=sum(tool_calls.values()),
+        tool_calls_by_type=tool_calls,
+    )
+
+
+def parse_claude_execution(raw_json: dict, latency_ms: int) -> ExecutionMetrics:
+    usage = raw_json.get("usage", {})
+    iterations = usage.get("iterations", [])
+    server_tool_use = usage.get("server_tool_use", {})
+    tool_calls = {name: count for name, count in server_tool_use.items() if count}
+
+    return ExecutionMetrics(
+        latency_ms=latency_ms,
+        step_count=max(len(iterations), 1),
+        tool_call_count=sum(tool_calls.values()),
+        tool_calls_by_type=tool_calls,
+    )
+
+
+def parse_gemini_execution(raw_json: dict, latency_ms: int) -> ExecutionMetrics:
+    tool_calls = raw_json.get("stats", {}).get("tools", {}) or {}
+    normalized = flatten_numeric_metrics(tool_calls)
+    return ExecutionMetrics(
+        latency_ms=latency_ms,
+        step_count=1,
+        tool_call_count=sum(normalized.values()),
+        tool_calls_by_type=normalized,
+    )
+
+
+def parse_response(
+    llm: str,
+    raw_stdout: str,
+    latency_ms: int,
+) -> tuple[str, TokenUsage, str, ExecutionMetrics]:
+    """Parse CLI output into response text, token usage, model name, and execution metrics."""
     if llm == "codex":
         # Codex: JSONL format, extract text from item.completed events
         tokens = parse_codex_tokens(raw_stdout)
@@ -265,22 +454,37 @@ def parse_response(llm: str, raw_stdout: str) -> tuple[str, TokenUsage, str]:
                     text_parts.append(item.get("text", ""))
             except json.JSONDecodeError:
                 continue
-        return "\n".join(text_parts).strip(), tokens, model
+        return (
+            "\n".join(text_parts).strip(),
+            tokens,
+            model,
+            parse_codex_execution(raw_stdout, latency_ms),
+        )
 
     # Claude and Gemini: single JSON object
     try:
         data = json.loads(raw_stdout)
     except json.JSONDecodeError:
-        return raw_stdout[:500], TokenUsage(
+        return raw_stdout, TokenUsage(
             input=0, input_cached=0, output=0, thoughts=0,
             billable=0, cost_usd=None, cost_source="parse_error", raw={},
-        ), "unknown"
+        ), "unknown", ExecutionMetrics(
+            latency_ms=latency_ms,
+            step_count=1,
+            tool_call_count=0,
+            tool_calls_by_type={},
+        )
 
     if "error" in data:
         return f"[ERROR] {data['error']}", TokenUsage(
             input=0, input_cached=0, output=0, thoughts=0,
             billable=0, cost_usd=None, cost_source="error", raw=data,
-        ), "unknown"
+        ), "unknown", ExecutionMetrics(
+            latency_ms=latency_ms,
+            step_count=1,
+            tool_call_count=0,
+            tool_calls_by_type={},
+        )
 
     if llm == "claude":
         tokens = parse_claude_tokens(data)
@@ -288,7 +492,7 @@ def parse_response(llm: str, raw_stdout: str) -> tuple[str, TokenUsage, str]:
         # Model from modelUsage keys
         model_usage = data.get("modelUsage", {})
         model = next(iter(model_usage), "unknown")
-        return text[:500], tokens, model
+        return text, tokens, model, parse_claude_execution(data, latency_ms)
 
     if llm == "gemini":
         tokens = parse_gemini_tokens(data)
@@ -297,12 +501,105 @@ def parse_response(llm: str, raw_stdout: str) -> tuple[str, TokenUsage, str]:
         stats = data.get("stats", {})
         models = stats.get("models", {})
         model = next(iter(models), "unknown")
-        return text[:500], tokens, model
+        return text, tokens, model, parse_gemini_execution(data, latency_ms)
 
-    return raw_stdout[:500], TokenUsage(
+    return raw_stdout, TokenUsage(
         input=0, input_cached=0, output=0, thoughts=0,
         billable=0, cost_usd=None, cost_source="unknown_llm", raw={},
-    ), "unknown"
+    ), "unknown", ExecutionMetrics(
+        latency_ms=latency_ms,
+        step_count=1,
+        tool_call_count=0,
+        tool_calls_by_type={},
+    )
+
+
+def detect_issue8_refusal(question: dict, response_lower: str) -> bool:
+    expected_commands = set(question.get("expected_commands", []))
+    issue8_commands = expected_commands.intersection(ISSUE8_COMMANDS)
+    if not issue8_commands:
+        return False
+    if any(p.search(response_lower) for p in _ISSUE8_REFUSAL_PATTERNS):
+        return True
+
+    for command in issue8_commands:
+        if re.search(rf"{command}[\s\S]{{0,160}}not posix(?:-compliant)?", response_lower):
+            return True
+        if re.search(rf"not posix(?:-compliant)?[\s\S]{{0,160}}{command}", response_lower):
+            return True
+
+    return False
+
+
+def analyze_response(
+    question: dict,
+    response: str,
+    tokens: TokenUsage,
+    llm: str,
+    execution: ExecutionMetrics,
+) -> ResponseAnalysis:
+    minimal_answer = question.get("minimal_answer") or question.get("expected_answer") or question.get("expected", "")
+    
+    # Remove injected tool results to prevent false positives on negative warnings (e.g., "DO NOT USE tar")
+    response_for_grading = re.sub(r"\[TOOL RESULT\]:.*?(?=\n\n|\Z)", "", response, flags=re.DOTALL)
+    response_lower = response_for_grading.lower()
+    
+    expected_hits = [
+        command for command in question.get("expected_commands", [])
+        if re.search(rf"(?<![\\w-]){re.escape(command.lower())}(?![\\w-])", response_lower)
+    ]
+
+    trap_hits = []
+    for compiled_re in TRAP_PATTERNS_BY_ID.get(question["id"], []):
+        if compiled_re.search(response_for_grading):
+            trap_hits.append(compiled_re.pattern)
+
+    missing_concepts = [
+        concept for concept in question.get("required_concepts", [])
+        if concept.lower() not in response_lower
+    ]
+    issue8_refusal = detect_issue8_refusal(question, response_lower)
+    posix_compliant = bool(expected_hits) and not trap_hits and not issue8_refusal
+
+    minimal_word_count = count_words(minimal_answer)
+    response_word_count = count_words(response)
+    gap_words = max(response_word_count - minimal_word_count, 0)
+    verbosity_ratio = round(response_word_count / max(minimal_word_count, 1), 2)
+
+    if issue8_refusal:
+        failure_mode = "issue8_stale_knowledge"
+    elif trap_hits:
+        failure_mode = "non_posix_substitution"
+    elif not expected_hits:
+        failure_mode = "workaround_instead_of_native_utility"
+    elif llm == "codex" and (execution.tool_call_count > 0 or execution.step_count > 20):
+        failure_mode = "tool_heavy_detour"
+    elif tokens.output > max(minimal_word_count * 12, 150):
+        failure_mode = "over_explaining"
+    else:
+        failure_mode = "minimal_or_near_minimal"
+
+    estimated_excess_output_tokens = (
+        tokens.output
+        if not posix_compliant
+        else max(tokens.output - max(minimal_word_count, 1), 0)
+    )
+
+    return ResponseAnalysis(
+        minimal_answer=minimal_answer,
+        minimal_word_count=minimal_word_count,
+        minimal_shell_token_count=count_shell_tokens(minimal_answer),
+        response_word_count=response_word_count,
+        minimal_answer_gap_words=gap_words,
+        verbosity_ratio=verbosity_ratio,
+        expected_command_hits=expected_hits,
+        trap_hits=trap_hits,
+        missing_required_concepts=missing_concepts,
+        posix_compliant=posix_compliant,
+        issue8_refusal=issue8_refusal,
+        failure_mode=failure_mode,
+        estimated_excess_output_tokens=estimated_excess_output_tokens,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -323,17 +620,35 @@ def write_incremental(result: QuestionResult) -> None:
     path.write_text(json.dumps(asdict(result), indent=2, default=str))
 
 
-def load_existing_result(provider: str, q_id: str, run_k: int) -> QuestionResult | None:
+def load_existing_result(provider: str, question: dict, run_k: int) -> QuestionResult | None:
+    q_id = question["id"]
     path = result_path(provider, q_id, run_k)
     if not path.exists():
         return None
     try:
         data = json.loads(path.read_text())
+        execution_data = data.get("execution")
+        execution = ExecutionMetrics(**execution_data) if execution_data else ExecutionMetrics(
+            latency_ms=0,
+            step_count=1,
+            tool_call_count=0,
+            tool_calls_by_type={},
+        )
+        analysis_data = data.get("analysis")
+        analysis = ResponseAnalysis(**analysis_data) if analysis_data else analyze_response(
+            question=question,
+            response=data["response"],
+            tokens=TokenUsage(**data["tokens"]),
+            llm=data["llm"],
+            execution=execution,
+        )
         return QuestionResult(
             id=data["id"], llm=data["llm"], model=data.get("model", "unknown"),
             run_k=data["run_k"],
             question=data["question"], response=data["response"],
             tokens=TokenUsage(**data["tokens"]),
+            execution=execution,
+            analysis=analysis,
             accuracy=AccuracyGrade(**data["accuracy"]) if data.get("accuracy") else None,
             cache_state=data["cache_state"], timestamp=data["timestamp"],
         )
@@ -385,26 +700,26 @@ def grade_response(judge: str, question: dict, response: str) -> AccuracyGrade:
     )
 
     raw = invoke_cli(judge, prompt, timeout_seconds=60)
-    raw_cleaned = strip_cli_noise(raw)
+    raw_cleaned = strip_cli_noise(raw.stdout)
 
-    # Extract JSON with score field
-    json_match = re.search(r'\{[^{}]*"score"\s*:\s*\d[^{}]*\}', raw_cleaned)
-    if json_match:
+    # Extract JSON with score field.
+    # Strategy: find every { position, try json.loads from each one to find
+    # the first valid object containing "score". This avoids greedy over-matching
+    # and handles both nested objects and multiple JSON chunks in the response.
+    for i, ch in enumerate(raw_cleaned):
+        if ch != '{':
+            continue
+        # Try parsing from this brace to end of string, let json.loads find the boundary
         try:
-            parsed = json.loads(json_match.group())
-            score = max(0, min(2, parsed.get("score", 0)))
-            return AccuracyGrade(score=score, reason=parsed.get("reason", ""))
-        except json.JSONDecodeError:
-            pass
-
-    # Fallback: search all JSON objects
-    for match in re.finditer(r'\{[^{}]+\}', raw_cleaned):
-        try:
-            parsed = json.loads(match.group())
-            if "score" in parsed:
-                score = max(0, min(2, parsed.get("score", 0)))
-                return AccuracyGrade(score=score, reason=parsed.get("reason", ""))
-        except json.JSONDecodeError:
+            decoder = json.JSONDecoder()
+            parsed, end = decoder.raw_decode(raw_cleaned, i)
+            if isinstance(parsed, dict) and "score" in parsed:
+                try:
+                    score = max(0, min(2, int(parsed["score"])))
+                except (ValueError, TypeError):
+                    score = 0
+                return AccuracyGrade(score=score, reason=str(parsed.get("reason", "")))
+        except (json.JSONDecodeError, ValueError):
             continue
 
     return AccuracyGrade(score=-1, reason=f"Failed to parse grade: {raw_cleaned[:100]}")
@@ -419,9 +734,21 @@ def load_questions(question_ids: list[str] | None = None) -> list[dict]:
     with open(DATA_FILE) as f:
         data = json.load(f)
 
-    questions = data["questions"]
+    questions = []
+    for question in data["questions"]:
+        normalized = dict(question)
+        normalized.setdefault("minimal_answer", normalized.get("expected_answer", normalized.get("expected", "")))
+        questions.append(normalized)
+
     if question_ids:
+        valid_ids = {q["id"] for q in questions}
+        unknown = [qid for qid in question_ids if qid not in valid_ids]
+        if unknown:
+            print(f"  ERROR: Unknown question IDs: {', '.join(unknown)}")
+            print(f"  Valid IDs: {', '.join(sorted(valid_ids))}")
+            raise SystemExit(1)
         questions = [q for q in questions if q["id"] in question_ids]
+
     return questions
 
 
@@ -435,27 +762,83 @@ def run_single(
     run_k: int,
     judge: str | None,
     delay: float,
+    inject_posix: bool = False,
 ) -> QuestionResult:
     """Run a single question against a single LLM and return the result."""
-    import time
-
     if delay > 0:
-        time.sleep(delay)
+        with _provider_locks[llm]:
+            time.sleep(delay)
 
     q_id = question["id"]
-    prompt = f"{SYSTEM_PROMPT}\n\n{question['question']}"
+    # Benchmark prompt must remain the raw user task. Do not prime with "POSIX"
+    # framing, because that leaks the answer space and corrupts the measurement.
+    prompt = question["question"]
+
+    if inject_posix:
+        core_md = _load_posix_core()
+        if core_md is None:
+            print(f"  [{q_id}] Skipping POSIX injection — posix-core.md not available")
+        else:
+            prompt = f"{core_md}\n\nTOOL INSTRUCTION: You must use the get_posix_syntax tool for any non-trivial command. Output exactly: TOOL_CALL: get_posix_syntax(command) and stop. Do not guess syntax.\n\nTASK:\n{prompt}"
+
 
     # Detect cache state (first call to this provider = cold)
     cache_state = "warm" if already_completed(llm, q_id, 0) else "unknown"
 
-    raw_stdout = invoke_cli(llm, prompt)
-    response_text, tokens, model = parse_response(llm, raw_stdout)
+    invocation = invoke_cli(llm, prompt)
+    response_text, tokens, model, execution = parse_response(
+        llm,
+        invocation.stdout,
+        invocation.latency_ms,
+    )
 
     # Determine cache state from actual token data
     if tokens.input_cached > 0:
         cache_state = "warm"
     else:
         cache_state = "cold"
+
+
+    if inject_posix and "TOOL_CALL: get_posix_syntax(" in response_text:
+        match = re.search(r"TOOL_CALL:\s*get_posix_syntax\((.*?)\)", response_text)
+        if match:
+            cmd = match.group(1).strip("'\"")
+            try:
+                tldr = _load_posix_tldr()
+                syntax = tldr.get(cmd, ["Utility not found in Tier 2."])
+            except (FileNotFoundError, json.JSONDecodeError):
+                syntax = ["Error reading posix-tldr.json"]
+            
+            follow_up = f"{prompt}\n\nAssistant: {response_text}\n\nTOOL_RESULT:\n{json.dumps(syntax)}\nNow complete the task."
+            inv2 = invoke_cli(llm, follow_up)
+            resp2, tok2, _, exec2 = parse_response(llm, inv2.stdout, inv2.latency_ms)
+            
+            response_text = f"{response_text}\n\n[TOOL RESULT]: {syntax}\n\n{resp2}"
+            
+            # Simple merge of tokens/execution for tracking
+            tokens = TokenUsage(
+                input=tokens.input + tok2.input,
+                input_cached=tokens.input_cached + tok2.input_cached,
+                output=tokens.output + tok2.output,
+                thoughts=tokens.thoughts + tok2.thoughts,
+                billable=tokens.billable + tok2.billable,
+                cost_usd=((tokens.cost_usd or 0) + (tok2.cost_usd or 0)) if (tokens.cost_usd is not None or tok2.cost_usd is not None) else None,
+                cost_source=tokens.cost_source,
+                raw={"run1": tokens.raw, "run2": tok2.raw}
+            )
+            
+            # Explicitly log the tool call success
+            by_type = execution.tool_calls_by_type.copy()
+            by_type["get_posix_syntax"] = by_type.get("get_posix_syntax", 0) + 1
+            
+            execution = ExecutionMetrics(
+                latency_ms=execution.latency_ms + exec2.latency_ms,
+                step_count=execution.step_count + exec2.step_count + 1,
+                tool_call_count=execution.tool_call_count + exec2.tool_call_count + 1,
+                tool_calls_by_type=by_type
+            )
+
+    analysis = analyze_response(question, response_text, tokens, llm, execution)
 
     # Grade if judge is specified and question has expected answer
     accuracy = None
@@ -468,8 +851,10 @@ def run_single(
         model=model,
         run_k=run_k,
         question=question["question"],
-        response=response_text[:500],
+        response=response_text,
         tokens=tokens,
+        execution=execution,
+        analysis=analysis,
         accuracy=accuracy,
         cache_state=cache_state,
         timestamp=datetime.now().isoformat(),
@@ -486,6 +871,12 @@ PROVIDER_CONCURRENCY = {
     "codex": 2,
 }
 
+_provider_locks: dict[str, threading.Lock] = {
+    "claude": threading.Lock(),
+    "gemini": threading.Lock(),
+    "codex": threading.Lock(),
+}
+
 
 def run_provider_batch(
     llm: str,
@@ -494,6 +885,7 @@ def run_provider_batch(
     judge: str | None,
     delay: float,
     max_workers: int | None,
+    inject_posix: bool = False,
 ) -> list[QuestionResult]:
     """Run all questions for a single provider with concurrency."""
     workers = max_workers or PROVIDER_CONCURRENCY.get(llm, 2)
@@ -503,7 +895,7 @@ def run_provider_batch(
     for q in questions:
         for run_idx in range(k):
             if already_completed(llm, q["id"], run_idx):
-                existing = load_existing_result(llm, q["id"], run_idx)
+                existing = load_existing_result(llm, q, run_idx)
                 if existing:
                     results.append(existing)
                     print(f"  [{q['id']}] run {run_idx} — cached (skipped)")
@@ -519,7 +911,7 @@ def run_provider_batch(
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {}
         for q, run_idx in tasks_to_run:
-            future = pool.submit(run_single, llm, q, run_idx, judge, delay)
+            future = pool.submit(run_single, llm, q, run_idx, judge, delay, inject_posix)
             futures[future] = (q["id"], run_idx)
 
         for future in as_completed(futures):
@@ -540,7 +932,9 @@ def run_provider_batch(
                         f"in:{result.tokens.input} out:{result.tokens.output} "
                         f"cached:{result.tokens.input_cached} "
                         f"thoughts:{result.tokens.thoughts} "
-                        f"billable:{result.tokens.billable}"
+                        f"billable:{result.tokens.billable} "
+                        f"lat:{result.execution.latency_ms}ms "
+                        f"mode:{result.analysis.failure_mode}"
                         f"{acc}"
                     )
                 else:
@@ -559,12 +953,13 @@ def run_benchmark(
     delay: float,
     max_workers: int | None,
     dry_run: bool,
+    inject_posix: bool = False,
 ) -> dict[str, list[QuestionResult]]:
     """Run the full benchmark across all providers."""
     total_calls = len(questions) * len(llms) * k
 
     print(f"\n{'=' * 60}")
-    print(f"  POSIX Token Efficiency Benchmark v0.2")
+    print(f"  POSIX Token Efficiency Benchmark v0.4")
     print(f"  {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     print(f"  LLMs: {', '.join(llms)}")
     print(f"  Judge: {judge or 'none (token-only mode)'}")
@@ -586,7 +981,7 @@ def run_benchmark(
         for llm in llms:
             print(f"--- {llm.upper()} ---\n")
             future = provider_pool.submit(
-                run_provider_batch, llm, questions, k, judge, delay, max_workers,
+                run_provider_batch, llm, questions, k, judge, delay, max_workers, inject_posix,
             )
             provider_futures[future] = llm
 
@@ -606,11 +1001,10 @@ def run_benchmark(
 # ---------------------------------------------------------------------------
 
 def generate_report(all_results: dict[str, list[QuestionResult]], questions: list[dict]) -> None:
-    """Print a formatted token usage report."""
+    """Print a formatted benchmark report with efficiency and failure-mode metrics."""
     if not all_results:
         return
 
-    # Build question lookup for tier info
     q_lookup = {q["id"]: q for q in questions}
 
     print(f"\n{'=' * 70}")
@@ -619,7 +1013,6 @@ def generate_report(all_results: dict[str, list[QuestionResult]], questions: lis
     print(f"  Spec: POSIX.1-2024 (Issue 8) — 155 utilities")
     print(f"{'=' * 70}\n")
 
-    # --- Per-LLM summary ---
     for llm, results in all_results.items():
         if not results:
             continue
@@ -637,7 +1030,13 @@ def generate_report(all_results: dict[str, list[QuestionResult]], questions: lis
         cached = [r.tokens.input_cached for r in valid]
         thoughts = [r.tokens.thoughts for r in valid]
         billable = [r.tokens.billable for r in valid]
+        latency = [r.execution.latency_ms for r in valid]
+        steps = [r.execution.step_count for r in valid]
+        excess = [r.analysis.estimated_excess_output_tokens for r in valid]
         costs = [r.tokens.cost_usd for r in valid if r.tokens.cost_usd is not None]
+        compliant = [r for r in valid if r.analysis.posix_compliant]
+        issue8_refusals = [r for r in valid if r.analysis.issue8_refusal]
+        failure_modes = Counter(r.analysis.failure_mode for r in valid)
 
         def stats(values: list[int | float]) -> str:
             if not values:
@@ -655,17 +1054,29 @@ def generate_report(all_results: dict[str, list[QuestionResult]], questions: lis
         print(f"    Cached tokens:  {stats(cached)}")
         print(f"    Thought tokens: {stats(thoughts)}")
         print(f"    Billable:       {stats(billable)}")
+        print(f"    Latency ms:     {stats(latency)}")
+        print(f"    Step count:     {stats(steps)}")
+        print(f"    Excess output:  {stats(excess)}")
         if costs:
             print(f"    Cost USD:       {stats(costs)}")
             print(f"    Total cost:     ${sum(costs):.4f}")
         print()
 
-        # Cache state
         cold = [r for r in valid if r.cache_state == "cold"]
         warm = [r for r in valid if r.cache_state == "warm"]
         print(f"    Cache: {len(cold)} cold, {len(warm)} warm, {len(valid) - len(cold) - len(warm)} unknown")
+        print(
+            f"    POSIX compliance: {len(compliant)}/{len(valid)} "
+            f"({len(compliant) / len(valid) * 100:.0f}%)"
+        )
+        print(f"    Issue 8 refusals: {len(issue8_refusals)}")
+        print(f"    Tool calls: {sum(r.execution.tool_call_count for r in valid)} total")
+        if failure_modes:
+            print(
+                "    Failure modes: "
+                + ", ".join(f"{mode}={count}" for mode, count in failure_modes.most_common())
+            )
 
-        # Accuracy (if graded)
         graded = [r for r in valid if r.accuracy and r.accuracy.score >= 0]
         if graded:
             scores = [r.accuracy.score for r in graded]
@@ -676,9 +1087,8 @@ def generate_report(all_results: dict[str, list[QuestionResult]], questions: lis
 
         print()
 
-    # --- Per-tier breakdown ---
     print(f"  {'─' * 70}")
-    print(f"  TOKEN USAGE BY TIER")
+    print(f"  MINIMAL-ANSWER GAP BY TIER")
     print(f"  {'─' * 70}\n")
 
     tier_names = {1: "Tier 1 (Common)", 2: "Tier 2 (Less common)", 3: "Tier 3 (POSIX-blind spot)"}
@@ -696,35 +1106,40 @@ def generate_report(all_results: dict[str, list[QuestionResult]], questions: lis
             if not tier_results:
                 continue
             out_tokens = [r.tokens.output for r in tier_results]
+            excess_tokens = [r.analysis.estimated_excess_output_tokens for r in tier_results]
+            latency_ms = [r.execution.latency_ms for r in tier_results]
+            compliant_count = sum(1 for r in tier_results if r.analysis.posix_compliant)
             mean_out = sum(out_tokens) / len(out_tokens)
-            median_out = sorted(out_tokens)[len(out_tokens) // 2]
-            print(f"    {tier_name}: {len(tier_results)} questions, output mean={mean_out:.0f} median={median_out:.0f}")
+            mean_excess = sum(excess_tokens) / len(excess_tokens)
+            mean_latency = sum(latency_ms) / len(latency_ms)
+            print(
+                f"    {tier_name}: {len(tier_results)} questions, "
+                f"output mean={mean_out:.0f} excess mean={mean_excess:.0f} "
+                f"latency mean={mean_latency:.0f}ms compliant={compliant_count}/{len(tier_results)}"
+            )
 
         print()
 
-    # --- Per-question detail ---
     print(f"  {'─' * 70}")
-    print(f"  PER-QUESTION DETAIL (sorted by output tokens)")
+    print(f"  TASK SCORECARDS (sorted by estimated excess output)")
     print(f"  {'─' * 70}\n")
 
     all_valid = []
     for results in all_results.values():
         all_valid.extend(r for r in results if r.tokens.billable > 0)
 
-    by_output = sorted(all_valid, key=lambda r: r.tokens.output, reverse=True)
-    for r in by_output:
+    by_excess = sorted(all_valid, key=lambda r: r.analysis.estimated_excess_output_tokens, reverse=True)
+    for r in by_excess:
         tier = q_lookup.get(r.id, {}).get("tier", "?")
-        acc = ""
-        if r.accuracy and r.accuracy.score >= 0:
-            sym = "✓" if r.accuracy.score == 2 else "△" if r.accuracy.score == 1 else "✗"
-            acc = f" {sym}{r.accuracy.score}/2"
+        compliance = "posix" if r.analysis.posix_compliant else "miss"
         print(
             f"    {r.llm:>8} [{r.id}] T{tier} "
-            f"out:{r.tokens.output:>5} in:{r.tokens.input:>6} "
-            f"cached:{r.tokens.input_cached:>6} thoughts:{r.tokens.thoughts:>4}"
-            f"{acc}"
+            f"out:{r.tokens.output:>5} excess:{r.analysis.estimated_excess_output_tokens:>5} "
+            f"lat:{r.execution.latency_ms:>5}ms gap:{r.analysis.minimal_answer_gap_words:>4}w "
+            f"{compliance:>5} {r.analysis.failure_mode}"
         )
         print(f"             {r.question[:65]}")
+        print(f"             minimal: {r.analysis.minimal_answer}")
 
     print()
 
@@ -736,7 +1151,7 @@ def save_summary(all_results: dict[str, list[QuestionResult]]) -> Path:
     summary_path = RESULTS_DIR / f"summary-{ts}.json"
 
     summary = {
-        "version": "0.2",
+        "version": "0.4",
         "timestamp": ts,
         "spec": "POSIX.1-2024 (Issue 8)",
         "utilities_count": 155,
@@ -746,23 +1161,523 @@ def save_summary(all_results: dict[str, list[QuestionResult]]) -> Path:
     for llm, results in all_results.items():
         valid = [r for r in results if r.tokens.billable > 0]
         model = valid[0].model if valid else "unknown"
+        failure_modes = Counter(r.analysis.failure_mode for r in valid)
         summary["llms"][llm] = {
             "model": model,
             "total_results": len(results),
             "valid_results": len(valid),
             "total_billable_tokens": sum(r.tokens.billable for r in valid),
             "total_output_tokens": sum(r.tokens.output for r in valid),
+            "total_estimated_excess_output_tokens": sum(
+                r.analysis.estimated_excess_output_tokens for r in valid
+            ),
             "total_cost_usd": sum(
                 r.tokens.cost_usd for r in valid if r.tokens.cost_usd is not None
             ),
             "mean_output_tokens": (
                 sum(r.tokens.output for r in valid) / len(valid) if valid else 0
             ),
+            "mean_latency_ms": (
+                sum(r.execution.latency_ms for r in valid) / len(valid) if valid else 0
+            ),
+            "mean_step_count": (
+                sum(r.execution.step_count for r in valid) / len(valid) if valid else 0
+            ),
+            "posix_compliance_rate": (
+                sum(1 for r in valid if r.analysis.posix_compliant) / len(valid)
+                if valid else 0
+            ),
+            "issue8_refusal_count": sum(1 for r in valid if r.analysis.issue8_refusal),
+            "failure_modes": dict(failure_modes),
         }
 
     summary_path.write_text(json.dumps(summary, indent=2))
     print(f"  Summary saved: {summary_path}")
     return summary_path
+
+
+def save_visual_report(
+    all_results: dict[str, list[QuestionResult]],
+    questions: list[dict],
+) -> Path:
+    """Save a self-contained HTML report with charts and task scorecards."""
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+    report_path = RESULTS_DIR / f"report-{ts}.html"
+
+    q_lookup = {q["id"]: q for q in questions}
+    all_valid = [
+        result
+        for results in all_results.values()
+        for result in results
+        if result.tokens.billable > 0
+    ]
+
+    def mean(values: list[int | float]) -> float:
+        return sum(values) / len(values) if values else 0.0
+
+    def pct(value: float) -> str:
+        return f"{value * 100:.0f}%"
+
+    max_output = max((r.tokens.output for r in all_valid), default=1)
+    max_excess = max((r.analysis.estimated_excess_output_tokens for r in all_valid), default=1)
+    max_latency = max((r.execution.latency_ms for r in all_valid), default=1)
+
+    model_cards = []
+    for llm, results in all_results.items():
+        valid = [r for r in results if r.tokens.billable > 0]
+        if not valid:
+            continue
+        failure_modes = Counter(r.analysis.failure_mode for r in valid)
+        model_cards.append({
+            "llm": llm,
+            "model": valid[0].model,
+            "count": len(valid),
+            "compliance_rate": sum(1 for r in valid if r.analysis.posix_compliant) / len(valid),
+            "issue8_refusal_count": sum(1 for r in valid if r.analysis.issue8_refusal),
+            "mean_output": mean([r.tokens.output for r in valid]),
+            "mean_excess": mean([r.analysis.estimated_excess_output_tokens for r in valid]),
+            "mean_latency": mean([r.execution.latency_ms for r in valid]),
+            "mean_steps": mean([r.execution.step_count for r in valid]),
+            "tool_calls": sum(r.execution.tool_call_count for r in valid),
+            "failure_modes": failure_modes,
+        })
+
+    top_gap_results = sorted(
+        all_valid,
+        key=lambda r: r.analysis.estimated_excess_output_tokens,
+        reverse=True,
+    )[:12]
+    issue8_results = [r for r in all_valid if r.analysis.issue8_refusal][:8]
+
+    def metric_bar(value: float, max_value: float, label: str, suffix: str = "") -> str:
+        width = 0 if max_value <= 0 else min(100, (value / max_value) * 100)
+        return (
+            "<div class='metric-row'>"
+            f"<div class='metric-label'>{escape(label)}</div>"
+            "<div class='metric-track'>"
+            f"<div class='metric-fill' style='width:{width:.1f}%'></div>"
+            "</div>"
+            f"<div class='metric-value'>{value:.0f}{escape(suffix)}</div>"
+            "</div>"
+        )
+
+    def result_card(result: QuestionResult) -> str:
+        tier = q_lookup.get(result.id, {}).get("tier", "?")
+        status = "POSIX" if result.analysis.posix_compliant else "MISS"
+        excerpt = result.response.strip()[:480]
+        return f"""
+        <article class="task-card">
+          <div class="task-meta">
+            <span class="pill model-pill">{escape(result.llm.upper())}</span>
+            <span class="pill tier-pill">T{tier}</span>
+            <span class="pill mode-pill {escape('good' if result.analysis.posix_compliant else 'bad')}">{escape(status)}</span>
+            <span class="pill failure-pill">{escape(result.analysis.failure_mode.replace('_', ' '))}</span>
+          </div>
+          <h3>{escape(result.id)} · {escape(result.question)}</h3>
+          <div class="task-stats">
+            <div><strong>Output</strong><span>{result.tokens.output}</span></div>
+            <div><strong>Excess</strong><span>{result.analysis.estimated_excess_output_tokens}</span></div>
+            <div><strong>Latency</strong><span>{result.execution.latency_ms} ms</span></div>
+            <div><strong>Gap</strong><span>{result.analysis.minimal_answer_gap_words} words</span></div>
+          </div>
+          <div class="code-pair">
+            <div>
+              <label>Minimal POSIX answer</label>
+              <pre>{escape(result.analysis.minimal_answer)}</pre>
+            </div>
+            <div>
+              <label>Model response excerpt</label>
+              <pre>{escape(excerpt)}</pre>
+            </div>
+          </div>
+        </article>
+        """
+
+    model_sections = []
+    for card in model_cards:
+        failure_summary = ", ".join(
+            f"{name.replace('_', ' ')}={count}"
+            for name, count in card["failure_modes"].most_common()
+        )
+        model_sections.append(f"""
+        <section class="model-card">
+          <div class="model-heading">
+            <div>
+              <p class="eyebrow">{escape(card["llm"].upper())}</p>
+              <h2>{escape(card["model"])}</h2>
+            </div>
+            <div class="compliance-badge">{pct(card["compliance_rate"])}</div>
+          </div>
+          <p class="caption">{card["count"]} tasks · {card["issue8_refusal_count"]} Issue 8 refusals · {card["tool_calls"]} tool calls</p>
+          {metric_bar(card["mean_output"], max(max_output, 1), "Mean output tokens")}
+          {metric_bar(card["mean_excess"], max(max_excess, 1), "Mean excess output")}
+          {metric_bar(card["mean_latency"], max(max_latency, 1), "Mean latency", " ms")}
+          <div class="micro-stats">
+            <div><span>Mean steps</span><strong>{card["mean_steps"]:.1f}</strong></div>
+            <div><span>Failure modes</span><strong>{escape(failure_summary or 'none')}</strong></div>
+          </div>
+        </section>
+        """)
+
+    issue8_section = "".join(result_card(result) for result in issue8_results) or (
+        "<p class='empty-state'>No Issue 8 refusals were detected in this run.</p>"
+    )
+    top_gap_section = "".join(result_card(result) for result in top_gap_results)
+
+    html_doc = f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>POSIX Benchmark Report</title>
+  <style>
+    :root {{
+      --bg: #f5f0e8;
+      --paper: rgba(255, 250, 241, 0.88);
+      --ink: #181512;
+      --muted: #655a4d;
+      --accent: #bf5b2c;
+      --accent-soft: #e6b89d;
+      --steel: #24464e;
+      --line: rgba(24, 21, 18, 0.12);
+      --good: #2f6b47;
+      --bad: #8a2e2e;
+      --shadow: 0 24px 80px rgba(43, 26, 14, 0.14);
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(191, 91, 44, 0.18), transparent 32%),
+        radial-gradient(circle at top right, rgba(36, 70, 78, 0.15), transparent 24%),
+        linear-gradient(180deg, #f8f3ea, var(--bg));
+      font-family: "Avenir Next", "Segoe UI", sans-serif;
+    }}
+    .frame {{
+      width: min(1240px, calc(100vw - 48px));
+      margin: 24px auto 64px;
+    }}
+    .hero {{
+      background: linear-gradient(140deg, rgba(255,250,241,0.95), rgba(246,235,221,0.92));
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      position: relative;
+      padding: 40px;
+    }}
+    .hero::after {{
+      content: "";
+      position: absolute;
+      inset: auto -80px -80px auto;
+      width: 240px;
+      height: 240px;
+      background: conic-gradient(from 45deg, rgba(191,91,44,0.12), rgba(36,70,78,0.16), transparent 70%);
+      border-radius: 50%;
+      filter: blur(4px);
+    }}
+    .eyebrow {{
+      margin: 0 0 8px;
+      color: var(--accent);
+      font-size: 12px;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+      font-weight: 700;
+    }}
+    h1, h2, h3 {{
+      font-family: "Iowan Old Style", "Palatino Linotype", serif;
+      letter-spacing: -0.02em;
+      margin: 0;
+    }}
+    h1 {{
+      font-size: clamp(40px, 6vw, 72px);
+      line-height: 0.95;
+      max-width: 900px;
+    }}
+    .hero p {{
+      max-width: 760px;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1.55;
+    }}
+    .hero-grid, .model-grid, .task-grid {{
+      display: grid;
+      gap: 20px;
+    }}
+    .hero-grid {{
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      margin-top: 28px;
+    }}
+    .hero-stat, .model-card, .task-card {{
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }}
+    .hero-stat {{
+      padding: 20px;
+    }}
+    .hero-stat span {{
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }}
+    .hero-stat strong {{
+      font-size: 34px;
+      font-family: "Iowan Old Style", "Palatino Linotype", serif;
+    }}
+    .section {{
+      margin-top: 28px;
+      padding: 28px;
+      background: rgba(255, 250, 241, 0.62);
+      border: 1px solid var(--line);
+      border-radius: 28px;
+    }}
+    .section-header {{
+      display: flex;
+      justify-content: space-between;
+      align-items: end;
+      gap: 16px;
+      margin-bottom: 20px;
+    }}
+    .section-header p {{
+      margin: 0;
+      color: var(--muted);
+    }}
+    .model-grid {{
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    }}
+    .model-card {{
+      padding: 22px;
+    }}
+    .model-heading {{
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: start;
+    }}
+    .model-heading h2 {{
+      font-size: 28px;
+    }}
+    .compliance-badge {{
+      min-width: 76px;
+      padding: 14px 12px;
+      border-radius: 20px;
+      background: linear-gradient(180deg, rgba(47,107,71,0.14), rgba(47,107,71,0.06));
+      color: var(--good);
+      text-align: center;
+      font-weight: 700;
+      font-size: 20px;
+    }}
+    .caption {{
+      color: var(--muted);
+      margin: 8px 0 18px;
+      line-height: 1.5;
+    }}
+    .metric-row {{
+      display: grid;
+      grid-template-columns: 130px 1fr 64px;
+      gap: 12px;
+      align-items: center;
+      margin-top: 12px;
+    }}
+    .metric-label, .metric-value {{
+      font-size: 13px;
+      color: var(--muted);
+    }}
+    .metric-track {{
+      height: 14px;
+      border-radius: 999px;
+      background: rgba(36,70,78,0.08);
+      overflow: hidden;
+    }}
+    .metric-fill {{
+      height: 100%;
+      background: linear-gradient(90deg, var(--steel), var(--accent));
+      border-radius: 999px;
+    }}
+    .micro-stats {{
+      margin-top: 18px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+      display: grid;
+      gap: 12px;
+    }}
+    .micro-stats div {{
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: start;
+    }}
+    .micro-stats span {{
+      color: var(--muted);
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }}
+    .micro-stats strong {{
+      text-align: right;
+      max-width: 60%;
+      font-size: 14px;
+    }}
+    .task-grid {{
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    }}
+    .task-card {{
+      padding: 18px;
+    }}
+    .task-meta {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 14px;
+    }}
+    .pill {{
+      display: inline-flex;
+      align-items: center;
+      padding: 7px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      font-weight: 700;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.55);
+    }}
+    .mode-pill.good {{ color: var(--good); }}
+    .mode-pill.bad {{ color: var(--bad); }}
+    .task-card h3 {{
+      font-size: 26px;
+      line-height: 1.06;
+      margin-bottom: 16px;
+    }}
+    .task-stats {{
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 16px;
+    }}
+    .task-stats div {{
+      padding: 12px;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.56);
+      border: 1px solid var(--line);
+    }}
+    .task-stats strong {{
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      margin-bottom: 8px;
+    }}
+    .task-stats span {{
+      font-family: "Iowan Old Style", "Palatino Linotype", serif;
+      font-size: 24px;
+    }}
+    .code-pair {{
+      display: grid;
+      gap: 14px;
+    }}
+    .code-pair label {{
+      display: block;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }}
+    pre {{
+      margin: 0;
+      padding: 14px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      border-radius: 16px;
+      background: rgba(24, 21, 18, 0.04);
+      border: 1px solid var(--line);
+      font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
+      font-size: 13px;
+      line-height: 1.5;
+    }}
+    .empty-state {{
+      margin: 0;
+      color: var(--muted);
+    }}
+    @media (max-width: 760px) {{
+      .frame {{ width: min(100vw - 20px, 1240px); margin: 10px auto 40px; }}
+      .hero, .section {{ padding: 20px; border-radius: 22px; }}
+      .task-stats {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+      .metric-row {{ grid-template-columns: 1fr; }}
+    }}
+  </style>
+</head>
+<body>
+  <main class="frame">
+    <section class="hero">
+      <p class="eyebrow">POSIX Token Efficiency Benchmark</p>
+      <h1>Minimal-answer gap report for shell tasks with standards-native answers.</h1>
+      <p>This run measures how often models fail to collapse to the shortest valid POSIX solution, and how much output, latency, and agentic overhead they burn instead.</p>
+      <div class="hero-grid">
+        <div class="hero-stat"><span>Spec</span><strong>Issue 8</strong></div>
+        <div class="hero-stat"><span>Utilities</span><strong>155</strong></div>
+        <div class="hero-stat"><span>Tasks</span><strong>{len(questions)}</strong></div>
+        <div class="hero-stat"><span>Responses</span><strong>{len(all_valid)}</strong></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <div>
+          <p class="eyebrow">Model Comparison</p>
+          <h2>Where the excess goes</h2>
+        </div>
+        <p>{escape(datetime.now().strftime("%Y-%m-%d %H:%M"))}</p>
+      </div>
+      <div class="model-grid">
+        {''.join(model_sections)}
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <div>
+          <p class="eyebrow">Issue 8 Watchlist</p>
+          <h2>Recency-driven failures</h2>
+        </div>
+        <p>Answers that still reject `readlink`, `realpath`, or `timeout` as non-POSIX.</p>
+      </div>
+      <div class="task-grid">
+        {issue8_section}
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <div>
+          <p class="eyebrow">Top Scorecards</p>
+          <h2>Largest minimal-answer gaps</h2>
+        </div>
+        <p>Ranked by estimated excess output tokens.</p>
+      </div>
+      <div class="task-grid">
+        {top_gap_section}
+      </div>
+    </section>
+  </main>
+</body>
+</html>
+"""
+
+    report_path.write_text(html_doc)
+    print(f"  Visual report saved: {report_path}")
+    return report_path
 
 
 # ---------------------------------------------------------------------------
@@ -774,9 +1689,9 @@ def main():
         description="POSIX Token Efficiency Benchmark",
     )
     parser.add_argument(
-        "--llms", nargs="+", default=["gemini", "claude", "codex"],
+        "--llms", nargs="+", default=["claude", "codex"],
         choices=["gemini", "claude", "codex"],
-        help="Which LLMs to test (default: all three)",
+        help="Which LLMs to test (default: claude and codex; add gemini explicitly when API is available)",
     )
     parser.add_argument(
         "--judge", default=None,
@@ -785,7 +1700,7 @@ def main():
     )
     parser.add_argument(
         "--questions", nargs="+",
-        help="Specific question IDs to run (e.g. Q1 Q5 Q12)",
+        help="Specific question IDs to run (e.g. T01 T17 T30)",
     )
     parser.add_argument(
         "--k", type=int, default=1,
@@ -807,6 +1722,10 @@ def main():
         "--no-grade", action="store_true",
         help="Skip accuracy grading, measure tokens only",
     )
+    parser.add_argument(
+        "--inject-posix", action="store_true",
+        help="Inject POSIX Step-Up Architecture for testing",
+    )
     args = parser.parse_args()
 
     judge = None if args.no_grade else args.judge
@@ -826,11 +1745,13 @@ def main():
         delay=args.delay,
         max_workers=args.max_workers,
         dry_run=args.dry_run,
+        inject_posix=args.inject_posix,
     )
 
     if all_results:
         generate_report(all_results, questions)
         save_summary(all_results)
+        save_visual_report(all_results, questions)
 
 
 if __name__ == "__main__":
