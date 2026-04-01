@@ -102,6 +102,23 @@ Gemini is temporarily excluded from the default run while the `gemini-3.1-pro-pr
 python3 run_benchmark.py --llms claude codex gemini
 ```
 
+For this repo, use a conservative Gemini run profile unless your active account limits clearly allow more:
+
+- Assume `1` benchmark call every `30` seconds.
+- Assume no more than `50` model calls per day.
+- Run Gemini alone, with `--max-workers 1`, so the benchmark never fans out concurrent Gemini calls.
+- Track 1 baseline fits in one day: `30` questions = `30` Gemini calls.
+- Track 2 does **not** reliably fit in one day: the Step-Up simulation can trigger a second Gemini call when the model emits `TOOL_CALL: get_posix_syntax(...)`, so a 30-question run can exceed `50` calls.
+- Do not use Gemini as the judge if you are trying to stay within the daily quota.
+
+Safe Track 1 baseline command:
+
+```bash
+python3 run_benchmark.py --llms gemini --max-workers 1 --delay 30
+```
+
+If a Gemini run stops early, rerun the same command on the next day. The benchmark will resume from the cached files already written under `results/gemini/`.
+
 Note: The Gemini CLI prepends `MCP issues detected...` noise to its output. The benchmark strips this before JSON parsing. If Gemini results still show `valid_results: 0`, run a manual check:
 
 ```bash

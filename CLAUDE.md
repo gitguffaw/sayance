@@ -18,6 +18,9 @@ python3 run_benchmark.py --dry-run
 python3 run_benchmark.py --llms gemini
 python3 run_benchmark.py --llms gemini claude codex
 
+# Safe Gemini baseline under tight quota
+python3 run_benchmark.py --llms gemini --max-workers 1 --delay 30
+
 # Run specific questions
 python3 run_benchmark.py --questions Q1 Q2 Q16
 
@@ -51,6 +54,7 @@ Single-file CLI tool (`run_benchmark.py`) that:
 ## Known Issues
 
 - **Gemini MCP prefix**: Gemini CLI prepends "MCP issues detected..." to output. Must strip before any JSON parsing.
+- **Gemini quota planning**: For this repo, assume Gemini is safe at one benchmark call every 30 seconds and no more than 50 calls per day unless the active account limits clearly show otherwise. A 30-question Track 1 baseline fits. Track 2 may exceed the daily quota because the Step-Up simulation can trigger a second Gemini call for a question.
 - **Codex needs git**: Requires `--skip-git-repo-check` flag since this directory isn't a git repo.
 - **POSIX Issue 8 vs 7**: `readlink`, `realpath`, and `timeout` are now POSIX (Issue 8, 2024). LLMs trained on older data will incorrectly call these "not POSIX." `c99` is now `c17`. The batch `q*` utilities and `fort77` were removed.
 

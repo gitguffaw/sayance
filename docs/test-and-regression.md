@@ -35,6 +35,14 @@ A regression is any change to the codebase, prompt, question set, or tool that m
    ```
    Verify the result file is written to `results/claude/` and the JSON is valid.
 
+For Gemini specifically, use a stricter smoke test shape:
+
+```bash
+python3 run_benchmark.py --llms gemini --questions T01 --max-workers 1 --delay 30
+```
+
+This keeps Gemini at one request every 30 seconds and avoids concurrent calls.
+
 ---
 
 ## After Every Run
@@ -105,6 +113,11 @@ Before committing any change to `benchmark_data.json` or `run_benchmark.py`:
 ## Known Issues to Watch
 
 - **Gemini 429 / MODEL_CAPACITY_EXHAUSTED:** The `gemini-3.1-pro-preview` model is frequently capacity-constrained. When this happens, Gemini returns non-JSON error output that fails parsing. Gemini is excluded from the default run until this stabilizes. Add `gemini` explicitly with `--llms claude codex gemini` when you want to include it.
+
+- **Gemini daily quota planning:** In this repo, assume Gemini is only safe for one benchmark call every 30 seconds and no more than 50 model calls per day unless your active account limits show otherwise. That means:
+  - Track 1 baseline with Gemini alone is safe: `python3 run_benchmark.py --llms gemini --max-workers 1 --delay 30`
+  - Track 2 Step-Up may exceed the daily quota because `TOOL_CALL: get_posix_syntax(...)` causes a second Gemini invocation for that question
+  - If a run stops partway through, reuse the same results directory and resume on the next day
 
 - **Codex step count creep:** Codex (GPT-5.4) tends to take 8–10 agentic steps even for simple questions. `mean_step_count` above 10 is a red flag — something in the prompt is triggering extra tool use. Check if the question wording is ambiguous or if the injected context is causing confusion.
 
