@@ -37,9 +37,9 @@ comm: side-by-side sorted-file diff (NOT diff)
 
 The agent scans this and thinks: "oh, `comm` exists — I should look it up instead of writing a Python script."
 
-### Tier 2 — Syntax Lookup (`get_posix_syntax`)
+### Tier 2 — Syntax Lookup (`posix-tldr.json`)
 
-An MCP tool backed by `posix-tldr.json`. Before executing a Tier 1 utility, the agent calls this tool to get exact POSIX syntax, flags, and common traps.
+A structured database of POSIX syntax, flags, and common traps. In the benchmark, Tier 2 is simulated — `run_benchmark.py` intercepts tool call patterns in the LLM's response and injects lookup results from `posix-tldr.json`. The production goal is an MCP tool (`get_posix_syntax`) that agents call directly.
 
 ```json
 {
@@ -74,14 +74,15 @@ We tested this across three providers, 30 real shell tasks, with and without the
 | **Compliance (after)** | 76.7% | 86.7% | 86.7% |
 | **Output tokens (before)** | 228 | 930 | 215 |
 | **Output tokens (after)** | 374 | 1,289 | 105 |
-| **Top failure (before)** | over_explaining | over_explaining | over_explaining |
-| **Top failure (after)** | over_explaining | tool_heavy_detour | minimal_or_near_minimal |
+| **Non-POSIX substitutions (before)** | 6 | 9 | 7 |
+| **Non-POSIX substitutions (after)** | 7 | 1 | 3 |
+| **Dominant response style (after)** | over_explaining | tool_heavy_detour | minimal_or_near_minimal |
 
-**Gemini** got both more correct *and* more concise — output tokens dropped 51% while compliance rose 21 points.
+**Gemini** got both more correct *and* more concise — output tokens dropped 51% while compliance rose 21 points. 24 of 30 answers were classified `minimal_or_near_minimal` — the best outcome.
 
-**Codex** jumped 28 points in compliance. Token count rose because it narrates tool usage verbosely, not because it gave worse answers.
+**Codex** jumped 28 points in compliance. Non-POSIX substitutions dropped from 9 to 1. Token count rose because it narrates tool usage verbosely (`tool_heavy_detour`), not because it gave worse answers.
 
-**Claude** improved 13 points. The smallest gain, but still meaningful — and the architecture is model-agnostic.
+**Claude** improved 13 points. Non-POSIX substitutions slightly increased (6 to 7) — the smallest gain, but compliance still rose due to fewer workarounds.
 
 ### What the Benchmark Doesn't Prove (Yet)
 
