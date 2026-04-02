@@ -12,9 +12,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Conflict rule: behavior/runtime conflicts resolve to CLAUDE.md; process/style conflicts resolve to AGENTS.md.
 - For coding/process constraints, runbook details, and commit behavior, follow AGENTS.md.
 
-## Project Purpose
+## Why This Project Exists
 
-**posix** is a benchmarking and measurement tool that quantifies how many tokens LLMs burn when reasoning about POSIX shell commands. The goal is to determine whether a hyper-efficient POSIX command reference is worth building.
+LLMs are blind to most POSIX utilities. They reach for `tar` instead of `pax`, write Python scripts instead of calling `od`, and reject `readlink` as "not POSIX." Every wrong tool wastes tokens, wastes time, and produces fragile non-portable code.
+
+**This project builds the semantic bridge that fixes that.** A two-tier reference injection system gives LLMs just enough context to discover and correctly use the 155 utilities defined in POSIX.1-2024 (Issue 8) — saving both time and tokens.
+
+- **Tier 1 (`posix-core.md`):** ~800-token semantic map injected into agent context. Tells the LLM what exists.
+- **Tier 2 (`get_posix_syntax` tool):** MCP tool backed by `posix-tldr.json`. Tells the LLM how to use it correctly.
+
+The benchmark (`run_benchmark.py`) is a utility for proving the solution works — it is not the product. The product is the bridge.
 
 The canonical source of truth is **POSIX.1-2024 (Issue 8)**: https://pubs.opengroup.org/onlinepubs/9799919799/idx/utilities.html — which defines **155 utilities**.
 
