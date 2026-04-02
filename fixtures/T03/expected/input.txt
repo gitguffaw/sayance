@@ -1,0 +1,4 @@
+The bar jumped over the bar.
+Another line with bar in it.
+No match here.
+Final bar line.
