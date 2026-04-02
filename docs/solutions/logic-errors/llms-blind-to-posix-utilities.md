@@ -35,12 +35,15 @@ LLM training data is dominated by GNU/Linux usage, Stack Overflow answers, and b
 
 ## Measured Token Waste
 
-Initial benchmarking (3 LLMs, task-based questions) shows:
-- Gemini: 245 output tokens for a sort question, 13.8k input (system context)
-- Claude: 478 output tokens, 22k input (CLAUDE.md overhead), $0.15/question
-- Codex: 841-3,538 output tokens (non-deterministic, agent mode)
+Benchmark results (Track 1, 30 questions, k=1, all three providers):
 
-When the LLM gives a non-POSIX answer, the **entire output is wasted tokens** — the user has to retry or correct.
+| Provider | Mean Output Tokens | POSIX Compliance | Notable Failure Mode |
+|----------|--------------------|-----------------|----------------------|
+| Claude | 228 | 63.3% | over_explaining (10/30) |
+| Codex | 930 | 58.6% | over_explaining (14/30) |
+| Gemini | 215 | 65.4% | over_explaining (11/30) |
+
+When the LLM gives a non-POSIX answer, the **entire output is wasted tokens** — the user has to retry or correct. Codex burns 4× more output tokens than Claude or Gemini due to its agentic multi-step behavior (mean 8.1 steps per question).
 
 ## Prevention
 

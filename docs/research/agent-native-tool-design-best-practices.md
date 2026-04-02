@@ -20,7 +20,9 @@ sources:
 
 ## Context
 
-This research supports the POSIX Step-Up Architecture's Tier 2 (`get_posix_syntax`) and Tier 3 (`search_posix_spec`) tools. The goal: design tool interfaces that LLMs call reliably, return results that minimize token consumption, and structurally enforce lookup-before-execute behavior.
+This research supports the POSIX Step-Up Architecture's Tier 2 (`get_posix_syntax`) tool. The goal: design tool interfaces that LLMs call reliably, return results that minimize token consumption, and structurally enforce lookup-before-execute behavior.
+
+> **Note on Tier 3 (`search_posix_spec`):** This tool is currently **deferred**. No benchmark question required it, and no measured failure motivated it. All references to `search_posix_spec` in this document are retained as forward-looking design guidance only — it is not implemented and should not be built until Track 3 data shows Tier 2 is insufficient.
 
 ---
 
