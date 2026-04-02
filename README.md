@@ -60,33 +60,22 @@ We tested this across three providers, 30 real shell tasks, with and without the
 
 ### POSIX Compliance: Before and After
 
-```mermaid
----
-config:
-  theme: base
-  themeVariables:
-    primaryColor: "#bf5b2c"
-    secondaryColor: "#24464e"
----
-xychart-beta
-  title "POSIX Compliance Rate (%)"
-  x-axis ["Claude", "Codex", "Gemini"]
-  y-axis "Compliance %" 0 --> 100
-  bar [63.3, 58.6, 65.4]
-  bar [76.7, 86.7, 86.7]
-```
+| Provider | Without Step-Up | With Step-Up | Delta |
+|:---------|:----------------|:-------------|:------|
+| **Claude** | `██████░░░░` 63.3% | `████████░░` 76.7% | **+13.4 pts** |
+| **Codex** | `██████░░░░` 58.6% | `█████████░` 86.7% | **+28.1 pts** |
+| **Gemini** | `███████░░░` 65.4% | `█████████░` 86.7% | **+21.3 pts** |
 
-> Orange = Track 1 (no reference). Teal = Track 2 (with Step-Up injection).
-
-### The Numbers
+### Full Results (30 questions, k=1)
 
 | | Claude | Codex | Gemini |
-|---|:---:|:---:|:---:|
-| **Track 1 Compliance** | 63.3% | 58.6% | 65.4% |
-| **Track 2 Compliance** | 76.7% | 86.7% | 86.7% |
-| **Improvement** | +13.4 pts | +28.1 pts | +21.3 pts |
-| **Track 1 Mean Tokens** | 228 | 930 | 215 |
-| **Track 2 Mean Tokens** | 374 | 1,289 | 105 |
+|:---|:---:|:---:|:---:|
+| **Compliance (before)** | 63.3% | 58.6% | 65.4% |
+| **Compliance (after)** | 76.7% | 86.7% | 86.7% |
+| **Output tokens (before)** | 228 | 930 | 215 |
+| **Output tokens (after)** | 374 | 1,289 | 105 |
+| **Top failure (before)** | over_explaining | over_explaining | over_explaining |
+| **Top failure (after)** | over_explaining | tool_heavy_detour | minimal_or_near_minimal |
 
 **Gemini** got both more correct *and* more concise — output tokens dropped 51% while compliance rose 21 points.
 
