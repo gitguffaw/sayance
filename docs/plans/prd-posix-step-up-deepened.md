@@ -1,3 +1,9 @@
+Status: ACTIVE
+Expiry condition: when Track 3 benchmark run completes and all implementation steps are marked done
+Outcome:
+
+---
+
 ## Status Summary
 
 **Last updated:** 2026-04-02  

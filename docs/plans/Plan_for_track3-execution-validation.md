@@ -1,3 +1,9 @@
+Status: ACTIVE
+Expiry condition: when Track 3 benchmark run completes with valid results for all three providers
+Outcome:
+
+---
+
 # Track 3 — Execution Validation Environment
 
 ## Context

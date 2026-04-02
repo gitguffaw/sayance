@@ -34,6 +34,22 @@ There is no dedicated `tests/` directory yet, so use dry runs and focused benchm
 
 Current history uses Conventional Commit prefixes such as `feat:`. Keep commit subjects short, imperative, and scoped to one benchmark change. There is no PR template, so include what changed, which commands you ran, whether API-backed runs were executed, and any scoring assumptions affected. If a change alters prompts, grading, or POSIX coverage, include a before/after example in the PR description.
 
+## Post-Run Documentation Checklist
+
+Run after every benchmark run that produces results. Doc drift is the primary risk in this project — it compounds silently.
+
+**Immediate (before closing the terminal):**
+- [ ] Did any result contradict a Known Issues entry in CLAUDE.md? Update it with observed behavior and `[OBSERVED date]`.
+- [ ] Did any result confirm or refute a speculative claim in any reference doc? Replace with observed fact.
+- [ ] Did a planning doc's expiry condition get met? Fill in Outcome, set Status to SUPERSEDED, move to `docs/archive/`.
+
+**In the same commit as the results:**
+- [ ] Does CLAUDE.md Known Issues still match reality? Each bullet must have an `[OBSERVED date]` tag.
+- [ ] Are there one-shot scripts (`patch_*`, `migrate_*`, `fix_once_*`) in the repo root that were run to produce this result? Delete them now.
+
+**Before the next planning session:**
+- [ ] Pull `docs/plans/`. Any plan whose expiry condition has been met must be archived before a new plan is created.
+
 ## Repository-Specific Notes
 
 Treat POSIX.1-2024 Issue 8 as canonical when editing questions or expected answers. Check `CLAUDE.md` before changing CLI behavior, token accounting, or provider quirks such as Gemini noise stripping and Codex's `--skip-git-repo-check` flag.
