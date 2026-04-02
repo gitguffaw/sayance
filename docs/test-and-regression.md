@@ -11,7 +11,7 @@ A regression is any change to the codebase, prompt, question set, or tool that m
 | `valid_results` drops below `total_results` | A parser broke — JSON output from a CLI changed format |
 | `mean_step_count` for Codex spikes above its Track 1 baseline | The Step-Up prompt is causing detours, not reducing them |
 | Gemini shows `valid_results: 0` | The MCP prefix stripping broke, or the model API is down |
-| A question contains the utility name | The Taboo rule was violated — that question's data is worthless |
+| A question contains the utility name, "POSIX", or standards language | The Taboo rule was violated — that question's data is worthless |
 
 ---
 
@@ -82,20 +82,18 @@ Check `issue8_refusal_count` in both tracks. The LLM should never say that `read
 
 ## Checking the Question Set for Taboo Violations
 
+The canonical Taboo rules live in `benchmark_data.json` under `meta.question_rules`. Read those before reviewing questions.
+
 Run this before committing any changes to `benchmark_data.json`:
 
 ```bash
 python3 run_benchmark.py --dry-run 2>&1
 ```
 
-Review every question shown in the output. For each question, mentally check: does any word in the question match or closely resemble the `expected_commands` for that question?
-
-Known high-risk words to watch for:
-- "sort", "find", "split", "join" — exact command names
-- "combine", "merge" — close synonyms for `join` or `paste`
-- "link", "resolve" — close synonyms for `readlink`/`realpath`
-- "schedule" + time of day — hints at `at`
-- "checksum", "fingerprint" — partially hints at `cksum` but acceptable since it doesn't specify which tool
+Review every question shown in the output against the rules in `benchmark_data.json`. Watch especially for:
+- Expected command names that are also English words ("at", "test", "split", "join", "find", "cut", "sort", "comm", "tr", "nl")
+- The word "POSIX" or any standards/compliance language
+- Descriptions that mirror the expected tool's interface (flag names, output format, argument structure)
 
 ---
 

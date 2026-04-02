@@ -16,10 +16,7 @@ We are not measuring raw knowledge recall. We are measuring efficiency. A correc
 
 Every question in the set must follow these rules. If a question violates any of them, the data it produces is corrupted and the question must be rewritten.
 
-1. **No lexical leaks:** The name of the expected POSIX utility — or any close synonym — must never appear in the question. If the answer is `sort`, the word "sort" cannot be in the prompt. If the answer is `find`, the word "find" cannot be in the prompt.
-2. **Intent-based framing:** The question must be phrased as a natural user problem or desired outcome, not a technical instruction. "I have a file and need to do X" not "Use utility Y to do X."
-3. **No tool-leading:** Don't hint at the shape of the solution. Don't say "use a text processor" or "with a single command." Describe only what you want.
-4. **Describe effects, not mechanisms:** Say "every occurrence should be replaced" not "use a substitution pattern."
+**The canonical rules live in `benchmark_data.json` under `meta.question_rules`.** That is the single source of truth. In summary: no utility names, no "POSIX" or standards language, no tool-leading, and questions must read like a real user asking for help.
 
 ### Question Tiers
 

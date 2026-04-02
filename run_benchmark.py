@@ -21,6 +21,7 @@ import re
 import shlex
 import subprocess
 import argparse
+import random
 import threading
 import time
 from collections import Counter
@@ -34,6 +35,7 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).parent
 DATA_FILE = SCRIPT_DIR / "benchmark_data.json"
 RESULTS_DIR = SCRIPT_DIR / "results"
+RESULTS_DIR_STEPUP = SCRIPT_DIR / "results-stepup"
 
 # ---------------------------------------------------------------------------
 # Data model (frozen — measurement data must not be mutated after capture)
@@ -89,6 +91,13 @@ class ResponseAnalysis:
 
 
 @dataclass(frozen=True)
+class ToolSimulationAdjustment:
+    replay_input_billable: int = 0
+    tool_call_output: int = 0
+    adjusted_billable: int = 0
+
+
+@dataclass(frozen=True)
 class QuestionResult:
     id: str
     llm: str
@@ -136,6 +145,11 @@ NOISE_PREFIXES = (
     "Skill ",
     "[MCP error]",
 )
+
+DEFAULT_CLI_TIMEOUT_SECONDS = 120
+DEFAULT_SHUFFLE_SEED = 20260329
+TOOL_CALL_PATTERN = re.compile(r"TOOL_CALL:\s*get_posix_syntax\((.*?)\)")
+UTILITY_NAME_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9]*$")
 
 
 _TRAP_PATTERNS_RAW: dict[str, list[str]] = {
@@ -190,6 +204,13 @@ def _load_posix_tldr() -> dict:
     if _posix_tldr_cache is None:
         _posix_tldr_cache = json.loads((SCRIPT_DIR / "posix-tldr.json").read_text())
     return dict(_posix_tldr_cache)
+
+
+def normalize_utility_name(raw_command: str) -> str | None:
+    candidate = raw_command.strip().strip("'\"").strip().lower()
+    if not candidate or not UTILITY_NAME_PATTERN.fullmatch(candidate):
+        return None
+    return candidate
 
 
 def strip_cli_noise(output: str) -> str:
@@ -252,7 +273,7 @@ def flatten_numeric_metrics(
     return flattened
 
 
-def invoke_cli(llm: str, prompt: str, *, timeout_seconds: int = 90) -> CLIInvocation:
+def invoke_cli(llm: str, prompt: str, *, timeout_seconds: int = DEFAULT_CLI_TIMEOUT_SECONDS) -> CLIInvocation:
     """Send a prompt to an LLM CLI and return raw stdout plus latency."""
     cmd = LLM_COMMANDS[llm].copy()
     cmd.append(prompt)
@@ -271,6 +292,15 @@ def invoke_cli(llm: str, prompt: str, *, timeout_seconds: int = 90) -> CLIInvoca
                 stdout=(
                     f'{{"error": "exit code {result.returncode}", '
                     f'"stderr": {json.dumps(result.stderr.strip()[:200])}}}'
+                ),
+                latency_ms=latency_ms,
+            )
+        if not result.stdout.strip():
+            stderr_hint = result.stderr.strip()[:200] if result.stderr else "none"
+            return CLIInvocation(
+                stdout=(
+                    f'{{"error": "empty response", '
+                    f'"stderr": {json.dumps(stderr_hint)}}}'
                 ),
                 latency_ms=latency_ms,
             )
@@ -344,8 +374,8 @@ def parse_gemini_tokens(raw_json: dict) -> TokenUsage:
 
 
 def parse_codex_tokens(raw_stdout: str) -> TokenUsage:
-    """Parse token usage from Codex JSONL output (last turn.completed event)."""
-    usage = {}
+    """Parse token usage from Codex JSONL output."""
+    usage_events: list[dict] = []
     for line in raw_stdout.strip().splitlines():
         line = line.strip()
         if not line:
@@ -354,12 +384,19 @@ def parse_codex_tokens(raw_stdout: str) -> TokenUsage:
             event = json.loads(line)
             if event.get("type") == "turn.completed" and "usage" in event:
                 usage = event["usage"]
+                if isinstance(usage, dict):
+                    usage_events.append(usage)
         except json.JSONDecodeError:
             continue
 
-    input_tokens = usage.get("input_tokens", 0)
-    cached = usage.get("cached_input_tokens", 0)
-    output_tokens = usage.get("output_tokens", 0)
+    input_tokens = sum(int(usage.get("input_tokens", 0)) for usage in usage_events)
+    cached = sum(int(usage.get("cached_input_tokens", 0)) for usage in usage_events)
+    output_tokens = sum(int(usage.get("output_tokens", 0)) for usage in usage_events)
+    raw_usage: dict = {}
+    if len(usage_events) == 1:
+        raw_usage = usage_events[0]
+    elif usage_events:
+        raw_usage = {"turns": usage_events}
 
     return TokenUsage(
         input=input_tokens,
@@ -369,7 +406,7 @@ def parse_codex_tokens(raw_stdout: str) -> TokenUsage:
         billable=input_tokens - cached + output_tokens,
         cost_usd=None,
         cost_source="calculated",
-        raw=usage,
+        raw=raw_usage,
     )
 
 
@@ -442,6 +479,23 @@ def parse_response(
 ) -> tuple[str, TokenUsage, str, ExecutionMetrics]:
     """Parse CLI output into response text, token usage, model name, and execution metrics."""
     if llm == "codex":
+        # Check for error responses (timeout, empty response) before JSONL parsing
+        try:
+            maybe_error = json.loads(raw_stdout.strip())
+            if isinstance(maybe_error, dict) and "error" in maybe_error:
+                return f"[ERROR] {maybe_error['error']}", TokenUsage(
+                    input=0, input_cached=0, output=0, thoughts=0,
+                    billable=0, cost_usd=None, cost_source="error",
+                    raw=maybe_error,
+                ), _detect_codex_model(), ExecutionMetrics(
+                    latency_ms=latency_ms,
+                    step_count=1,
+                    tool_call_count=0,
+                    tool_calls_by_type={},
+                )
+        except (json.JSONDecodeError, ValueError):
+            pass  # Not a single JSON object — proceed with JSONL parsing
+
         # Codex: JSONL format, extract text from item.completed events
         tokens = parse_codex_tokens(raw_stdout)
         model = _detect_codex_model()
@@ -512,6 +566,73 @@ def parse_response(
         tool_call_count=0,
         tool_calls_by_type={},
     )
+
+
+def raw_usage_input_billable_tokens(raw_usage: dict) -> int:
+    """Estimate provider-native billable input tokens from a raw usage payload."""
+    if not raw_usage:
+        return 0
+    if isinstance(raw_usage.get("turns"), list):
+        return sum(raw_usage_input_billable_tokens(turn) for turn in raw_usage["turns"])
+    if "cache_creation_input_tokens" in raw_usage or "cache_read_input_tokens" in raw_usage:
+        return (
+            int(raw_usage.get("input_tokens", 0))
+            + int(raw_usage.get("cache_creation_input_tokens", 0))
+            + int(raw_usage.get("cache_read_input_tokens", 0))
+        )
+    if "cached_input_tokens" in raw_usage:
+        return max(
+            int(raw_usage.get("input_tokens", 0)) - int(raw_usage.get("cached_input_tokens", 0)),
+            0,
+        )
+    if "prompt" in raw_usage:
+        return max(int(raw_usage.get("prompt", 0)) - int(raw_usage.get("cached", 0)), 0)
+    return 0
+
+
+def raw_usage_output_tokens(raw_usage: dict) -> int:
+    """Extract provider-native output tokens from a raw usage payload."""
+    if not raw_usage:
+        return 0
+    if isinstance(raw_usage.get("turns"), list):
+        return sum(raw_usage_output_tokens(turn) for turn in raw_usage["turns"])
+    if "output_tokens" in raw_usage:
+        return int(raw_usage.get("output_tokens", 0))
+    if "candidates" in raw_usage:
+        return int(raw_usage.get("candidates", 0))
+    return 0
+
+
+def tool_simulation_adjustment(tokens: TokenUsage) -> ToolSimulationAdjustment:
+    """Compute a simulation-adjusted billable total without mutating raw measurements."""
+    raw = tokens.raw
+    if not isinstance(raw, dict):
+        return ToolSimulationAdjustment(adjusted_billable=tokens.billable)
+
+    run1 = raw.get("run1")
+    run2 = raw.get("run2")
+    if not isinstance(run1, dict) or not isinstance(run2, dict):
+        return ToolSimulationAdjustment(adjusted_billable=tokens.billable)
+
+    replay_input_billable = raw_usage_input_billable_tokens(run2)
+    tool_call_output = raw_usage_output_tokens(run1)
+    adjusted_billable = max(tokens.billable - replay_input_billable - tool_call_output, 0)
+    return ToolSimulationAdjustment(
+        replay_input_billable=replay_input_billable,
+        tool_call_output=tool_call_output,
+        adjusted_billable=adjusted_billable,
+    )
+
+
+def shuffled_questions_for_run(
+    questions: list[dict],
+    *,
+    run_idx: int,
+    seed: int,
+) -> list[dict]:
+    ordered = list(questions)
+    random.Random(seed + run_idx).shuffle(ordered)
+    return ordered
 
 
 def detect_issue8_refusal(question: dict, response_lower: str) -> bool:
@@ -685,7 +806,13 @@ First decode the base64 response, then grade it:
 Respond with ONLY valid JSON, no markdown fences: {{"score": N, "reason": "brief explanation", "used_posix": true/false, "traps_hit": ["list of non-POSIX tools suggested"]}}"""
 
 
-def grade_response(judge: str, question: dict, response: str) -> AccuracyGrade:
+def grade_response(
+    judge: str,
+    question: dict,
+    response: str,
+    *,
+    timeout_seconds: int,
+) -> AccuracyGrade:
     """Use an LLM to grade another LLM's response."""
     import base64
     response_b64 = base64.b64encode(response.encode()).decode()
@@ -699,7 +826,7 @@ def grade_response(judge: str, question: dict, response: str) -> AccuracyGrade:
         response_b64=response_b64,
     )
 
-    raw = invoke_cli(judge, prompt, timeout_seconds=60)
+    raw = invoke_cli(judge, prompt, timeout_seconds=timeout_seconds)
     raw_cleaned = strip_cli_noise(raw.stdout)
 
     # Extract JSON with score field.
@@ -762,6 +889,7 @@ def run_single(
     run_k: int,
     judge: str | None,
     delay: float,
+    timeout_seconds: int,
     inject_posix: bool = False,
 ) -> QuestionResult:
     """Run a single question against a single LLM and return the result."""
@@ -785,7 +913,7 @@ def run_single(
     # Detect cache state (first call to this provider = cold)
     cache_state = "warm" if already_completed(llm, q_id, 0) else "unknown"
 
-    invocation = invoke_cli(llm, prompt)
+    invocation = invoke_cli(llm, prompt, timeout_seconds=timeout_seconds)
     response_text, tokens, model, execution = parse_response(
         llm,
         invocation.stdout,
@@ -800,22 +928,37 @@ def run_single(
 
 
     if inject_posix and "TOOL_CALL: get_posix_syntax(" in response_text:
-        match = re.search(r"TOOL_CALL:\s*get_posix_syntax\((.*?)\)", response_text)
+        match = TOOL_CALL_PATTERN.search(response_text)
         if match:
-            cmd = match.group(1).strip("'\"")
+            cmd = normalize_utility_name(match.group(1))
+            if not cmd:
+                match = None
+        if match and cmd:
             try:
                 tldr = _load_posix_tldr()
-                syntax = tldr.get(cmd, ["Utility not found in Tier 2."])
+                syntax = tldr.get(
+                    cmd,
+                    [
+                        (
+                            f"Utility '{cmd}' is not yet covered by the local syntax index. "
+                            "Continue cautiously and prefer POSIX.1-2024 Issue 8 syntax only."
+                        )
+                    ],
+                )
             except (FileNotFoundError, json.JSONDecodeError):
                 syntax = ["Error reading posix-tldr.json"]
-            
-            follow_up = f"{prompt}\n\nAssistant: {response_text}\n\nTOOL_RESULT:\n{json.dumps(syntax)}\nNow complete the task."
-            inv2 = invoke_cli(llm, follow_up)
+
+            tool_call = f"TOOL_CALL: get_posix_syntax({cmd})"
+            follow_up = (
+                f"{prompt}\n\nAssistant: {tool_call}\n\n"
+                f"TOOL_RESULT:\n{json.dumps(syntax)}\nNow complete the task."
+            )
+            inv2 = invoke_cli(llm, follow_up, timeout_seconds=timeout_seconds)
             resp2, tok2, _, exec2 = parse_response(llm, inv2.stdout, inv2.latency_ms)
-            
-            response_text = f"{response_text}\n\n[TOOL RESULT]: {syntax}\n\n{resp2}"
-            
-            # Simple merge of tokens/execution for tracking
+
+            response_text = f"{tool_call}\n\n[TOOL RESULT]: {syntax}\n\n{resp2}"
+
+            # Keep the raw totals intact; adjusted reporting is derived later.
             tokens = TokenUsage(
                 input=tokens.input + tok2.input,
                 input_cached=tokens.input_cached + tok2.input_cached,
@@ -843,7 +986,12 @@ def run_single(
     # Grade if judge is specified and question has expected answer
     accuracy = None
     if judge and ("expected_answer" in question or "expected" in question):
-        accuracy = grade_response(judge, question, response_text)
+        accuracy = grade_response(
+            judge,
+            question,
+            response_text,
+            timeout_seconds=timeout_seconds,
+        )
 
     return QuestionResult(
         id=q_id,
@@ -884,7 +1032,9 @@ def run_provider_batch(
     k: int,
     judge: str | None,
     delay: float,
+    timeout_seconds: int,
     max_workers: int | None,
+    seed: int,
     inject_posix: bool = False,
 ) -> list[QuestionResult]:
     """Run all questions for a single provider with concurrency."""
@@ -892,8 +1042,8 @@ def run_provider_batch(
     results: list[QuestionResult] = []
     tasks_to_run = []
 
-    for q in questions:
-        for run_idx in range(k):
+    for run_idx in range(k):
+        for q in shuffled_questions_for_run(questions, run_idx=run_idx, seed=seed):
             if already_completed(llm, q["id"], run_idx):
                 existing = load_existing_result(llm, q, run_idx)
                 if existing:
@@ -911,7 +1061,16 @@ def run_provider_batch(
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {}
         for q, run_idx in tasks_to_run:
-            future = pool.submit(run_single, llm, q, run_idx, judge, delay, inject_posix)
+            future = pool.submit(
+                run_single,
+                llm,
+                q,
+                run_idx,
+                judge,
+                delay,
+                timeout_seconds,
+                inject_posix,
+            )
             futures[future] = (q["id"], run_idx)
 
         for future in as_completed(futures):
@@ -951,8 +1110,10 @@ def run_benchmark(
     k: int,
     judge: str | None,
     delay: float,
+    timeout_seconds: int,
     max_workers: int | None,
     dry_run: bool,
+    seed: int,
     inject_posix: bool = False,
 ) -> dict[str, list[QuestionResult]]:
     """Run the full benchmark across all providers."""
@@ -964,12 +1125,16 @@ def run_benchmark(
     print(f"  LLMs: {', '.join(llms)}")
     print(f"  Judge: {judge or 'none (token-only mode)'}")
     print(f"  Questions: {len(questions)}, K={k} runs each")
+    print(f"  Shuffle seed: {seed}")
+    print(f"  CLI timeout: {timeout_seconds}s")
     print(f"  Total calls: {total_calls}")
     print(f"{'=' * 60}\n")
 
     if dry_run:
-        for q in questions:
-            print(f"  [{q['id']}] {q['question'][:60]}...")
+        for run_idx in range(k):
+            ordered = shuffled_questions_for_run(questions, run_idx=run_idx, seed=seed)
+            ids = ", ".join(q["id"] for q in ordered)
+            print(f"  Run {run_idx} order: {ids}")
         print(f"\n  Would make {total_calls} CLI invocations.")
         return {}
 
@@ -981,7 +1146,16 @@ def run_benchmark(
         for llm in llms:
             print(f"--- {llm.upper()} ---\n")
             future = provider_pool.submit(
-                run_provider_batch, llm, questions, k, judge, delay, max_workers, inject_posix,
+                run_provider_batch,
+                llm,
+                questions,
+                k,
+                judge,
+                delay,
+                timeout_seconds,
+                max_workers,
+                seed,
+                inject_posix,
             )
             provider_futures[future] = llm
 
@@ -1037,6 +1211,7 @@ def generate_report(all_results: dict[str, list[QuestionResult]], questions: lis
         compliant = [r for r in valid if r.analysis.posix_compliant]
         issue8_refusals = [r for r in valid if r.analysis.issue8_refusal]
         failure_modes = Counter(r.analysis.failure_mode for r in valid)
+        adjustments = [tool_simulation_adjustment(r.tokens) for r in valid]
 
         def stats(values: list[int | float]) -> str:
             if not values:
@@ -1060,7 +1235,22 @@ def generate_report(all_results: dict[str, list[QuestionResult]], questions: lis
         if costs:
             print(f"    Cost USD:       {stats(costs)}")
             print(f"    Total cost:     ${sum(costs):.4f}")
+        total_replay_input = sum(a.replay_input_billable for a in adjustments)
+        total_tool_call_output = sum(a.tool_call_output for a in adjustments)
+        if total_replay_input or total_tool_call_output:
+            adjusted_billable = [a.adjusted_billable for a in adjustments]
+            print(f"    Tool-sim replay input:  {stats([a.replay_input_billable for a in adjustments])}")
+            print(f"    Tool-call stub output:  {stats([a.tool_call_output for a in adjustments])}")
+            print(f"    Billable (sim-adjusted): {stats(adjusted_billable)}")
         print()
+
+        errors = [r for r in results if r.response.startswith("[ERROR]")]
+        if errors:
+            print(f"    Errors: {len(errors)}/{len(results)} questions failed")
+            for r in errors:
+                error_type = r.response.removeprefix("[ERROR] ")
+                print(f"      {r.id}: {error_type} (after {r.execution.latency_ms}ms)")
+            print()
 
         cold = [r for r in valid if r.cache_state == "cold"]
         warm = [r for r in valid if r.cache_state == "warm"]
@@ -1162,11 +1352,21 @@ def save_summary(all_results: dict[str, list[QuestionResult]]) -> Path:
         valid = [r for r in results if r.tokens.billable > 0]
         model = valid[0].model if valid else "unknown"
         failure_modes = Counter(r.analysis.failure_mode for r in valid)
+        adjustments = [tool_simulation_adjustment(r.tokens) for r in valid]
         summary["llms"][llm] = {
             "model": model,
             "total_results": len(results),
             "valid_results": len(valid),
             "total_billable_tokens": sum(r.tokens.billable for r in valid),
+            "total_simulation_adjusted_billable_tokens": sum(
+                adjustment.adjusted_billable for adjustment in adjustments
+            ),
+            "total_tool_simulation_replay_input_tokens": sum(
+                adjustment.replay_input_billable for adjustment in adjustments
+            ),
+            "total_tool_call_stub_output_tokens": sum(
+                adjustment.tool_call_output for adjustment in adjustments
+            ),
             "total_output_tokens": sum(r.tokens.output for r in valid),
             "total_estimated_excess_output_tokens": sum(
                 r.analysis.estimated_excess_output_tokens for r in valid
@@ -1189,6 +1389,15 @@ def save_summary(all_results: dict[str, list[QuestionResult]]) -> Path:
             ),
             "issue8_refusal_count": sum(1 for r in valid if r.analysis.issue8_refusal),
             "failure_modes": dict(failure_modes),
+            "errors": [
+                {
+                    "question_id": r.id,
+                    "error": r.response.removeprefix("[ERROR] "),
+                    "latency_ms": r.execution.latency_ms,
+                }
+                for r in results
+                if r.response.startswith("[ERROR]")
+            ],
         }
 
     summary_path.write_text(json.dumps(summary, indent=2))
@@ -1212,6 +1421,17 @@ def save_visual_report(
         for result in results
         if result.tokens.billable > 0
     ]
+    all_errors = [
+        result
+        for results in all_results.values()
+        for result in results
+        if result.response.startswith("[ERROR]")
+    ]
+    all_flat = [
+        result
+        for results in all_results.values()
+        for result in results
+    ]
 
     def mean(values: list[int | float]) -> float:
         return sum(values) / len(values) if values else 0.0
@@ -1223,9 +1443,11 @@ def save_visual_report(
     max_excess = max((r.analysis.estimated_excess_output_tokens for r in all_valid), default=1)
     max_latency = max((r.execution.latency_ms for r in all_valid), default=1)
 
+    # --- Model cards ---
     model_cards = []
     for llm, results in all_results.items():
         valid = [r for r in results if r.tokens.billable > 0]
+        errors = [r for r in results if r.response.startswith("[ERROR]")]
         if not valid:
             continue
         failure_modes = Counter(r.analysis.failure_mode for r in valid)
@@ -1233,6 +1455,8 @@ def save_visual_report(
             "llm": llm,
             "model": valid[0].model,
             "count": len(valid),
+            "total": len(results),
+            "error_count": len(errors),
             "compliance_rate": sum(1 for r in valid if r.analysis.posix_compliant) / len(valid),
             "issue8_refusal_count": sum(1 for r in valid if r.analysis.issue8_refusal),
             "mean_output": mean([r.tokens.output for r in valid]),
@@ -1240,8 +1464,31 @@ def save_visual_report(
             "mean_latency": mean([r.execution.latency_ms for r in valid]),
             "mean_steps": mean([r.execution.step_count for r in valid]),
             "tool_calls": sum(r.execution.tool_call_count for r in valid),
+            "total_cost": sum(r.tokens.cost_usd for r in valid if r.tokens.cost_usd is not None),
             "failure_modes": failure_modes,
+            "errors": errors,
         })
+
+    # --- Tier breakdown per model ---
+    tier_breakdown_rows = []
+    for card in model_cards:
+        llm = card["llm"]
+        valid = [r for r in all_results[llm] if r.tokens.billable > 0]
+        for tier_num, tier_label in [(1, "Tier 1 — Common"), (2, "Tier 2 — Less common"), (3, "Tier 3 — Blind spot")]:
+            tier_results = [r for r in valid if q_lookup.get(r.id, {}).get("tier") == tier_num]
+            if not tier_results:
+                continue
+            compliant = sum(1 for r in tier_results if r.analysis.posix_compliant)
+            tier_breakdown_rows.append({
+                "llm": llm,
+                "tier_label": tier_label,
+                "count": len(tier_results),
+                "compliant": compliant,
+                "rate": compliant / len(tier_results),
+                "mean_output": mean([r.tokens.output for r in tier_results]),
+                "mean_excess": mean([r.analysis.estimated_excess_output_tokens for r in tier_results]),
+                "mean_latency": mean([r.execution.latency_ms for r in tier_results]),
+            })
 
     top_gap_results = sorted(
         all_valid,
@@ -1249,6 +1496,12 @@ def save_visual_report(
         reverse=True,
     )[:12]
     issue8_results = [r for r in all_valid if r.analysis.issue8_refusal][:8]
+
+    # --- All results for full scorecard ---
+    all_sorted = sorted(
+        all_flat,
+        key=lambda r: (r.id, r.llm),
+    )
 
     def metric_bar(value: float, max_value: float, label: str, suffix: str = "") -> str:
         width = 0 if max_value <= 0 else min(100, (value / max_value) * 100)
@@ -1264,15 +1517,17 @@ def save_visual_report(
 
     def result_card(result: QuestionResult) -> str:
         tier = q_lookup.get(result.id, {}).get("tier", "?")
-        status = "POSIX" if result.analysis.posix_compliant else "MISS"
+        is_error = result.response.startswith("[ERROR]")
+        status = "ERROR" if is_error else ("POSIX" if result.analysis.posix_compliant else "MISS")
+        status_class = "error" if is_error else ("good" if result.analysis.posix_compliant else "bad")
         excerpt = result.response.strip()[:480]
         return f"""
         <article class="task-card">
           <div class="task-meta">
             <span class="pill model-pill">{escape(result.llm.upper())}</span>
             <span class="pill tier-pill">T{tier}</span>
-            <span class="pill mode-pill {escape('good' if result.analysis.posix_compliant else 'bad')}">{escape(status)}</span>
-            <span class="pill failure-pill">{escape(result.analysis.failure_mode.replace('_', ' '))}</span>
+            <span class="pill mode-pill {escape(status_class)}">{escape(status)}</span>
+            <span class="pill failure-pill">{escape(result.analysis.failure_mode.replace('_', ' ') if not is_error else result.response.removeprefix('[ERROR] '))}</span>
           </div>
           <h3>{escape(result.id)} · {escape(result.question)}</h3>
           <div class="task-stats">
@@ -1287,19 +1542,59 @@ def save_visual_report(
               <pre>{escape(result.analysis.minimal_answer)}</pre>
             </div>
             <div>
-              <label>Model response excerpt</label>
+              <label>Model response{' (error)' if is_error else ' excerpt'}</label>
               <pre>{escape(excerpt)}</pre>
             </div>
           </div>
         </article>
         """
 
+    # --- Question reference rows ---
+    TIER_NAMES = {1: "Common", 2: "Less common", 3: "Blind spot"}
+    question_rows = []
+    for q in questions:
+        traps = q.get("posix_traps", [])
+        trap_html = ", ".join(escape(t) for t in traps) if traps else '<span class="no-traps">None</span>'
+        cmds = q.get("expected_commands", [])
+        cmds_html = " ".join(f'<code>{escape(c)}</code>' for c in cmds)
+        tier = q.get("tier", "?")
+        tier_name = TIER_NAMES.get(tier, "?")
+        question_rows.append(f"""
+        <tr>
+          <td class="q-id"><strong>{escape(q['id'])}</strong></td>
+          <td><span class="pill tier-pill tier-{tier}">Tier {tier}</span></td>
+          <td class="q-category">{escape(q.get('category', '').replace('_', ' '))}</td>
+          <td class="q-text">{escape(q['question'])}</td>
+          <td class="q-cmds">{cmds_html}</td>
+          <td><pre class="q-answer">{escape(q.get('expected_answer', ''))}</pre></td>
+          <td class="q-traps">{trap_html}</td>
+        </tr>
+        """)
+
+    # --- Model sections ---
     model_sections = []
     for card in model_cards:
         failure_summary = ", ".join(
             f"{name.replace('_', ' ')}={count}"
             for name, count in card["failure_modes"].most_common()
         )
+        error_html = ""
+        if card["errors"]:
+            error_items = "".join(
+                f"<li><strong>{escape(r.id)}</strong>: {escape(r.response.removeprefix('[ERROR] '))} "
+                f"(after {r.execution.latency_ms:,}ms)</li>"
+                for r in card["errors"]
+            )
+            error_html = f"""
+            <div class="error-list">
+              <span class="error-label">Errors ({card['error_count']})</span>
+              <ul>{error_items}</ul>
+            </div>
+            """
+        cost_line = ""
+        if card["total_cost"] > 0:
+            cost_line = f"<div><span>Total cost</span><strong>${card['total_cost']:.4f}</strong></div>"
+
         model_sections.append(f"""
         <section class="model-card">
           <div class="model-heading">
@@ -1309,21 +1604,39 @@ def save_visual_report(
             </div>
             <div class="compliance-badge">{pct(card["compliance_rate"])}</div>
           </div>
-          <p class="caption">{card["count"]} tasks · {card["issue8_refusal_count"]} Issue 8 refusals · {card["tool_calls"]} tool calls</p>
+          <p class="caption">{card["count"]}/{card["total"]} tasks valid · {card["issue8_refusal_count"]} Issue 8 refusals · {card["tool_calls"]} tool calls</p>
           {metric_bar(card["mean_output"], max(max_output, 1), "Mean output tokens")}
           {metric_bar(card["mean_excess"], max(max_excess, 1), "Mean excess output")}
           {metric_bar(card["mean_latency"], max(max_latency, 1), "Mean latency", " ms")}
           <div class="micro-stats">
             <div><span>Mean steps</span><strong>{card["mean_steps"]:.1f}</strong></div>
+            {cost_line}
             <div><span>Failure modes</span><strong>{escape(failure_summary or 'none')}</strong></div>
           </div>
+          {error_html}
         </section>
+        """)
+
+    # --- Tier breakdown table ---
+    tier_table_rows = []
+    for row in tier_breakdown_rows:
+        rate_color = "good" if row["rate"] >= 0.7 else ("bad" if row["rate"] < 0.5 else "muted")
+        tier_table_rows.append(f"""
+        <tr>
+          <td>{escape(row['llm'].upper())}</td>
+          <td>{escape(row['tier_label'])}</td>
+          <td class="{rate_color}">{row['compliant']}/{row['count']} ({pct(row['rate'])})</td>
+          <td>{row['mean_output']:.0f}</td>
+          <td>{row['mean_excess']:.0f}</td>
+          <td>{row['mean_latency']:.0f}ms</td>
+        </tr>
         """)
 
     issue8_section = "".join(result_card(result) for result in issue8_results) or (
         "<p class='empty-state'>No Issue 8 refusals were detected in this run.</p>"
     )
     top_gap_section = "".join(result_card(result) for result in top_gap_results)
+    all_results_section = "".join(result_card(result) for result in all_sorted)
 
     html_doc = f"""<!doctype html>
 <html lang="en">
@@ -1339,6 +1652,713 @@ def save_visual_report(
       --muted: #655a4d;
       --accent: #bf5b2c;
       --accent-soft: #e6b89d;
+      --steel: #24464e;
+      --line: rgba(24, 21, 18, 0.12);
+      --good: #2f6b47;
+      --bad: #8a2e2e;
+      --warn: #9a6b1b;
+      --shadow: 0 24px 80px rgba(43, 26, 14, 0.14);
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(191, 91, 44, 0.18), transparent 32%),
+        radial-gradient(circle at top right, rgba(36, 70, 78, 0.15), transparent 24%),
+        linear-gradient(180deg, #f8f3ea, var(--bg));
+      font-family: "Avenir Next", "Segoe UI", sans-serif;
+    }}
+    .frame {{
+      width: min(1240px, calc(100vw - 48px));
+      margin: 24px auto 64px;
+    }}
+
+    /* --- Hero --- */
+    .hero {{
+      background: linear-gradient(140deg, rgba(255,250,241,0.95), rgba(246,235,221,0.92));
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      position: relative;
+      padding: 40px;
+    }}
+    .hero::after {{
+      content: "";
+      position: absolute;
+      inset: auto -80px -80px auto;
+      width: 240px;
+      height: 240px;
+      background: conic-gradient(from 45deg, rgba(191,91,44,0.12), rgba(36,70,78,0.16), transparent 70%);
+      border-radius: 50%;
+      filter: blur(4px);
+    }}
+    .eyebrow {{
+      margin: 0 0 8px;
+      color: var(--accent);
+      font-size: 12px;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+      font-weight: 700;
+    }}
+    h1, h2, h3 {{
+      font-family: "Iowan Old Style", "Palatino Linotype", serif;
+      letter-spacing: -0.02em;
+      margin: 0;
+    }}
+    h1 {{
+      font-size: clamp(40px, 6vw, 72px);
+      line-height: 0.95;
+      max-width: 900px;
+    }}
+    .hero p, .intro-text {{
+      max-width: 760px;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1.55;
+    }}
+    .intro-text {{ margin: 16px 0 0; font-size: 15px; line-height: 1.65; }}
+    .hero-grid, .model-grid, .task-grid {{
+      display: grid;
+      gap: 20px;
+    }}
+    .hero-grid {{
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      margin-top: 28px;
+    }}
+    .hero-stat, .model-card, .task-card {{
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }}
+    .hero-stat {{ padding: 20px; }}
+    .hero-stat span {{
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }}
+    .hero-stat strong {{
+      font-size: 34px;
+      font-family: "Iowan Old Style", "Palatino Linotype", serif;
+    }}
+
+    /* --- Sections --- */
+    .section {{
+      margin-top: 28px;
+      padding: 28px;
+      background: rgba(255, 250, 241, 0.62);
+      border: 1px solid var(--line);
+      border-radius: 28px;
+    }}
+    .section-header {{
+      display: flex;
+      justify-content: space-between;
+      align-items: end;
+      gap: 16px;
+      margin-bottom: 20px;
+    }}
+    .section-header p {{ margin: 0; color: var(--muted); }}
+
+    /* --- Model cards --- */
+    .model-grid {{ grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }}
+    .model-card {{ padding: 22px; }}
+    .model-heading {{
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: start;
+    }}
+    .model-heading h2 {{ font-size: 28px; }}
+    .compliance-badge {{
+      min-width: 76px;
+      padding: 14px 12px;
+      border-radius: 20px;
+      background: linear-gradient(180deg, rgba(47,107,71,0.14), rgba(47,107,71,0.06));
+      color: var(--good);
+      text-align: center;
+      font-weight: 700;
+      font-size: 20px;
+    }}
+    .caption {{ color: var(--muted); margin: 8px 0 18px; line-height: 1.5; }}
+    .metric-row {{
+      display: grid;
+      grid-template-columns: 130px 1fr 64px;
+      gap: 12px;
+      align-items: center;
+      margin-top: 12px;
+    }}
+    .metric-label, .metric-value {{ font-size: 13px; color: var(--muted); }}
+    .metric-track {{
+      height: 14px;
+      border-radius: 999px;
+      background: rgba(36,70,78,0.08);
+      overflow: hidden;
+    }}
+    .metric-fill {{
+      height: 100%;
+      background: linear-gradient(90deg, var(--steel), var(--accent));
+      border-radius: 999px;
+    }}
+    .micro-stats {{
+      margin-top: 18px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+      display: grid;
+      gap: 12px;
+    }}
+    .micro-stats div {{
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: start;
+    }}
+    .micro-stats span {{ color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; }}
+    .micro-stats strong {{ text-align: right; max-width: 60%; font-size: 14px; }}
+
+    /* --- Error list in model cards --- */
+    .error-list {{
+      margin-top: 16px;
+      padding: 14px;
+      border-radius: 16px;
+      background: rgba(138, 46, 46, 0.06);
+      border: 1px solid rgba(138, 46, 46, 0.15);
+    }}
+    .error-label {{
+      display: block;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--bad);
+      margin-bottom: 8px;
+    }}
+    .error-list ul {{ margin: 0; padding-left: 18px; font-size: 13px; }}
+    .error-list li {{ margin-bottom: 4px; color: var(--ink); }}
+
+    /* --- Task cards --- */
+    .task-grid {{ grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }}
+    .task-card {{ padding: 18px; }}
+    .task-meta {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 14px;
+    }}
+    .pill {{
+      display: inline-flex;
+      align-items: center;
+      padding: 7px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      font-weight: 700;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.55);
+    }}
+    .mode-pill.good {{ color: var(--good); }}
+    .mode-pill.bad {{ color: var(--bad); }}
+    .mode-pill.error {{ color: var(--bad); background: rgba(138,46,46,0.08); }}
+    .task-card h3 {{ font-size: 26px; line-height: 1.06; margin-bottom: 16px; }}
+    .task-stats {{
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 16px;
+    }}
+    .task-stats div {{
+      padding: 12px;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.56);
+      border: 1px solid var(--line);
+    }}
+    .task-stats strong {{
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      margin-bottom: 8px;
+    }}
+    .task-stats span {{ font-family: "Iowan Old Style", "Palatino Linotype", serif; font-size: 24px; }}
+    .code-pair {{ display: grid; gap: 14px; }}
+    .code-pair label {{
+      display: block;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }}
+    pre {{
+      margin: 0;
+      padding: 14px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      border-radius: 16px;
+      background: rgba(24, 21, 18, 0.04);
+      border: 1px solid var(--line);
+      font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
+      font-size: 13px;
+      line-height: 1.5;
+    }}
+    .empty-state {{ margin: 0; color: var(--muted); }}
+
+    /* --- Question reference table --- */
+    .q-table-wrap {{ overflow-x: auto; -webkit-overflow-scrolling: touch; }}
+    .q-table {{
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: 13px;
+    }}
+    .q-table th {{
+      text-align: left;
+      padding: 10px 12px;
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      border-bottom: 2px solid var(--line);
+      position: sticky;
+      top: 0;
+      background: rgba(255,250,241,0.95);
+    }}
+    .q-table td {{
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+    }}
+    .q-table tr:hover td {{ background: rgba(191,91,44,0.04); }}
+    .q-id {{ white-space: nowrap; }}
+    .q-text {{ min-width: 260px; line-height: 1.5; }}
+    .q-cmds code {{
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 8px;
+      background: rgba(36,70,78,0.1);
+      color: var(--steel);
+      font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
+      font-size: 13px;
+      font-weight: 600;
+    }}
+    .q-answer {{
+      padding: 8px 10px !important;
+      font-size: 12px !important;
+      border-radius: 10px !important;
+      white-space: nowrap;
+    }}
+    .q-traps {{ font-size: 12px; color: var(--bad); min-width: 180px; }}
+    .no-traps {{ color: var(--muted); font-style: italic; }}
+    .q-category {{ text-transform: capitalize; white-space: nowrap; color: var(--muted); }}
+    .tier-pill {{ font-size: 10px; padding: 4px 8px; }}
+    .tier-1 {{ color: var(--good); }}
+    .tier-2 {{ color: var(--warn); }}
+    .tier-3 {{ color: var(--bad); }}
+
+    /* --- Tier breakdown table --- */
+    .tier-table {{
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: 14px;
+    }}
+    .tier-table th {{
+      text-align: left;
+      padding: 10px 14px;
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      border-bottom: 2px solid var(--line);
+    }}
+    .tier-table td {{
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--line);
+    }}
+    .tier-table tr:hover td {{ background: rgba(191,91,44,0.04); }}
+    .tier-table .good {{ color: var(--good); font-weight: 700; }}
+    .tier-table .bad {{ color: var(--bad); font-weight: 700; }}
+    .tier-table .muted {{ color: var(--warn); font-weight: 700; }}
+
+    /* --- Nav --- */
+    .report-nav {{
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(245,240,232,0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--line);
+      padding: 10px 0;
+      margin-bottom: 4px;
+    }}
+    .report-nav ul {{
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      gap: 24px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }}
+    .report-nav a {{
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 12px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      font-weight: 600;
+      padding: 6px 0;
+      border-bottom: 2px solid transparent;
+      transition: color 0.2s, border-color 0.2s;
+    }}
+    .report-nav a:hover {{ color: var(--accent); border-bottom-color: var(--accent); }}
+
+    @media (max-width: 760px) {{
+      .frame {{ width: min(100vw - 20px, 1240px); margin: 10px auto 40px; }}
+      .hero, .section {{ padding: 20px; border-radius: 22px; }}
+      .task-stats {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+      .metric-row {{ grid-template-columns: 1fr; }}
+      .report-nav ul {{ gap: 12px; }}
+    }}
+  </style>
+</head>
+<body>
+  <nav class="report-nav">
+    <ul>
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#models">Models</a></li>
+      <li><a href="#tiers">By Tier</a></li>
+      <li><a href="#questions">Question Set</a></li>
+      <li><a href="#issue8">Issue 8</a></li>
+      <li><a href="#top-gaps">Top Gaps</a></li>
+      <li><a href="#all-results">All Results</a></li>
+    </ul>
+  </nav>
+
+  <main class="frame">
+    <section class="hero" id="overview">
+      <p class="eyebrow">POSIX Token Efficiency Benchmark</p>
+      <h1>How many tokens do LLMs waste on shell tasks?</h1>
+      <p>Every POSIX task in this benchmark has a short, correct answer using a standard utility. This report measures how far each model's response deviates from that minimal answer — in tokens, latency, and compliance.</p>
+      <p class="intro-text">The primary metric is <strong>token cost</strong>, not accuracy. A correct answer in 5 tokens beats a correct answer in 500. An answer that uses GNU extensions or writes a Python script for a one-liner is wasted compute. All questions follow the <strong>Taboo rule</strong> (defined in <code>benchmark_data.json</code>): the expected utility name, the word "POSIX", and any standards language are banned from the question text.</p>
+      <div class="hero-grid">
+        <div class="hero-stat"><span>Spec</span><strong>Issue 8</strong></div>
+        <div class="hero-stat"><span>Utilities</span><strong>155</strong></div>
+        <div class="hero-stat"><span>Tasks</span><strong>{len(questions)}</strong></div>
+        <div class="hero-stat"><span>Valid</span><strong>{len(all_valid)}/{len(all_flat)}</strong></div>
+        <div class="hero-stat"><span>Errors</span><strong style="color: {'var(--bad)' if all_errors else 'var(--good)'}">{len(all_errors)}</strong></div>
+      </div>
+    </section>
+
+    <section class="section" id="models">
+      <div class="section-header">
+        <div>
+          <p class="eyebrow">Model Comparison</p>
+          <h2>Where the excess goes</h2>
+        </div>
+        <p>{escape(datetime.now().strftime("%Y-%m-%d %H:%M"))}</p>
+      </div>
+      <div class="model-grid">
+        {''.join(model_sections)}
+      </div>
+    </section>
+
+    <section class="section" id="tiers">
+      <div class="section-header">
+        <div>
+          <p class="eyebrow">Compliance by Tier</p>
+          <h2>The deeper the obscurity, the worse the answers</h2>
+        </div>
+        <p>Tier 1 = common utilities. Tier 2 = less common but POSIX-specified. Tier 3 = utilities LLMs rarely see in training data.</p>
+      </div>
+      <div class="q-table-wrap">
+        <table class="tier-table">
+          <thead>
+            <tr>
+              <th>Model</th>
+              <th>Tier</th>
+              <th>Compliance</th>
+              <th>Mean Output</th>
+              <th>Mean Excess</th>
+              <th>Mean Latency</th>
+            </tr>
+          </thead>
+          <tbody>
+            {''.join(tier_table_rows)}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section" id="questions">
+      <div class="section-header">
+        <div>
+          <p class="eyebrow">Question Reference</p>
+          <h2>All 30 tasks and their expected POSIX answers</h2>
+        </div>
+        <p>Each question is intent-based. See <code>benchmark_data.json</code> for the Taboo rule that governs question authoring.</p>
+      </div>
+      <div class="q-table-wrap">
+        <table class="q-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Tier</th>
+              <th>Category</th>
+              <th>Task</th>
+              <th>Expected</th>
+              <th>Minimal Answer</th>
+              <th>POSIX Traps</th>
+            </tr>
+          </thead>
+          <tbody>
+            {''.join(question_rows)}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section" id="issue8">
+      <div class="section-header">
+        <div>
+          <p class="eyebrow">Issue 8 Watchlist</p>
+          <h2>Recency-driven failures</h2>
+        </div>
+        <p>Answers that still reject <code>readlink</code>, <code>realpath</code>, or <code>timeout</code> as non-POSIX.</p>
+      </div>
+      <div class="task-grid">
+        {issue8_section}
+      </div>
+    </section>
+
+    <section class="section" id="top-gaps">
+      <div class="section-header">
+        <div>
+          <p class="eyebrow">Top Scorecards</p>
+          <h2>Largest minimal-answer gaps</h2>
+        </div>
+        <p>The 12 responses with the most excess tokens. These are the worst offenders.</p>
+      </div>
+      <div class="task-grid">
+        {top_gap_section}
+      </div>
+    </section>
+
+    <section class="section" id="all-results">
+      <div class="section-header">
+        <div>
+          <p class="eyebrow">Full Results</p>
+          <h2>Every question, every model</h2>
+        </div>
+        <p>All {len(all_flat)} responses sorted by question ID. Includes errors and timeouts.</p>
+      </div>
+      <div class="task-grid">
+        {all_results_section}
+      </div>
+    </section>
+  </main>
+</body>
+</html>
+"""
+
+    report_path.write_text(html_doc)
+    print(f"  Visual report saved: {report_path}")
+    return report_path
+
+
+# ---------------------------------------------------------------------------
+# Comparison report
+# ---------------------------------------------------------------------------
+
+def save_comparison_report(named_summaries: list[tuple[str, dict]]) -> Path:
+    """Generate a standalone HTML report comparing multiple benchmark runs."""
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+    report_path = RESULTS_DIR / f"comparison-{ts}.html"
+
+    # Collect all LLM names across all runs
+    all_llms: list[str] = []
+    for _, summary in named_summaries:
+        for llm in summary.get("llms", {}):
+            if llm not in all_llms:
+                all_llms.append(llm)
+
+    run_names = [name for name, _ in named_summaries]
+    num_runs = len(named_summaries)
+
+    def fmt_pct(val: float) -> str:
+        return f"{val * 100:.1f}%"
+
+    def delta_cell(current: float, baseline: float, fmt: str = ".0f", suffix: str = "", invert: bool = False) -> str:
+        """Render a value with a delta badge vs the first run (baseline)."""
+        diff = current - baseline
+        if abs(diff) < 0.001:
+            badge = ""
+        else:
+            # For metrics where lower is better (tokens, latency), negative diff is good
+            # For compliance rate, positive diff is good
+            is_good = (diff < 0) if not invert else (diff > 0)
+            color = "good" if is_good else "bad"
+            sign = "+" if diff > 0 else ""
+            badge = f' <span class="delta {color}">{sign}{diff:{fmt}}{suffix}</span>'
+        return f"<td>{current:{fmt}}{suffix}{badge}</td>"
+
+    # --- Per-LLM comparison tables ---
+    llm_sections = []
+    for llm in all_llms:
+        rows_data = []
+        for name, summary in named_summaries:
+            data = summary.get("llms", {}).get(llm)
+            if data:
+                rows_data.append((name, data))
+
+        if not rows_data:
+            continue
+
+        baseline = rows_data[0][1]
+
+        # Header row
+        header_cells = "".join(f"<th>{escape(name)}</th>" for name, _ in rows_data)
+
+        # Metric rows
+        metrics = [
+            ("Model", "model", "s", "", False),
+            ("Valid Results", "valid_results", "d", "", False),
+            ("Total Results", "total_results", "d", "", False),
+            ("Compliance Rate", "posix_compliance_rate", ".1%", "", True),
+            ("Mean Output Tokens", "mean_output_tokens", ".0f", "", False),
+            ("Mean Latency (ms)", "mean_latency_ms", ".0f", "", False),
+            ("Mean Steps", "mean_step_count", ".1f", "", False),
+            ("Total Output Tokens", "total_output_tokens", "d", "", False),
+            ("Total Excess Tokens", "total_estimated_excess_output_tokens", "d", "", False),
+            ("Total Billable Tokens", "total_billable_tokens", "d", "", False),
+            ("Total Cost (USD)", "total_cost_usd", ".4f", "$", False),
+            ("Issue 8 Refusals", "issue8_refusal_count", "d", "", False),
+        ]
+
+        metric_rows = []
+        for label, key, fmt, prefix, invert in metrics:
+            cells = []
+            for i, (name, data) in enumerate(rows_data):
+                val = data.get(key, 0)
+                if fmt == "s":
+                    cells.append(f"<td>{escape(str(val))}</td>")
+                elif fmt == ".1%":
+                    if i == 0:
+                        cells.append(f"<td>{fmt_pct(val)}</td>")
+                    else:
+                        diff = val - baseline.get(key, 0)
+                        color = "good" if (diff > 0 if invert else diff < 0) else "bad"
+                        sign = "+" if diff > 0 else ""
+                        badge = f' <span class="delta {color}">{sign}{diff * 100:.1f}pp</span>' if abs(diff) > 0.001 else ""
+                        cells.append(f"<td>{fmt_pct(val)}{badge}</td>")
+                else:
+                    if i == 0:
+                        cells.append(f"<td>{prefix}{val:{fmt}}</td>")
+                    else:
+                        diff = val - baseline.get(key, 0)
+                        if abs(diff) < 0.001:
+                            badge = ""
+                        else:
+                            is_good = (diff < 0) if not invert else (diff > 0)
+                            color = "good" if is_good else "bad"
+                            sign = "+" if diff > 0 else ""
+                            badge = f' <span class="delta {color}">{sign}{prefix}{diff:{fmt}}</span>'
+                        cells.append(f"<td>{prefix}{val:{fmt}}{badge}</td>")
+            metric_rows.append(f"<tr><td class='metric-name'>{escape(label)}</td>{''.join(cells)}</tr>")
+
+        # Failure modes comparison
+        all_modes: list[str] = []
+        for _, data in rows_data:
+            for mode in data.get("failure_modes", {}):
+                if mode not in all_modes:
+                    all_modes.append(mode)
+
+        fm_rows = []
+        for mode in all_modes:
+            cells = []
+            baseline_val = baseline.get("failure_modes", {}).get(mode, 0)
+            for i, (name, data) in enumerate(rows_data):
+                val = data.get("failure_modes", {}).get(mode, 0)
+                if i == 0:
+                    cells.append(f"<td>{val}</td>")
+                else:
+                    diff = val - baseline_val
+                    if diff == 0:
+                        badge = ""
+                    else:
+                        color = "good" if diff < 0 else "bad"
+                        sign = "+" if diff > 0 else ""
+                        badge = f' <span class="delta {color}">{sign}{diff}</span>'
+                    cells.append(f"<td>{val}{badge}</td>")
+            fm_rows.append(f"<tr><td class='metric-name'>{escape(mode.replace('_', ' '))}</td>{''.join(cells)}</tr>")
+
+        # Errors comparison
+        error_rows = []
+        for name, data in rows_data:
+            errors = data.get("errors", [])
+            if errors:
+                for err in errors:
+                    error_rows.append(f"<tr><td>{escape(name)}</td><td>{escape(err['question_id'])}</td><td>{escape(err['error'])}</td><td>{err['latency_ms']:,}ms</td></tr>")
+
+        error_section = ""
+        if error_rows:
+            error_section = f"""
+            <h3>Errors</h3>
+            <table class="comp-table">
+              <thead><tr><th>Run</th><th>Question</th><th>Error</th><th>Latency</th></tr></thead>
+              <tbody>{''.join(error_rows)}</tbody>
+            </table>
+            """
+
+        llm_sections.append(f"""
+        <section class="section" id="llm-{escape(llm)}">
+          <div class="section-header">
+            <div>
+              <p class="eyebrow">{escape(llm.upper())}</p>
+              <h2>Across {len(rows_data)} runs</h2>
+            </div>
+          </div>
+          <table class="comp-table">
+            <thead><tr><th>Metric</th>{header_cells}</tr></thead>
+            <tbody>{''.join(metric_rows)}</tbody>
+          </table>
+          <h3>Failure Modes</h3>
+          <table class="comp-table">
+            <thead><tr><th>Mode</th>{header_cells}</tr></thead>
+            <tbody>{''.join(fm_rows)}</tbody>
+          </table>
+          {error_section}
+        </section>
+        """)
+
+    # --- Nav ---
+    nav_items = "".join(
+        f'<li><a href="#llm-{escape(llm)}">{escape(llm.upper())}</a></li>'
+        for llm in all_llms
+    )
+
+    html_doc = f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>POSIX Benchmark Comparison</title>
+  <style>
+    :root {{
+      --bg: #f5f0e8;
+      --paper: rgba(255, 250, 241, 0.88);
+      --ink: #181512;
+      --muted: #655a4d;
+      --accent: #bf5b2c;
       --steel: #24464e;
       --line: rgba(24, 21, 18, 0.12);
       --good: #2f6b47;
@@ -1391,33 +2411,20 @@ def save_visual_report(
       letter-spacing: -0.02em;
       margin: 0;
     }}
-    h1 {{
-      font-size: clamp(40px, 6vw, 72px);
-      line-height: 0.95;
-      max-width: 900px;
-    }}
-    .hero p {{
-      max-width: 760px;
-      color: var(--muted);
-      font-size: 18px;
-      line-height: 1.55;
-    }}
-    .hero-grid, .model-grid, .task-grid {{
-      display: grid;
-      gap: 20px;
-    }}
+    h1 {{ font-size: clamp(40px, 6vw, 72px); line-height: 0.95; max-width: 900px; }}
+    h3 {{ margin: 24px 0 12px; font-size: 20px; }}
+    .hero p {{ max-width: 760px; color: var(--muted); font-size: 18px; line-height: 1.55; }}
     .hero-grid {{
+      display: grid;
       grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 20px;
       margin-top: 28px;
     }}
-    .hero-stat, .model-card, .task-card {{
+    .hero-stat {{
       background: var(--paper);
       border: 1px solid var(--line);
       border-radius: 24px;
       box-shadow: var(--shadow);
-      backdrop-filter: blur(10px);
-    }}
-    .hero-stat {{
       padding: 20px;
     }}
     .hero-stat span {{
@@ -1446,237 +2453,133 @@ def save_visual_report(
       gap: 16px;
       margin-bottom: 20px;
     }}
-    .section-header p {{
-      margin: 0;
-      color: var(--muted);
-    }}
-    .model-grid {{
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    }}
-    .model-card {{
-      padding: 22px;
-    }}
-    .model-heading {{
-      display: flex;
-      justify-content: space-between;
-      gap: 16px;
-      align-items: start;
-    }}
-    .model-heading h2 {{
-      font-size: 28px;
-    }}
-    .compliance-badge {{
-      min-width: 76px;
-      padding: 14px 12px;
-      border-radius: 20px;
-      background: linear-gradient(180deg, rgba(47,107,71,0.14), rgba(47,107,71,0.06));
-      color: var(--good);
-      text-align: center;
-      font-weight: 700;
-      font-size: 20px;
-    }}
-    .caption {{
-      color: var(--muted);
-      margin: 8px 0 18px;
-      line-height: 1.5;
-    }}
-    .metric-row {{
-      display: grid;
-      grid-template-columns: 130px 1fr 64px;
-      gap: 12px;
-      align-items: center;
-      margin-top: 12px;
-    }}
-    .metric-label, .metric-value {{
-      font-size: 13px;
-      color: var(--muted);
-    }}
-    .metric-track {{
-      height: 14px;
-      border-radius: 999px;
-      background: rgba(36,70,78,0.08);
-      overflow: hidden;
-    }}
-    .metric-fill {{
-      height: 100%;
-      background: linear-gradient(90deg, var(--steel), var(--accent));
-      border-radius: 999px;
-    }}
-    .micro-stats {{
-      margin-top: 18px;
-      padding-top: 18px;
-      border-top: 1px solid var(--line);
-      display: grid;
-      gap: 12px;
-    }}
-    .micro-stats div {{
-      display: flex;
-      justify-content: space-between;
-      gap: 18px;
-      align-items: start;
-    }}
-    .micro-stats span {{
-      color: var(--muted);
-      font-size: 13px;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-    }}
-    .micro-stats strong {{
-      text-align: right;
-      max-width: 60%;
+    .section-header p {{ margin: 0; color: var(--muted); }}
+    .comp-table {{
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
       font-size: 14px;
     }}
-    .task-grid {{
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    .comp-table th {{
+      text-align: left;
+      padding: 10px 14px;
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      border-bottom: 2px solid var(--line);
+      background: rgba(255,250,241,0.95);
+      position: sticky;
+      top: 44px;
     }}
-    .task-card {{
-      padding: 18px;
+    .comp-table td {{
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--line);
+      font-variant-numeric: tabular-nums;
     }}
-    .task-meta {{
+    .comp-table tr:hover td {{ background: rgba(191,91,44,0.04); }}
+    .metric-name {{
+      font-weight: 600;
+      white-space: nowrap;
+    }}
+    .delta {{
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      margin-left: 6px;
+    }}
+    .delta.good {{
+      color: var(--good);
+      background: rgba(47,107,71,0.1);
+    }}
+    .delta.bad {{
+      color: var(--bad);
+      background: rgba(138,46,46,0.1);
+    }}
+    .report-nav {{
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(245,240,232,0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--line);
+      padding: 10px 0;
+      margin-bottom: 4px;
+    }}
+    .report-nav ul {{
+      list-style: none;
+      margin: 0;
+      padding: 0;
       display: flex;
+      gap: 24px;
+      justify-content: center;
       flex-wrap: wrap;
-      gap: 8px;
-      margin-bottom: 14px;
     }}
-    .pill {{
-      display: inline-flex;
-      align-items: center;
-      padding: 7px 10px;
-      border-radius: 999px;
-      font-size: 11px;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      font-weight: 700;
-      border: 1px solid var(--line);
-      background: rgba(255,255,255,0.55);
-    }}
-    .mode-pill.good {{ color: var(--good); }}
-    .mode-pill.bad {{ color: var(--bad); }}
-    .task-card h3 {{
-      font-size: 26px;
-      line-height: 1.06;
-      margin-bottom: 16px;
-    }}
-    .task-stats {{
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 10px;
-      margin-bottom: 16px;
-    }}
-    .task-stats div {{
-      padding: 12px;
-      border-radius: 16px;
-      background: rgba(255,255,255,0.56);
-      border: 1px solid var(--line);
-    }}
-    .task-stats strong {{
-      display: block;
+    .report-nav a {{
       color: var(--muted);
-      font-size: 11px;
+      text-decoration: none;
+      font-size: 12px;
+      letter-spacing: 0.1em;
       text-transform: uppercase;
-      letter-spacing: 0.12em;
-      margin-bottom: 8px;
+      font-weight: 600;
+      padding: 6px 0;
+      border-bottom: 2px solid transparent;
+      transition: color 0.2s, border-color 0.2s;
     }}
-    .task-stats span {{
-      font-family: "Iowan Old Style", "Palatino Linotype", serif;
-      font-size: 24px;
+    .report-nav a:hover {{ color: var(--accent); border-bottom-color: var(--accent); }}
+    .run-list {{ margin: 16px 0 0; padding: 0; list-style: none; }}
+    .run-list li {{
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--line);
+      font-size: 14px;
     }}
-    .code-pair {{
-      display: grid;
-      gap: 14px;
-    }}
-    .code-pair label {{
-      display: block;
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 8px;
-    }}
-    pre {{
-      margin: 0;
-      padding: 14px;
-      white-space: pre-wrap;
-      word-break: break-word;
-      border-radius: 16px;
-      background: rgba(24, 21, 18, 0.04);
-      border: 1px solid var(--line);
-      font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
-      font-size: 13px;
-      line-height: 1.5;
-    }}
-    .empty-state {{
-      margin: 0;
-      color: var(--muted);
-    }}
+    .run-list .run-name {{ font-weight: 700; }}
+    .run-list .run-ts {{ color: var(--muted); font-size: 13px; }}
     @media (max-width: 760px) {{
       .frame {{ width: min(100vw - 20px, 1240px); margin: 10px auto 40px; }}
       .hero, .section {{ padding: 20px; border-radius: 22px; }}
-      .task-stats {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
-      .metric-row {{ grid-template-columns: 1fr; }}
     }}
   </style>
 </head>
 <body>
+  <nav class="report-nav">
+    <ul>
+      <li><a href="#overview">Overview</a></li>
+      {nav_items}
+    </ul>
+  </nav>
+
   <main class="frame">
-    <section class="hero">
-      <p class="eyebrow">POSIX Token Efficiency Benchmark</p>
-      <h1>Minimal-answer gap report for shell tasks with standards-native answers.</h1>
-      <p>This run measures how often models fail to collapse to the shortest valid POSIX solution, and how much output, latency, and agentic overhead they burn instead.</p>
+    <section class="hero" id="overview">
+      <p class="eyebrow">POSIX Benchmark Comparison</p>
+      <h1>Side-by-side across {num_runs} runs</h1>
+      <p>Comparing benchmark results across different conditions. The first run listed is the baseline — deltas are computed against it.</p>
       <div class="hero-grid">
+        <div class="hero-stat"><span>Runs</span><strong>{num_runs}</strong></div>
+        <div class="hero-stat"><span>Models</span><strong>{len(all_llms)}</strong></div>
         <div class="hero-stat"><span>Spec</span><strong>Issue 8</strong></div>
-        <div class="hero-stat"><span>Utilities</span><strong>155</strong></div>
-        <div class="hero-stat"><span>Tasks</span><strong>{len(questions)}</strong></div>
-        <div class="hero-stat"><span>Responses</span><strong>{len(all_valid)}</strong></div>
       </div>
+      <ul class="run-list">
+        {''.join(
+            f'<li><span class="run-name">{escape(name)}</span>'
+            f'<span class="run-ts">{escape(summary.get("timestamp", "?"))}</span></li>'
+            for name, summary in named_summaries
+        )}
+      </ul>
     </section>
 
-    <section class="section">
-      <div class="section-header">
-        <div>
-          <p class="eyebrow">Model Comparison</p>
-          <h2>Where the excess goes</h2>
-        </div>
-        <p>{escape(datetime.now().strftime("%Y-%m-%d %H:%M"))}</p>
-      </div>
-      <div class="model-grid">
-        {''.join(model_sections)}
-      </div>
-    </section>
-
-    <section class="section">
-      <div class="section-header">
-        <div>
-          <p class="eyebrow">Issue 8 Watchlist</p>
-          <h2>Recency-driven failures</h2>
-        </div>
-        <p>Answers that still reject `readlink`, `realpath`, or `timeout` as non-POSIX.</p>
-      </div>
-      <div class="task-grid">
-        {issue8_section}
-      </div>
-    </section>
-
-    <section class="section">
-      <div class="section-header">
-        <div>
-          <p class="eyebrow">Top Scorecards</p>
-          <h2>Largest minimal-answer gaps</h2>
-        </div>
-        <p>Ranked by estimated excess output tokens.</p>
-      </div>
-      <div class="task-grid">
-        {top_gap_section}
-      </div>
-    </section>
+    {''.join(llm_sections)}
   </main>
 </body>
 </html>
 """
 
     report_path.write_text(html_doc)
-    print(f"  Visual report saved: {report_path}")
+    print(f"  Comparison report saved: {report_path}")
     return report_path
 
 
@@ -1707,8 +2610,16 @@ def main():
         help="Number of runs per question (default: 1, use 3+ for statistics)",
     )
     parser.add_argument(
+        "--seed", type=int, default=DEFAULT_SHUFFLE_SEED,
+        help="Seed for randomized question order (default: 20260329)",
+    )
+    parser.add_argument(
         "--delay", type=float, default=0,
         help="Seconds to pause between API calls (default: 0)",
+    )
+    parser.add_argument(
+        "--timeout", type=int, default=DEFAULT_CLI_TIMEOUT_SECONDS,
+        help="Abort an external CLI call if it exceeds this many seconds (default: 120)",
     )
     parser.add_argument(
         "--max-workers", type=int, default=None,
@@ -1726,7 +2637,45 @@ def main():
         "--inject-posix", action="store_true",
         help="Inject POSIX Step-Up Architecture for testing",
     )
+    parser.add_argument(
+        "--results-dir",
+        help="Override results directory for this run (relative to repo root or absolute path)",
+    )
+    parser.add_argument(
+        "--compare", nargs="+", metavar="NAME=PATH",
+        help='Compare multiple runs: "Raw Baseline=results/summary-1.json" "Step-Up=results/summary-2.json"',
+    )
     args = parser.parse_args()
+
+    # --- Compare mode: generate comparison report and exit ---
+    if args.compare:
+        named_summaries: list[tuple[str, dict]] = []
+        for entry in args.compare:
+            if "=" not in entry:
+                parser.error(f"--compare entries must be NAME=PATH, got: {entry}")
+            name, path_str = entry.split("=", 1)
+            path = Path(path_str)
+            if not path.exists():
+                parser.error(f"Summary file not found: {path}")
+            with open(path) as f:
+                named_summaries.append((name.strip(), json.load(f)))
+        if len(named_summaries) < 2:
+            parser.error("--compare requires at least 2 summary files")
+        save_comparison_report(named_summaries)
+        return
+
+    if args.timeout <= 0:
+        parser.error("--timeout must be greater than 0")
+
+    # Switch results directory when running with --inject-posix
+    global RESULTS_DIR
+    if args.inject_posix:
+        RESULTS_DIR = RESULTS_DIR_STEPUP
+    if args.results_dir:
+        custom_results_dir = Path(args.results_dir)
+        if not custom_results_dir.is_absolute():
+            custom_results_dir = SCRIPT_DIR / custom_results_dir
+        RESULTS_DIR = custom_results_dir
 
     judge = None if args.no_grade else args.judge
 
@@ -1743,8 +2692,10 @@ def main():
         k=args.k,
         judge=judge,
         delay=args.delay,
+        timeout_seconds=args.timeout,
         max_workers=args.max_workers,
         dry_run=args.dry_run,
+        seed=args.seed,
         inject_posix=args.inject_posix,
     )
 

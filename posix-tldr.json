@@ -25,6 +25,10 @@
   "grep": [
     "Case-insensitive search: grep -i 'error' *.log"
   ],
+  "printf": [
+    "Portable output: printf 'yes\\n'",
+    "Prefer printf over echo in POSIX shell scripts."
+  ],
   "test": [
     "Check if file is readable: test -r file"
   ],
@@ -48,6 +52,9 @@
   "nohup": [
     "Run in background safely: nohup ./script.sh &"
   ],
+  "ls": [
+    "Show symlink target: ls -l symlink"
+  ],
   "readlink": [
     "Resolve symlink: readlink symlink"
   ],
@@ -68,6 +75,9 @@
   ],
   "nl": [
     "Add line numbers: nl file"
+  ],
+  "wc": [
+    "Count lines: wc -l file"
   ],
   "pathchk": [
     "Check if filename is portable: pathchk -p filename"
