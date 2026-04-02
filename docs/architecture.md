@@ -12,7 +12,7 @@ The root cause is not that the LLM "can't do it" — it's that it doesn't know t
 
 ---
 
-## The Three Tiers
+## The Two Tiers
 
 ### Tier 1 — The Semantic Map (`posix-core.md`)
 
@@ -36,12 +36,6 @@ The agent is instructed to always call this tool before using any utility it fou
 
 The tool is backed by `posix-tldr.json`, a local structured file. The LLM never reads that file directly — it always goes through the tool interface, which prevents token flooding from a naive `cat posix-tldr.json`.
 
-### Tier 3 — The IEEE Fallback (`search_posix_spec`)
-
-A scoped search tool that queries a vectorized version of POSIX.1-2024 directly. Used only for edge cases that Tier 2 doesn't cover — obscure flags, interaction behavior between utilities, or POSIX-specific portability notes.
-
-This tier is the escape hatch, not the default. Using it on every call would defeat the purpose of the architecture.
-
 ---
 
 ## How the Tiers Work Together
@@ -54,10 +48,7 @@ User prompt
     |-- YES --> Call get_posix_syntax(tool_name)
     |               |
     |           [Tier 2] Returns exact POSIX syntax
-    |               |-- Has what I need --> Use it, answer the question
-    |               |-- Missing edge case --> Call search_posix_spec(query)
-    |                                             |
-    |                                         [Tier 3] Returns spec detail
+    |               |-- Use it, answer the question
     |
     |-- NO --> Use general knowledge (expected to be rare)
 ```
@@ -91,3 +82,17 @@ Within each namespace, no two tools can share the same primary verb. If `join` u
 - It does not guarantee POSIX compliance — it makes it dramatically more likely.
 - It does not replace reading the spec for novel edge cases.
 - It does not work if the agent bypasses the tool system entirely (e.g., answers from training data alone). The benchmark tracks tool call metrics specifically to detect this.
+
+---
+
+## Observed Results
+
+Benchmark runs across Claude, Codex, and Gemini confirm the architecture works:
+
+| Provider | Track 1 Compliance | Track 2 Compliance | Output Tokens T1 | Output Tokens T2 |
+|----------|-------------------|--------------------|------------------|------------------|
+| Claude | 63.3% | 76.7% | 228 | 374 |
+| Codex | 58.6% | 86.7% | 930 | 1,289 |
+| Gemini | 65.4% | 86.7% | 215 | 105 |
+
+Notable: Gemini's output tokens dropped by more than half in Track 2 — the Step-Up architecture led it to answer more directly. Codex compliance improved the most (+28pp) but its agentic style means output tokens increased; `tool_heavy_detour` was its dominant Track 2 failure mode (25/30 questions).
