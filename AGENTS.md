@@ -1,5 +1,13 @@
 # Repository Guidelines
 
+## Governance and Sync
+
+- CLAUDE.md is canonical for benchmark behavior, runtime semantics, provider CLI quirks, and result interpretation.
+- AGENTS.md is canonical for process, code style, validation commands, PR hygiene, and operational workflow.
+- `benchmark_data.json` (`meta.question_rules`) is canonical for question-rule semantics; `posix-utilities.txt` is canonical for POSIX utility scope.
+- Sync rule: when a topic changes in one file that affects the other, update both in the same change.
+- Conflict rule: behavior/runtime conflicts resolve to CLAUDE.md; process/style conflicts resolve to AGENTS.md.
+
 ## Project Structure & Module Organization
 
 This repository is a small, stdlib-only Python benchmark. `run_benchmark.py` is the main entrypoint and contains the CLI, provider adapters, grading flow, and JSON parsing. Benchmark inputs live in `benchmark_data.json`, and the POSIX utility source of truth lives in `posix-utilities.txt`. Research notes and planning docs are under `docs/brainstorms/`, `docs/plans/`, and `docs/solutions/`. Generated output is written to `results/`, which is ignored by Git.
@@ -29,3 +37,5 @@ Current history uses Conventional Commit prefixes such as `feat:`. Keep commit s
 ## Repository-Specific Notes
 
 Treat POSIX.1-2024 Issue 8 as canonical when editing questions or expected answers. Check `CLAUDE.md` before changing CLI behavior, token accounting, or provider quirks such as Gemini noise stripping and Codex's `--skip-git-repo-check` flag.
+
+For benchmark behavior and runtime assumptions, follow CLAUDE.md.
