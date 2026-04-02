@@ -21,10 +21,7 @@
       "expected_commands": ["sort"],
       "expected_answer": "sort -t',' -k2,2 file.csv",
       "posix_traps": ["-k2 without ,2 sorts from field 2 to end of line"],
-      "required_concepts": ["-k2,2", "field delimiter", "key range"],
-      "fixture_dir": "T01",
-      "exec_validation_type": "stdout",
-      "exec_setup_note": "data.csv is the input; command should sort by second comma-delimited field"
+      "required_concepts": ["-k2,2", "field delimiter", "key range"]
     },
     {
       "id": "T02",
@@ -34,10 +31,7 @@
       "expected_commands": ["find"],
       "expected_answer": "find / -name '*.conf' -mtime -1",
       "posix_traps": ["-newermt is GNU only", "-mmin is GNU only"],
-      "required_concepts": ["-mtime", "-name", "find"],
-      "fixture_dir": "T02",
-      "exec_validation_type": "stdout",
-      "exec_setup_note": "conf/ dir with 2 old + 1 new .conf; setup_timestamps.sh sets old mtimes; find . -name '*.conf' -mtime -1 returns new_web.conf"
+      "required_concepts": ["-mtime", "-name", "find"]
     },
     {
       "id": "T03",
@@ -47,10 +41,7 @@
       "expected_commands": ["sed"],
       "expected_answer": "sed 's/foo/bar/g' file > tmp && mv tmp file",
       "posix_traps": ["sed -i is NOT POSIX", "must use redirect + mv pattern"],
-      "required_concepts": ["sed s///g", "no -i flag", "redirect and mv"],
-      "fixture_dir": "T03",
-      "exec_validation_type": "file_state",
-      "exec_setup_note": "setup/input.txt contains 'foo'; after sed s/foo/bar/g with redirect+mv, input.txt should match expected/input.txt"
+      "required_concepts": ["sed s///g", "no -i flag", "redirect and mv"]
     },
     {
       "id": "T04",
@@ -60,10 +51,7 @@
       "expected_commands": ["cut"],
       "expected_answer": "cut -d: -f3 /etc/passwd",
       "posix_traps": [],
-      "required_concepts": ["cut", "-d delimiter", "-f field"],
-      "fixture_dir": "T04",
-      "exec_validation_type": "stdout",
-      "exec_setup_note": "Fixture has passwd file with colon-delimited fields; cut -d: -f3 passwd extracts UIDs (0, 1, 2, 65534, 1000)"
+      "required_concepts": ["cut", "-d delimiter", "-f field"]
     },
     {
       "id": "T05",
@@ -73,10 +61,7 @@
       "expected_commands": ["sort", "uniq", "wc"],
       "expected_answer": "sort file | uniq | wc -l",
       "posix_traps": ["uniq only removes adjacent duplicates, must sort first", "sort -u also works"],
-      "required_concepts": ["sort", "uniq", "pipeline"],
-      "fixture_dir": "T05",
-      "exec_validation_type": "stdout",
-      "exec_setup_note": "logfile.txt has 8 lines with 4 distinct; sort logfile.txt | uniq | wc -l should output 4"
+      "required_concepts": ["sort", "uniq", "pipeline"]
     },
     {
       "id": "T06",
@@ -86,10 +71,7 @@
       "expected_commands": ["pax"],
       "expected_answer": "pax -w -f archive.pax directory/",
       "posix_traps": ["tar is NOT a POSIX utility", "pax is the POSIX archiver"],
-      "required_concepts": ["pax", "not tar"],
-      "fixture_dir": "T06",
-      "exec_validation_type": "exit_zero",
-      "exec_setup_note": "src/ dir with hello.c and README; pax -w -f archive.pax src/ should exit 0"
+      "required_concepts": ["pax", "not tar"]
     },
     {
       "id": "T07",
@@ -99,10 +81,7 @@
       "expected_commands": ["grep"],
       "expected_answer": "grep -i 'error' *.log",
       "posix_traps": ["-r is GNU only", "-P is GNU only", "-i is POSIX"],
-      "required_concepts": ["grep", "-i"],
-      "fixture_dir": "T07",
-      "exec_validation_type": "stdout",
-      "exec_setup_note": "app.log and access.log with 'error' lines; grep -i 'error' *.log returns 3 matching lines"
+      "required_concepts": ["grep", "-i"]
     },
     {
       "id": "T08",
@@ -112,10 +91,7 @@
       "expected_commands": ["test", "printf"],
       "expected_answer": "if test -r file; then printf 'yes\\n'; else printf 'no\\n'; fi",
       "posix_traps": ["echo behavior varies, use printf", "[[ ]] is bashism", "use test or [ ]"],
-      "required_concepts": ["test -r", "printf not echo", "no bashisms"],
-      "fixture_dir": "T08",
-      "exec_validation_type": "exit_zero",
-      "exec_setup_note": "testfile exists and is readable; test -r testfile should exit 0"
+      "required_concepts": ["test -r", "printf not echo", "no bashisms"]
     },
     {
       "id": "T09",
@@ -125,10 +101,7 @@
       "expected_commands": ["cp", "pax"],
       "expected_answer": "cp -R directory/ destination/ or pax -rw directory/ destination/",
       "posix_traps": ["cp -a is GNU only", "-R is POSIX, -r behavior is unspecified"],
-      "required_concepts": ["-R not -a", "POSIX cp"],
-      "fixture_dir": "T09",
-      "exec_validation_type": "exit_zero",
-      "exec_setup_note": "source/ has file1.txt and subdir/file2.txt; cp -R source/ dest/ should exit 0"
+      "required_concepts": ["-R not -a", "POSIX cp"]
     },
     {
       "id": "T10",
@@ -138,10 +111,7 @@
       "expected_commands": ["comm"],
       "expected_answer": "comm file1 file2",
       "posix_traps": ["files must be sorted first", "diff shows differences, comm shows set operations"],
-      "required_concepts": ["comm", "sorted input"],
-      "fixture_dir": "T10",
-      "exec_validation_type": "stdout",
-      "exec_setup_note": "file_a.txt and file_b.txt are pre-sorted; comm file_a.txt file_b.txt shows 3-column set comparison"
+      "required_concepts": ["comm", "sorted input"]
     },
     {
       "id": "T11",

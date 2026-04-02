@@ -814,6 +814,28 @@ def load_existing_result(provider: str, question: dict, run_k: int) -> QuestionR
 # ---------------------------------------------------------------------------
 
 COMMAND_TIMEOUT_SECONDS = 30
+FIXTURE_MANIFEST = FIXTURES_DIR / "manifest.json"
+
+_fixture_manifest_cache: dict | None = None
+
+
+def load_fixture_manifest() -> dict[str, dict]:
+    """Load fixture metadata from fixtures/manifest.json.
+
+    Returns a dict keyed by question ID (e.g. "T01") with fixture_dir,
+    exec_validation_type, and exec_setup_note. Keeps benchmark_data.json
+    as a frozen dataset — execution metadata lives separately.
+    """
+    global _fixture_manifest_cache
+    if _fixture_manifest_cache is not None:
+        return _fixture_manifest_cache
+    if not FIXTURE_MANIFEST.exists():
+        _fixture_manifest_cache = {}
+        return _fixture_manifest_cache
+    with open(FIXTURE_MANIFEST) as f:
+        data = json.load(f)
+    _fixture_manifest_cache = data.get("fixtures", {})
+    return _fixture_manifest_cache
 
 
 def extract_command(response: str, expected_commands: list[str]) -> str:
@@ -866,15 +888,15 @@ def extract_command(response: str, expected_commands: list[str]) -> str:
     return text
 
 
-def setup_fixture(question: dict) -> tuple[Path | None, str]:
+def setup_fixture(fixture_spec: dict) -> tuple[Path | None, str]:
     """Copy fixture files into a temp directory for isolated execution.
 
     Returns (temp_dir_path, skip_reason). If skip_reason is non-empty,
     execution should be skipped.
     """
-    fixture_name = question.get("fixture_dir")
+    fixture_name = fixture_spec.get("fixture_dir")
     if not fixture_name:
-        return None, "no fixture_dir in question"
+        return None, "no fixture_dir in spec"
     if not re.match(r'^[A-Za-z0-9_-]+$', fixture_name):
         return None, f"invalid fixture_dir name: {fixture_name}"
 
@@ -958,7 +980,7 @@ def run_command(command: str, cwd: Path, timeout: int = COMMAND_TIMEOUT_SECONDS)
 
 
 def validate_command_result(
-    result: CommandResult, question: dict, temp_dir: Path
+    result: CommandResult, fixture_spec: dict, temp_dir: Path
 ) -> bool:
     """Validate command output against expected results.
 
@@ -967,8 +989,8 @@ def validate_command_result(
     - exit_zero: command exits with code 0
     - file_state: files in temp_dir match expected/ directory
     """
-    validation_type = question.get("exec_validation_type", "exit_zero")
-    fixture_path = FIXTURES_DIR / question["fixture_dir"]
+    validation_type = fixture_spec.get("exec_validation_type", "exit_zero")
+    fixture_path = FIXTURES_DIR / fixture_spec["fixture_dir"]
 
     if validation_type == "stdout":
         expected_file = fixture_path / "expected_stdout"
@@ -1018,21 +1040,25 @@ def _skip_record(validation_type: str, reason: str) -> ExecutionRecord:
 def execute_question(question: dict, response: str) -> ExecutionRecord:
     """Execute the command from an LLM response against the question's fixture.
 
+    Looks up fixture metadata from fixtures/manifest.json by question ID.
     Phase 1: single-attempt execution only (no retry loop).
     """
-    validation_type = question.get("exec_validation_type", "exit_zero")
+    manifest = load_fixture_manifest()
+    fixture_spec = manifest.get(question["id"])
 
-    if not question.get("fixture_dir"):
-        return _skip_record(validation_type, "no fixture_dir in question")
+    if not fixture_spec:
+        return _skip_record("exit_zero", f"no fixture for {question['id']}")
 
-    temp_dir, skip_reason = setup_fixture(question)
+    validation_type = fixture_spec.get("exec_validation_type", "exit_zero")
+
+    temp_dir, skip_reason = setup_fixture(fixture_spec)
     if skip_reason:
         return _skip_record(validation_type, skip_reason)
 
     try:
         command = extract_command(response, question.get("expected_commands", []))
         result = run_command(command, temp_dir)
-        success = validate_command_result(result, question, temp_dir)
+        success = validate_command_result(result, fixture_spec, temp_dir)
 
         return ExecutionRecord(
             command_extracted=command,
@@ -1267,7 +1293,7 @@ def run_single(
 
     # Track 3: execute the extracted command if --execute was passed
     exec_record = None
-    if execute and question.get("fixture_dir"):
+    if execute:
         exec_record = execute_question(question, response_text)
 
     return QuestionResult(
@@ -1412,7 +1438,8 @@ def run_benchmark(
     elif inject_posix:
         mode_label = "Track 2 (Step-Up)"
 
-    exec_qs = [q for q in questions if q.get("fixture_dir")] if execute else []
+    manifest = load_fixture_manifest() if execute else {}
+    exec_qs = [q for q in questions if q["id"] in manifest] if execute else []
 
     print(f"\n{'=' * 60}")
     print(f"  POSIX Token Efficiency Benchmark v0.4")
