@@ -50,7 +50,7 @@ The POSIX.1-2024 Issue 8 spec rationale confirms the addition of `readlink`, `re
 ## 2. Solution: The 2-Tier "Step-Up" Architecture
 A progressive, low-token reference mechanism that mirrors human developer workflows.
 
-*   **Tier 1 (`posix-core.md`):** A heavily condensed semantic map of the 155 utilities injected into the agent's context as a Factory Skill. It provides a 2-4 word semantic hook (e.g., `pax: portable archive (NOT tar)`) so the agent knows the tool exists. Max size: ~800 tokens.
+*   **Tier 1 (`posix-core.md`):** A heavily condensed semantic map of the 155 utilities injected into the agent's context as a Factory Skill. It provides a 2-4 word semantic hook (e.g., `pax: portable archive (NOT tar)`) so the agent knows the tool exists. Max size: ~1,200 tokens.
 *   **Tier 2 (Syntax Lookup Tool):** An agent-native tool (`get_posix_syntax`) backed by a local database (`posix-tldr.json`). Agents are instructed to call this tool *before* executing a Tier 1 utility in the shell. Accepts batch arrays for pipeline lookups.
 
 *Future consideration:* If Tier 2 coverage proves insufficient after Track 3 validation, a Tier 3 spec search tool can be added. This is deferred until data motivates it.
@@ -116,7 +116,7 @@ All three major providers support forcing specific tool calls:
 
 Each entry in `posix-core.md` follows these rules:
 
-- **2-5 words per hook.** Below 3 words, LLMs confuse similar tools. Above 5, the 800-token budget is exceeded.
+- **2-5 words per hook.** Below 3 words, LLMs confuse similar tools. Above 5, the 1,200-token budget is exceeded.
 - **Disambiguate by mechanism, not outcome.** `sed` = regex stream, `tr` = 1-to-1 character swap, `awk` = column/field logic.
 - **One Verb, One Tool.** Within each namespace, no two tools share a primary verb.
 - **Trap inversion for known hallucination traps.** Format: `tool: positive description (NOT wrong_tool)`. Limit to 8-12 negation markers total.

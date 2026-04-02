@@ -2,7 +2,7 @@
 INSTRUCTION: You are operating in a strict POSIX environment. Do NOT write Python/Bash scripts for data/file manipulation without checking this list first. If a tool matches your intent, you MUST use the `get_posix_syntax` tool to retrieve its exact syntax before executing. Do not guess the flags.
 
 ### [CORE_TRIVIAL] (Assumed known, no lookup needed)
-cd, ls, cat, echo, rm, mkdir, rmdir, pwd, grep, find, mv, cp, kill, chmod, chown, chgrp, date, sleep, tail, head, touch, wc, who, env, true, false, sh, test, expr, printf, read
+cd, ls, cat, echo, rm, mkdir, rmdir, pwd, grep, find, mv, cp, ln, kill, chmod, chown, chgrp, date, sleep, tail, head, touch, wc, who, env, true, false, sh, test, expr, printf, read, more, man
 
 ### [TEXT_DATA_PROC]
 *   awk: process via column/field logic
@@ -27,6 +27,8 @@ cd, ls, cat, echo, rm, mkdir, rmdir, pwd, grep, find, mv, cp, kill, chmod, chown
 *   expand: convert tabs to spaces
 *   unexpand: convert spaces to tabs
 *   strings: extract printable characters
+*   tsort: topological sort (dependency order)
+*   xargs: build commands from stdin
 *   ed: scriptable line editor
 *   ex: text editor
 
@@ -69,9 +71,13 @@ cd, ls, cat, echo, rm, mkdir, rmdir, pwd, grep, find, mv, cp, kill, chmod, chown
 *   mailx: send/receive email
 *   mesg: permit terminal write
 *   write: message another user
+*   lp: send to print queue
 *   talk: interactive chat
+uucp, uustat, uux
 
 ### [SYS_ENV_INFO]
+*   df: report filesystem space
+*   du: estimate file space usage
 *   id: return user identity
 *   uname: system name/info
 *   tty: return terminal name
@@ -82,6 +88,7 @@ cd, ls, cat, echo, rm, mkdir, rmdir, pwd, grep, find, mv, cp, kill, chmod, chown
 *   localedef: define localization
 
 ### [DEV_BUILD] (Development / SCCS)
+*   m4: general macro processor
 *   make: build automation
 *   c17: C compiler
 *   lex: lexical analyzer

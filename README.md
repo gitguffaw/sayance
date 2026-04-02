@@ -25,7 +25,7 @@ A two-tier progressive reference system that gives the LLM just enough context t
 
 ### Tier 1 — Discovery (`posix-core.md`)
 
-A ~800-token semantic map of all 155 POSIX utilities, injected into the agent's context. Each utility gets a 2–5 word hook — enough to know it exists and when to reach for it.
+A ~750-token semantic map of all 155 POSIX utilities (budget: 1,200 tokens), injected into the agent's context. Each utility gets a 2–5 word hook — enough to know it exists and when to reach for it.
 
 ```
 [TEXT_DATA_PROC]
@@ -112,7 +112,7 @@ For Gemini, add `--max-workers 1 --delay 30` if you're on a tight API quota.
 
 | File | Purpose |
 |------|---------|
-| `posix-core.md` | **Tier 1** — semantic map of all 155 POSIX utilities (~800 tokens) |
+| `posix-core.md` | **Tier 1** — semantic map of all 155 POSIX utilities (~750 tokens, budget 1,200) |
 | `posix-tldr.json` | **Tier 2** — syntax lookup database for `get_posix_syntax` tool |
 | `run_benchmark.py` | Benchmark runner — provider adapters, grading, reporting |
 | `benchmark_data.json` | 30 intent-based questions with expected POSIX answers |
