@@ -18,7 +18,6 @@ Usage:
 
 import filecmp
 import json
-import os
 import re
 import shlex
 import shutil
@@ -821,24 +820,26 @@ def extract_command(response: str, expected_commands: list[str]) -> str:
     """Extract a runnable shell command from LLM prose output.
 
     Strategy in priority order:
-    1. Single short line with no prose -> return as-is
+    1. Single short line starting with an expected utility -> return as-is
     2. Fenced code block (``` or `) -> extract contents
     3. Lines starting with $ -> strip $ prefix
     4. Lines starting with an expected utility name
     5. Fallback: return the full response stripped
+
+    Extraction failures surface as exec_exit_code 127 (command not found)
+    rather than crashing the run.
     """
     text = response.strip()
 
-    # 1. Single short line — likely already a command
+    # 1. Single short line starting with an expected utility
     if "\n" not in text and len(text) < 200:
-        return text
+        if any(text.startswith(cmd) for cmd in expected_commands):
+            return text
 
     # 2. Fenced code block
     fenced = re.findall(r"```(?:\w*)\n(.*?)```", text, re.DOTALL)
     if fenced:
-        # Take the first code block, strip internal whitespace
         block = fenced[0].strip()
-        # If multi-line, take lines that look like commands (not comments)
         lines = [l for l in block.splitlines() if l.strip() and not l.strip().startswith("#")]
         if lines:
             return "\n".join(lines) if len(lines) > 1 else lines[0]
@@ -861,7 +862,7 @@ def extract_command(response: str, expected_commands: list[str]) -> str:
         if any(stripped.startswith(cmd) for cmd in expected_commands):
             return stripped
 
-    # 5. Fallback
+    # 5. Fallback — returns full text; will fail as exit_code 127 if not a valid command
     return text
 
 
@@ -874,6 +875,8 @@ def setup_fixture(question: dict) -> tuple[Path | None, str]:
     fixture_name = question.get("fixture_dir")
     if not fixture_name:
         return None, "no fixture_dir in question"
+    if not re.match(r'^[A-Za-z0-9_-]+$', fixture_name):
+        return None, f"invalid fixture_dir name: {fixture_name}"
 
     fixture_path = FIXTURES_DIR / fixture_name
     if not fixture_path.is_dir():
@@ -895,15 +898,20 @@ def setup_fixture(question: dict) -> tuple[Path | None, str]:
             else:
                 shutil.copy2(item, temp_dir / item.name)
 
-    # Run setup script if present (e.g., for timestamp manipulation)
+    # Run setup script if present (e.g., for timestamp manipulation).
+    # These scripts are part of the trusted fixture corpus, not LLM output.
     setup_script = fixture_path / "setup_timestamps.sh"
     if setup_script.exists():
-        subprocess.run(
+        proc = subprocess.run(
             ["sh", str(setup_script)],
             cwd=str(temp_dir),
             timeout=5,
             capture_output=True,
+            text=True,
         )
+        if proc.returncode != 0:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            return None, f"setup script failed (exit {proc.returncode}): {proc.stderr[:200]}"
 
     return temp_dir, ""
 
@@ -977,27 +985,34 @@ def validate_command_result(
         expected_dir = fixture_path / "expected"
         if not expected_dir.is_dir():
             return False
-        # Compare each file in expected/ against the corresponding file in temp_dir
         for expected_file in expected_dir.rglob("*"):
             if expected_file.is_dir():
                 continue
             rel = expected_file.relative_to(expected_dir)
             actual_file = temp_dir / rel
             if not actual_file.exists():
-                # Also check in subdirectories that might have been created
-                # by cp -R (e.g., dest/file1.txt vs file1.txt)
-                found = False
-                for candidate in temp_dir.rglob(rel.name):
-                    if candidate.is_file() and candidate.read_text() == expected_file.read_text():
-                        found = True
-                        break
-                if not found:
-                    return False
-            elif not filecmp.cmp(str(expected_file), str(actual_file), shallow=False):
+                return False
+            if not filecmp.cmp(str(expected_file), str(actual_file), shallow=False):
                 return False
         return True
 
     return False
+
+
+def _skip_record(validation_type: str, reason: str) -> ExecutionRecord:
+    """Return an ExecutionRecord for a skipped question."""
+    return ExecutionRecord(
+        command_extracted="",
+        exec_success=False,
+        exec_attempts=0,  # 0 = skipped, 1 = single attempt
+        exec_exit_code=-1,
+        exec_stdout="",
+        exec_stderr="",
+        exec_elapsed_ms=0,
+        exec_validation_type=validation_type,
+        exec_skipped=True,
+        exec_skip_reason=reason,
+    )
 
 
 def execute_question(question: dict, response: str) -> ExecutionRecord:
@@ -1005,37 +1020,14 @@ def execute_question(question: dict, response: str) -> ExecutionRecord:
 
     Phase 1: single-attempt execution only (no retry loop).
     """
-    fixture_name = question.get("fixture_dir")
     validation_type = question.get("exec_validation_type", "exit_zero")
 
-    if not fixture_name:
-        return ExecutionRecord(
-            command_extracted="",
-            exec_success=False,
-            exec_attempts=0,
-            exec_exit_code=-1,
-            exec_stdout="",
-            exec_stderr="",
-            exec_elapsed_ms=0,
-            exec_validation_type=validation_type,
-            exec_skipped=True,
-            exec_skip_reason="no fixture_dir in question",
-        )
+    if not question.get("fixture_dir"):
+        return _skip_record(validation_type, "no fixture_dir in question")
 
     temp_dir, skip_reason = setup_fixture(question)
     if skip_reason:
-        return ExecutionRecord(
-            command_extracted="",
-            exec_success=False,
-            exec_attempts=0,
-            exec_exit_code=-1,
-            exec_stdout="",
-            exec_stderr="",
-            exec_elapsed_ms=0,
-            exec_validation_type=validation_type,
-            exec_skipped=True,
-            exec_skip_reason=skip_reason,
-        )
+        return _skip_record(validation_type, skip_reason)
 
     try:
         command = extract_command(response, question.get("expected_commands", []))
@@ -1053,7 +1045,6 @@ def execute_question(question: dict, response: str) -> ExecutionRecord:
             exec_validation_type=validation_type,
         )
     finally:
-        # Clean up temp directory
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 
