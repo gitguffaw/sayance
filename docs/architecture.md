@@ -95,4 +95,4 @@ Benchmark runs across Claude, Codex, and Gemini confirm the architecture works:
 | Codex | 58.6% | 86.7% | 930 | 1,289 |
 | Gemini | 65.4% | 86.7% | 215 | 105 |
 
-Notable: Gemini's output tokens dropped by more than half in Track 2 — the Step-Up architecture led it to answer more directly. Codex compliance improved the most (+28pp) but its agentic style means output tokens increased; `tool_heavy_detour` was its dominant Track 2 failure mode (25/30 questions).
+Track 1 and Track 2 prove that injection improves compliance. What they do not yet prove is the real-world token cost difference — because in both tracks the model never actually executes anything. In a real environment, a Track 1 model that reaches for the wrong tool will retry, debug, and potentially write its own script, burning orders of magnitude more tokens. A Track 2 model that reaches the correct command on the first attempt incurs none of that retry cost. Track 3 (execution validation) will measure this delta. The working hypothesis is that Track 2's real-world total cost is substantially lower than Track 1's, even accounting for the injection overhead.
