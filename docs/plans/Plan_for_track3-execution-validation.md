@@ -10,11 +10,11 @@ Outcome:
 
 The current benchmark (Tracks 1 and 2) measures token cost and POSIX compliance through **text analysis only** — pattern matching on the LLM's response. Compliance = "the response contains the expected command and doesn't mention non-POSIX tools." No command is ever actually run.
 
-This creates a gap: a response can be marked POSIX-compliant because it uses `sort` while still being syntactically wrong or producing wrong output. More importantly, it fails to answer the real financial question:
+This creates a gap: a response can be marked POSIX-compliant because it uses `sort` while still being syntactically wrong or producing wrong output. More importantly, it fails to answer the real question:
 
-> **If the LLM gives a wrong command on the first attempt, what does the retry loop cost?**
+> **If the LLM gives a wrong command on the first attempt, what does the retry loop cost in tokens and time?**
 
-That retry cost — extra tokens + extra time — is the true financial delta between Raw (Track 1) and Step-Up (Track 2).
+That retry cost — extra tokens + extra wall-clock time — is the true delta between Raw (Track 1) and Step-Up (Track 2).
 
 Track 3 proves this delta by actually running the suggested commands and measuring what happens when they fail.
 
@@ -28,7 +28,7 @@ After running Track 3, you get three new metrics per track:
 - `total_retry_tokens` — additional tokens burned in retry loops when the first attempt was wrong
 - `total_retry_time_ms` — additional wall-clock time burned in retry loops
 
-Side-by-side comparison: Raw vs Step-Up on all three metrics. Fewer retries = fewer tokens = less time = less money. That's the financial case for Step-Up.
+Side-by-side comparison: Raw vs Step-Up on all three metrics. Fewer retries = fewer tokens = less time. That's the case for Step-Up.
 
 ---
 
