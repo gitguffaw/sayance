@@ -1,31 +1,35 @@
 # posix
 
-A stdlib-only Python benchmark for measuring how many tokens LLMs burn answering POSIX shell tasks.
+**LLMs are bad at shell tasks. This benchmark proves it — and measures how bad.**
 
-The benchmark is built around POSIX.1-2024 (Issue 8). It measures two things:
+Every time you ask an AI assistant for a shell command, it reasons out loud, hedges, reaches for `grep` when `cut` was right there, and bills you for the detour. This project measures that waste precisely: token by token, utility by utility, across 30 real POSIX shell tasks.
 
-- Token cost: how expensive the answer was
-- POSIX compliance: whether the answer used the right standard utility and avoided non-POSIX substitutions
+The deeper question: if we hand the model a compact POSIX reference before it answers, does it stop burning tokens on things it should already know?
 
-This repo exists to answer a practical question: if LLMs are wasteful or wrong on shell tasks, is a compact POSIX "step-up" system worth building?
+## What It Measures
 
-## What It Benchmarks
+Two things:
 
-`benchmark_data.json` contains 30 intent-based shell questions across three tiers:
+- **Token cost** — how many tokens the model actually burned (vs. the minimal correct answer)
+- **POSIX compliance** — whether the model reached for the right standard utility or substituted something non-POSIX
 
-- Tier 1: common utilities like `sort`, `find`, `sed`, `grep`
-- Tier 2: less common but standard utilities like `od`, `nl`, `readlink`, `realpath`
-- Tier 3: obscure POSIX tools like `tsort`, `cksum`, `uuencode`, `mkfifo`, `pr`
+`benchmark_data.json` contains 30 intent-based questions across three tiers:
 
-Each question has a minimal correct POSIX answer. The benchmark compares model responses against that baseline and records token usage, latency, failure modes, and optional judge scores.
+| Tier | Examples |
+|------|---------|
+| Tier 1 | `sort`, `find`, `sed`, `grep` |
+| Tier 2 | `od`, `nl`, `readlink`, `realpath` |
+| Tier 3 | `tsort`, `cksum`, `uuencode`, `mkfifo`, `pr` |
 
-## The Two Tracks
+Each question has a known minimal correct answer. The benchmark measures the gap.
+
+## Two Tracks
 
 ### Track 1: Raw Capability
 
-The model gets only the question. No injected POSIX map, no syntax lookup step.
+The model gets only the question. No hints, no reference material.
 
-Use this to establish the baseline.
+This is the baseline — how models perform cold.
 
 ```bash
 python3 run_benchmark.py --llms claude codex
@@ -33,91 +37,86 @@ python3 run_benchmark.py --llms claude codex
 
 ### Track 2: Step-Up
 
-The benchmark prepends `posix-core.md` and simulates a syntax lookup flow using `posix-tldr.json`.
+The benchmark prepends `posix-core.md` and simulates a syntax lookup step using `posix-tldr.json`.
 
-Use this to test whether the Step-Up architecture reduces detours and improves compliance.
+This tests the hypothesis: does a compact POSIX reference reduce detours and improve compliance?
 
 ```bash
 python3 run_benchmark.py --llms claude codex --inject-posix
 ```
 
+Compare Track 1 vs Track 2 on the same model. If the Step-Up reduces output waste and lifts compliance, the reference is worth building.
+
 ## Quick Start
 
-No virtualenv or build step is required.
+No virtualenv or build step required. Pure stdlib Python 3.
 
 ```bash
 # Syntax check
 python3 -m py_compile run_benchmark.py
 
-# Dry run
+# Dry run (no API calls)
 python3 run_benchmark.py --dry-run
 
 # Single-provider baseline
 python3 run_benchmark.py --llms claude
 
-# Claude/Codex Step-Up
+# Step-Up run
 python3 run_benchmark.py --llms claude codex --inject-posix
 ```
 
 ## Gemini
 
-Gemini is supported, but in this repo it should be treated conservatively unless your active account limits clearly allow more.
-
-Use this safe Track 1 baseline shape:
+Supported, but treat conservatively unless your account limits clearly allow more.
 
 ```bash
 python3 run_benchmark.py --llms gemini --max-workers 1 --delay 30
 ```
 
-Working assumptions for Gemini in this repo:
+Safe working assumptions: one call every 30 seconds, no more than 50 calls per day. A 30-question Track 1 run fits. Track 2 may not — the Step-Up simulation can trigger a second Gemini call per question.
 
-- one benchmark call every 30 seconds
-- no more than 50 model calls per day
-- run Gemini alone
-- do not use Gemini as the judge if you are trying to stay within the daily quota
-
-Under that assumption, a 30-question Track 1 run fits in one day. Track 2 may not, because the Step-Up simulation can trigger a second Gemini call for a question.
-
-If a Gemini run stops partway through, rerun the same command later and let the benchmark resume from cached files.
+If a run stops partway through, rerun the same command and the benchmark resumes from cached files.
 
 ## Output Files
 
-Each run writes per-question JSON plus summary/report artifacts:
+```
+results/<llm>/T##_run0.json     per-question results
+results/summary-*.json          aggregate metrics
+results/report-*.html           human-readable report
+```
 
-- `results/<llm>/T##_run0.json`
-- `results/summary-*.json`
-- `results/report-*.html`
+Results are gitignored and not committed.
 
-Generated results are gitignored and should not be committed.
+## What to Look At
+
+The numbers that matter most:
+
+| Field | What it tells you |
+|-------|------------------|
+| `total_billable_tokens` | Total cost of the run |
+| `mean_output_tokens` | Average verbosity per answer |
+| `total_estimated_excess_output_tokens` | Estimated waste vs. minimal answer |
+| `posix_compliance_rate` | How often the model reached for the right tool |
+| `issue8_refusal_count` | How often the model incorrectly rejected a valid POSIX utility |
+| `failure_modes` | Breakdown of how answers went wrong |
+| `mean_step_count` | Average reasoning steps per answer |
 
 ## Repository Map
 
-- [run_benchmark.py](run_benchmark.py): main CLI, provider adapters, parsing, grading, reporting
-- [benchmark_data.json](benchmark_data.json): question set and expected answers
-- [posix-utilities.txt](posix-utilities.txt): source of truth list of POSIX utilities
-- [posix-core.md](posix-core.md): Tier 1 semantic map
-- [posix-tldr.json](posix-tldr.json): Tier 2 syntax lookup source
-
-## Interpreting Results
-
-The most important summary fields are:
-
-- `total_billable_tokens`
-- `mean_output_tokens`
-- `total_estimated_excess_output_tokens`
-- `posix_compliance_rate`
-- `issue8_refusal_count`
-- `failure_modes`
-- `mean_step_count`
-
-For Track 1 vs Track 2, compare the same model across both runs. The goal is lower output waste and better POSIX compliance, not just a different prompt shape.
+| File | Purpose |
+|------|---------|
+| `run_benchmark.py` | Main CLI — provider adapters, parsing, grading, reporting |
+| `benchmark_data.json` | Question set with expected answers and required concepts |
+| `posix-utilities.txt` | All 155 POSIX Issue 8 utilities (source of truth) |
+| `posix-core.md` | Tier 1 semantic map (injected in Track 2) |
+| `posix-tldr.json` | Syntax lookup source (injected in Track 2) |
 
 ## Notes
 
-- Treat POSIX.1-2024 Issue 8 as canonical.
-- `readlink`, `realpath`, and `timeout` are POSIX in Issue 8.
-- Gemini CLI output may include an `MCP issues detected...` prefix; the benchmark strips it before parsing.
-- Codex uses `--skip-git-repo-check` because this benchmark is often run outside a normal git-repo workflow.
+- POSIX.1-2024 Issue 8 is canonical: [pubs.opengroup.org](https://pubs.opengroup.org/onlinepubs/9799919799/idx/utilities.html)
+- `readlink`, `realpath`, and `timeout` are POSIX in Issue 8. Models trained on older data will flag them as non-POSIX — that's a scoreable failure.
+- Gemini CLI may prepend an `MCP issues detected...` line; the benchmark strips it before parsing.
+- Codex uses `--skip-git-repo-check` because the benchmark is often run outside a normal git-repo workflow.
 
 ## Further Reading
 
