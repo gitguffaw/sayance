@@ -31,14 +31,6 @@ A benchmark and measurement tool that quantifies how many tokens LLMs actually b
 
 4. **Three LLMs tested.** Claude, Gemini, Codex — all via CLI.
 
-## Baseline Measurements (from "Say hello")
-
-| LLM | System context tokens | Prompt tokens | Output tokens |
-|-----|----------------------|---------------|---------------|
-| Claude | 21,135 (cache creation) | 3 | 45 |
-| Gemini | ~10,862 (cached) | 2,483 | 9 |
-| Codex | ~5,120 (cached) | 23,029 | 142 |
-
 ## What "Token Efficiency" Means
 
 - **Input cost:** Tokens to give the LLM enough info to get it right

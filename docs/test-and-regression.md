@@ -110,13 +110,13 @@ Before committing any change to `benchmark_data.json` or `run_benchmark.py`:
 
 ## Known Issues to Watch
 
-- **Gemini 429 / MODEL_CAPACITY_EXHAUSTED:** The `gemini-3.1-pro-preview` model is frequently capacity-constrained. When this happens, Gemini returns non-JSON error output that fails parsing. Gemini is excluded from the default run until this stabilizes. Add `gemini` explicitly with `--llms claude codex gemini` when you want to include it.
+- **Gemini timeouts:** In Track 1, Gemini (`gemini-3.1-pro-preview`) timed out on 4/30 questions (T04, T21, T26, T30). This appears to be latency variance rather than quota exhaustion — Track 2 completed all 30 questions with no timeouts. If you see timeouts, rerun the same command; the benchmark resumes from cached files.
 
 - **Gemini daily quota planning:** In this repo, assume Gemini is only safe for one benchmark call every 30 seconds and no more than 50 model calls per day unless your active account limits show otherwise. That means:
   - Track 1 baseline with Gemini alone is safe: `python3 run_benchmark.py --llms gemini --max-workers 1 --delay 30`
   - Track 2 Step-Up may exceed the daily quota because `TOOL_CALL: get_posix_syntax(...)` causes a second Gemini invocation for that question
   - If a run stops partway through, reuse the same results directory and resume on the next day
 
-- **Codex step count creep:** Codex (GPT-5.4) tends to take 8–10 agentic steps even for simple questions. `mean_step_count` above 10 is a red flag — something in the prompt is triggering extra tool use. Check if the question wording is ambiguous or if the injected context is causing confusion.
+- **Codex step count:** Codex (GPT-5.4) runs 8.1 mean steps in Track 1 and 9.5 in Track 2. This is normal behavior — Codex is agentic by default. `mean_step_count` above 12 is a red flag; check for ambiguous question wording or injected context causing extra tool loops.
 
 - **Claude cache state:** Anthropic charges differently for cache hits vs. cache misses. The `tokens.input_cached` field in results tracks this. Back-to-back runs of the same questions will show lower costs due to caching. Run Track 1 and Track 2 in separate sessions if you want cold-cache numbers.

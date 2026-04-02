@@ -45,7 +45,15 @@ python3 run_benchmark.py --llms claude codex
 - Does it use GNU-only flags (`sed -i`, `grep -r`, `find -mmin`)?
 - Token cost per question — this is the baseline we will compare against.
 
-**Expected result:** High token cost on Tier 2 and Tier 3. Frequent non-POSIX substitutions. This is the problem we are solving.
+**Observed results (Track 1 baseline):**
+
+| Provider | POSIX Compliance | Mean Output Tokens | Mean Steps |
+|----------|------------------|--------------------|------------|
+| Claude | 63.3% | 228 | 1.0 |
+| Codex | 58.6% | 930 | 8.1 |
+| Gemini | 65.4% | 215 | 1.0 |
+
+Codex burns 4× more output tokens than Claude or Gemini due to multi-step agentic behavior. All three providers show significant non-POSIX substitution rates.
 
 ---
 
@@ -66,7 +74,15 @@ python3 run_benchmark.py --llms claude codex --inject-posix
 - Did `trap_hits` drop to zero or near zero?
 - Did `posix_compliance_rate` improve?
 
-**Expected result:** Lower token cost. Fewer detours. Higher POSIX compliance. If this track doesn't beat Track 1, the architecture needs work.
+**Observed results (Track 2 Step-Up):**
+
+| Provider | POSIX Compliance | Mean Output Tokens | Mean Steps |
+|----------|------------------|--------------------|------------|
+| Claude | 76.7% | 374 | 2.0 |
+| Codex | 86.7% | 1,289 | 9.5 |
+| Gemini | 86.7% | 105 | 2.8 |
+
+Compliance improved across all three providers. Gemini's output tokens dropped by more than half (215 → 105) — the biggest efficiency gain. Codex compliance jumped 28pp but output tokens increased; `tool_heavy_detour` was the dominant failure mode (25/30 questions), meaning Codex used the tool correctly but narrated every step at length.
 
 ---
 
@@ -87,19 +103,19 @@ The key numbers to compare across the two runs:
 - `mean_output_tokens` per LLM
 - `posix_compliance_rate` per LLM
 - `failure_modes` breakdown
-- `mean_step_count` (Codex multi-step detours should collapse)
+- `mean_step_count`
 
 ---
 
 ## Adding Gemini
 
-Gemini is temporarily excluded from the default run while the `gemini-3.1-pro-preview` API capacity is unavailable. When it recovers, add it explicitly:
+Gemini runs successfully but requires a conservative rate profile due to quota constraints:
 
 ```bash
 python3 run_benchmark.py --llms claude codex gemini
 ```
 
-For this repo, use a conservative Gemini run profile unless your active account limits clearly allow more:
+Use a conservative Gemini run profile unless your active account limits clearly allow more:
 
 - Assume `1` benchmark call every `30` seconds.
 - Assume no more than `50` model calls per day.
