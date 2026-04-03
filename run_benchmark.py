@@ -1071,8 +1071,8 @@ def execute_question(question: dict, response: str) -> ExecutionRecord:
             exec_success=success,
             exec_attempts=1,
             exec_exit_code=result.exit_code,
-            exec_stdout=result.stdout[:2000],  # cap stored output
-            exec_stderr=result.stderr[:2000],
+            exec_stdout=result.stdout[:2000] + ("\n[TRUNCATED]" if len(result.stdout) > 2000 else ""),
+            exec_stderr=result.stderr[:2000] + ("\n[TRUNCATED]" if len(result.stderr) > 2000 else ""),
             exec_elapsed_ms=result.elapsed_ms,
             exec_validation_type=validation_type,
         )

@@ -18,7 +18,7 @@
     "T03": {
       "fixture_dir": "T03",
       "exec_validation_type": "file_state",
-      "exec_setup_note": "setup/input.txt contains 'foo'; after sed s/foo/bar/g with redirect+mv, input.txt should match expected/input.txt"
+      "exec_setup_note": "setup/input.txt contains 'foo'; correct POSIX answer is redirect+mv (sed 's/foo/bar/g' input.txt > tmp && mv tmp input.txt). Note: sed -i is non-POSIX but also passes file_state validation — known false-positive for Phase 1"
     },
     "T04": {
       "fixture_dir": "T04",
