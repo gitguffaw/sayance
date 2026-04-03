@@ -172,11 +172,15 @@ GitHub enforcement note (current repo state, observed 2026-04-03):
 
 ```
 results/
-  by-provider/<llm>/current/    per-question Track 1 results
-  by-provider/<llm>/stepup/     per-question Track 2 results
-  by-run/track1-<provider>/     aggregate summary + HTML report
-  by-run/track2-<provider>/     aggregate summary + HTML report
-  by-run/final-comparison/      three-way comparison report
+  <llm>/                        per-question Track 1 results
+  summary-*.json               aggregate Track 1 summaries
+  report-*.html                aggregate Track 1 HTML reports
+  comparison-*.html            multi-run comparison reports
+  stepup/<llm>/                per-question Track 2 results
+  execute/<llm>/               per-question Track 3 results
+  stepup-execute/<llm>/        per-question Track 3b results
+  baseline-scheduled-5h/       scheduled baseline series (runNN + logs)
+  stepup-scheduled-5h/         scheduled Step-Up series (runNN + logs)
 ```
 
 Results are gitignored and not committed.
