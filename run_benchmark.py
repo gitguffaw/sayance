@@ -107,6 +107,14 @@ class ToolSimulationAdjustment:
     replay_input_billable: int = 0
     tool_call_output: int = 0
     adjusted_billable: int = 0
+    prompt_replay_input_billable: int = 0
+    replayed_tool_call_input_billable: int = 0
+    tool_result_input_billable: int = 0
+    follow_up_instruction_input_billable: int = 0
+    source: str = "none"
+    integrity_violation: bool = False
+    integrity_violation_reason: str = ""
+    integrity_violation_amount: int = 0
 
 
 @dataclass(frozen=True)
@@ -1047,10 +1055,133 @@ def raw_usage_output_tokens(raw_usage: dict) -> int:
     if isinstance(raw_usage.get("turns"), list):
         return sum(raw_usage_output_tokens(turn) for turn in raw_usage["turns"])
     if "output_tokens" in raw_usage:
-        return int(raw_usage.get("output_tokens", 0))
+        output_tokens, output_error = coerce_token_int(raw_usage.get("output_tokens", 0), "output_tokens")
+        if output_error:
+            return 0
+        assert output_tokens is not None
+        return output_tokens
     if "candidates" in raw_usage:
-        return int(raw_usage.get("candidates", 0))
+        candidate_tokens, candidate_error = coerce_token_int(raw_usage.get("candidates", 0), "candidates")
+        if candidate_error:
+            return 0
+        assert candidate_tokens is not None
+        return candidate_tokens
     return 0
+
+
+def _allocate_segment_billable_input(
+    total_billable_input: int,
+    segments: list[tuple[str, str]],
+) -> dict[str, int]:
+    allocations = {name: 0 for name, _ in segments}
+    if total_billable_input <= 0:
+        return allocations
+
+    weighted_segments = [
+        (name, len(text))
+        for name, text in segments
+        if text
+    ]
+    total_weight = sum(weight for _, weight in weighted_segments)
+    if total_weight <= 0:
+        return allocations
+
+    fractional_allocations: list[tuple[float, int, str]] = []
+    allocated = 0
+    for idx, (name, weight) in enumerate(weighted_segments):
+        exact_share = total_billable_input * weight / total_weight
+        base_share = int(exact_share)
+        allocations[name] = base_share
+        allocated += base_share
+        fractional_allocations.append((exact_share - base_share, idx, name))
+
+    remainder = total_billable_input - allocated
+    for _, _, name in sorted(fractional_allocations, reverse=True)[:remainder]:
+        allocations[name] += 1
+    return allocations
+
+
+def estimate_tool_call_stub_output_tokens(
+    *,
+    run1_total_output_tokens: int,
+    run1_response_text: str,
+    tool_call: str,
+) -> int:
+    """Estimate the run1 output portion attributable to the tool-call stub."""
+    if run1_total_output_tokens <= 0:
+        return 0
+
+    response = run1_response_text.strip()
+    stub = tool_call.strip()
+    if not response:
+        return 0
+    if response == stub:
+        return run1_total_output_tokens
+
+    if stub in response:
+        other_output = response.replace(stub, "", 1)
+        allocations = _allocate_segment_billable_input(
+            run1_total_output_tokens,
+            [
+                ("tool_call_stub_output_tokens", stub),
+                ("other_output_tokens", other_output),
+            ],
+        )
+        return allocations.get("tool_call_stub_output_tokens", 0)
+
+    # Conservative fallback when no literal stub is present in the response text.
+    return min(
+        run1_total_output_tokens,
+        max(1, round(run1_total_output_tokens * len(stub) / max(len(response), 1))),
+    )
+
+
+def captured_tool_simulation_adjustment(
+    *,
+    total_billable: int,
+    tool_call_output: int,
+    run2_input_billable: int,
+    prompt: str,
+    tool_call: str,
+    syntax: list[str],
+) -> ToolSimulationAdjustment:
+    assistant_stub = f"\n\nAssistant: {tool_call}\n\n"
+    tool_result_context = f"TOOL_RESULT:\n{json.dumps(syntax)}\n"
+    follow_up_instruction = "Now complete the task."
+    allocations = _allocate_segment_billable_input(
+        run2_input_billable,
+        [
+            ("prompt_replay_input_billable", prompt),
+            ("replayed_tool_call_input_billable", assistant_stub),
+            ("tool_result_input_billable", tool_result_context),
+            ("follow_up_instruction_input_billable", follow_up_instruction),
+        ],
+    )
+    replay_input_billable = (
+        allocations["prompt_replay_input_billable"]
+        + allocations["replayed_tool_call_input_billable"]
+    )
+    adjusted_billable = total_billable - replay_input_billable - tool_call_output
+    integrity_violation = adjusted_billable < 0
+    integrity_violation_amount = max(-adjusted_billable, 0)
+    integrity_violation_reason = ""
+    if integrity_violation:
+        integrity_violation_reason = (
+            "captured tool-simulation adjustment produced negative adjusted billable"
+        )
+    return ToolSimulationAdjustment(
+        replay_input_billable=replay_input_billable,
+        tool_call_output=tool_call_output,
+        adjusted_billable=adjusted_billable,
+        prompt_replay_input_billable=allocations["prompt_replay_input_billable"],
+        replayed_tool_call_input_billable=allocations["replayed_tool_call_input_billable"],
+        tool_result_input_billable=allocations["tool_result_input_billable"],
+        follow_up_instruction_input_billable=allocations["follow_up_instruction_input_billable"],
+        source="captured_estimate",
+        integrity_violation=integrity_violation,
+        integrity_violation_reason=integrity_violation_reason,
+        integrity_violation_amount=integrity_violation_amount,
+    )
 
 
 def tool_simulation_adjustment(tokens: TokenUsage) -> ToolSimulationAdjustment:
@@ -1059,6 +1190,22 @@ def tool_simulation_adjustment(tokens: TokenUsage) -> ToolSimulationAdjustment:
     if not isinstance(raw, dict):
         return ToolSimulationAdjustment(adjusted_billable=tokens.billable)
 
+    captured = raw.get("tool_simulation_adjustment")
+    if isinstance(captured, dict):
+        return ToolSimulationAdjustment(
+            replay_input_billable=int(captured.get("replay_input_billable", 0)),
+            tool_call_output=int(captured.get("tool_call_output", 0)),
+            adjusted_billable=int(captured.get("adjusted_billable", tokens.billable)),
+            prompt_replay_input_billable=int(captured.get("prompt_replay_input_billable", 0)),
+            replayed_tool_call_input_billable=int(captured.get("replayed_tool_call_input_billable", 0)),
+            tool_result_input_billable=int(captured.get("tool_result_input_billable", 0)),
+            follow_up_instruction_input_billable=int(captured.get("follow_up_instruction_input_billable", 0)),
+            source=str(captured.get("source", "captured_estimate")),
+            integrity_violation=bool(captured.get("integrity_violation", False)),
+            integrity_violation_reason=str(captured.get("integrity_violation_reason", "")),
+            integrity_violation_amount=int(captured.get("integrity_violation_amount", 0)),
+        )
+
     run1 = raw.get("run1")
     run2 = raw.get("run2")
     if not isinstance(run1, dict) or not isinstance(run2, dict):
@@ -1066,11 +1213,19 @@ def tool_simulation_adjustment(tokens: TokenUsage) -> ToolSimulationAdjustment:
 
     replay_input_billable = raw_usage_input_billable_tokens(run2)
     tool_call_output = raw_usage_output_tokens(run1)
-    adjusted_billable = max(tokens.billable - replay_input_billable - tool_call_output, 0)
+    adjusted_billable = tokens.billable - replay_input_billable - tool_call_output
+    integrity_violation = adjusted_billable < 0
     return ToolSimulationAdjustment(
         replay_input_billable=replay_input_billable,
         tool_call_output=tool_call_output,
         adjusted_billable=adjusted_billable,
+        source="legacy_derived",
+        integrity_violation=integrity_violation,
+        integrity_violation_reason=(
+            "legacy raw-derived tool-simulation adjustment produced negative adjusted billable"
+            if integrity_violation else ""
+        ),
+        integrity_violation_amount=max(-adjusted_billable, 0),
     )
 
 
@@ -1785,6 +1940,7 @@ def run_single(
                 syntax = ["Error reading posix-tldr.json"]
 
             tool_call = f"TOOL_CALL: get_posix_syntax({cmd})"
+            run1_response_text = response_text
             follow_up = (
                 f"{prompt}\n\nAssistant: {tool_call}\n\n"
                 f"TOOL_RESULT:\n{json.dumps(syntax)}\nNow complete the task."
@@ -1804,6 +1960,31 @@ def run_single(
             )
 
             response_text = f"{tool_call}\n\n[TOOL RESULT]: {syntax}\n\n{resp2}"
+            tool_call_stub_output = estimate_tool_call_stub_output_tokens(
+                run1_total_output_tokens=tokens.output,
+                run1_response_text=run1_response_text,
+                tool_call=tool_call,
+            )
+            simulation_adjustment = captured_tool_simulation_adjustment(
+                total_billable=tokens.billable + tok2.billable,
+                tool_call_output=tool_call_stub_output,
+                run2_input_billable=raw_usage_input_billable_tokens(tok2.raw),
+                prompt=prompt,
+                tool_call=tool_call,
+                syntax=syntax,
+            )
+            combined_usage_valid = tokens.usage_valid and tok2.usage_valid
+            combined_invalid_reasons = [
+                reason
+                for reason in (tokens.usage_invalid_reason, tok2.usage_invalid_reason)
+                if reason
+            ]
+            combined_invalid_reason = "; ".join(combined_invalid_reasons)
+            combined_cost_source = tokens.cost_source
+            if not combined_usage_valid:
+                invalid_sources = [tok.cost_source for tok in (tokens, tok2) if not tok.usage_valid]
+                if invalid_sources:
+                    combined_cost_source = invalid_sources[0]
 
             # Keep the raw totals intact; adjusted reporting is derived later.
             tokens = TokenUsage(
@@ -1813,8 +1994,14 @@ def run_single(
                 thoughts=tokens.thoughts + tok2.thoughts,
                 billable=tokens.billable + tok2.billable,
                 cost_usd=((tokens.cost_usd or 0) + (tok2.cost_usd or 0)) if (tokens.cost_usd is not None or tok2.cost_usd is not None) else None,
-                cost_source=tokens.cost_source,
-                raw={"run1": tokens.raw, "run2": tok2.raw}
+                cost_source=combined_cost_source,
+                raw={
+                    "run1": tokens.raw,
+                    "run2": tok2.raw,
+                    "tool_simulation_adjustment": asdict(simulation_adjustment),
+                },
+                usage_valid=combined_usage_valid,
+                usage_invalid_reason=combined_invalid_reason,
             )
             
             # Explicitly log the tool call success
@@ -2130,11 +2317,38 @@ def generate_report(all_results: dict[str, list[QuestionResult]], questions: lis
             print(f"    Total cost:     ${sum(costs):.4f}")
         total_replay_input = sum(a.replay_input_billable for a in adjustments)
         total_tool_call_output = sum(a.tool_call_output for a in adjustments)
+        total_tool_result_input = sum(a.tool_result_input_billable for a in adjustments)
+        total_follow_up_input = sum(a.follow_up_instruction_input_billable for a in adjustments)
+        integrity_violations = [a for a in adjustments if a.integrity_violation]
+        adjustment_sources = Counter(a.source for a in adjustments if a.source != "none")
         if total_replay_input or total_tool_call_output:
             adjusted_billable = [a.adjusted_billable for a in adjustments]
             print(f"    Tool-sim replay input:  {stats([a.replay_input_billable for a in adjustments])}")
             print(f"    Tool-call stub output:  {stats([a.tool_call_output for a in adjustments])}")
             print(f"    Billable (sim-adjusted): {stats(adjusted_billable)}")
+            print(
+                f"    Tool-sim replay prompt: {stats([a.prompt_replay_input_billable for a in adjustments])}"
+            )
+            print(
+                f"    Tool-sim replay stub input: {stats([a.replayed_tool_call_input_billable for a in adjustments])}"
+            )
+            if total_tool_result_input or total_follow_up_input:
+                print(
+                    f"    Tool-result context input: {stats([a.tool_result_input_billable for a in adjustments])}"
+                )
+                print(
+                    f"    Follow-up instruction input: {stats([a.follow_up_instruction_input_billable for a in adjustments])}"
+                )
+            if adjustment_sources:
+                print(
+                    "    Tool-sim adjustment sources: "
+                    + ", ".join(f"{source}={count}" for source, count in adjustment_sources.most_common())
+                )
+            if integrity_violations:
+                print(
+                    f"    Tool-sim integrity violations: {len(integrity_violations)} "
+                    f"(overflow={sum(a.integrity_violation_amount for a in integrity_violations)})"
+                )
         print()
 
         if provider_errors:
@@ -2273,6 +2487,17 @@ def save_summary(all_results: dict[str, list[QuestionResult]]) -> Path:
         model = first_result_model(token_results or visible_results or error_results(results))
         inefficiency_modes = Counter(r.analysis.inefficiency_mode for r in visible_results)
         adjustments = [tool_simulation_adjustment(r.tokens) for r in token_results]
+        adjustment_sources = Counter(a.source for a in adjustments if a.source != "none")
+        integrity_violations = [
+            {
+                "question_id": result.id,
+                "reason": adjustment.integrity_violation_reason,
+                "amount": adjustment.integrity_violation_amount,
+                "source": adjustment.source,
+            }
+            for result, adjustment in zip(token_results, adjustments)
+            if adjustment.integrity_violation
+        ]
         summary["llms"][llm] = {
             "model": model,
             "total_results": len(results),
@@ -2288,9 +2513,24 @@ def save_summary(all_results: dict[str, list[QuestionResult]]) -> Path:
             "total_tool_simulation_replay_input_tokens": sum(
                 adjustment.replay_input_billable for adjustment in adjustments
             ),
+            "total_tool_simulation_prompt_replay_input_tokens": sum(
+                adjustment.prompt_replay_input_billable for adjustment in adjustments
+            ),
+            "total_tool_simulation_replayed_tool_call_input_tokens": sum(
+                adjustment.replayed_tool_call_input_billable for adjustment in adjustments
+            ),
             "total_tool_call_stub_output_tokens": sum(
                 adjustment.tool_call_output for adjustment in adjustments
             ),
+            "total_tool_simulation_tool_result_input_tokens": sum(
+                adjustment.tool_result_input_billable for adjustment in adjustments
+            ),
+            "total_tool_simulation_follow_up_instruction_input_tokens": sum(
+                adjustment.follow_up_instruction_input_billable for adjustment in adjustments
+            ),
+            "tool_simulation_adjustment_sources": dict(adjustment_sources),
+            "tool_simulation_integrity_violation_count": len(integrity_violations),
+            "tool_simulation_integrity_violations": integrity_violations,
             "total_output_tokens": sum(r.tokens.output for r in token_results),
             "total_estimated_excess_output_tokens": sum(
                 r.analysis.estimated_excess_output_tokens for r in token_results

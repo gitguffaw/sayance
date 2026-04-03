@@ -4,6 +4,7 @@ import io
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import run_benchmark as benchmark
 from run_benchmark import (
@@ -11,6 +12,7 @@ from run_benchmark import (
     QuestionResult,
     ResponseAnalysis,
     TokenUsage,
+    captured_tool_simulation_adjustment,
     parse_claude_tokens,
     parse_codex_tokens,
     parse_gemini_execution,
@@ -18,6 +20,7 @@ from run_benchmark import (
     raw_usage_input_billable_tokens,
     save_summary,
     save_visual_report,
+    tool_simulation_adjustment,
 )
 
 
@@ -482,7 +485,226 @@ class ClaudeTokenParsingTests(unittest.TestCase):
         )
 
 
+class ToolSimulationAdjustmentTests(unittest.TestCase):
+    def test_tool_simulation_adjustment_uses_captured_components(self) -> None:
+        tokens = TokenUsage(
+            input=0,
+            input_cached=0,
+            output=0,
+            thoughts=0,
+            billable=70,
+            cost_usd=None,
+            cost_source="calculated",
+            raw={
+                "tool_simulation_adjustment": {
+                    "replay_input_billable": 20,
+                    "tool_call_output": 6,
+                    "adjusted_billable": 44,
+                    "prompt_replay_input_billable": 14,
+                    "replayed_tool_call_input_billable": 6,
+                    "tool_result_input_billable": 8,
+                    "follow_up_instruction_input_billable": 2,
+                    "source": "captured_estimate",
+                }
+            },
+        )
+
+        adjustment = tool_simulation_adjustment(tokens)
+        self.assertEqual(adjustment.replay_input_billable, 20)
+        self.assertEqual(adjustment.tool_call_output, 6)
+        self.assertEqual(adjustment.adjusted_billable, 44)
+        self.assertEqual(adjustment.prompt_replay_input_billable, 14)
+        self.assertEqual(adjustment.replayed_tool_call_input_billable, 6)
+        self.assertEqual(adjustment.tool_result_input_billable, 8)
+        self.assertEqual(adjustment.follow_up_instruction_input_billable, 2)
+        self.assertEqual(adjustment.source, "captured_estimate")
+
+    def test_tool_simulation_adjustment_flags_negative_integrity_violation(self) -> None:
+        adjustment = captured_tool_simulation_adjustment(
+            total_billable=10,
+            tool_call_output=6,
+            run2_input_billable=10,
+            prompt="P" * 10,
+            tool_call="TOOL_CALL: get_posix_syntax(od)",
+            syntax=["od -An -tx1 file"],
+        )
+
+        self.assertTrue(adjustment.integrity_violation)
+        self.assertLess(adjustment.adjusted_billable, 0)
+        self.assertEqual(
+            adjustment.integrity_violation_amount,
+            -adjustment.adjusted_billable,
+        )
+        self.assertIn("negative adjusted billable", adjustment.integrity_violation_reason)
+
+    def test_tool_simulation_adjustment_legacy_fallback_remains_compatible(self) -> None:
+        tokens = TokenUsage(
+            input=0,
+            input_cached=0,
+            output=0,
+            thoughts=0,
+            billable=30,
+            cost_usd=None,
+            cost_source="calculated",
+            raw={
+                "run1": {"output_tokens": 4},
+                "run2": {"prompt": 18, "cached": 2, "candidates": 6},
+            },
+        )
+
+        adjustment = tool_simulation_adjustment(tokens)
+        self.assertEqual(adjustment.replay_input_billable, 16)
+        self.assertEqual(adjustment.tool_call_output, 4)
+        self.assertEqual(adjustment.adjusted_billable, 10)
+        self.assertEqual(adjustment.source, "legacy_derived")
+        self.assertFalse(adjustment.integrity_violation)
+
+    def test_captured_tool_simulation_adjustment_keeps_non_replay_context_separate(self) -> None:
+        adjustment = captured_tool_simulation_adjustment(
+            total_billable=80,
+            tool_call_output=5,
+            run2_input_billable=40,
+            prompt="P" * 20,
+            tool_call="TOOL_CALL: get_posix_syntax(od)",
+            syntax=["od -An -tx1 file"],
+        )
+
+        self.assertEqual(
+            adjustment.replay_input_billable,
+            adjustment.prompt_replay_input_billable + adjustment.replayed_tool_call_input_billable,
+        )
+        self.assertEqual(
+            adjustment.replay_input_billable
+            + adjustment.tool_result_input_billable
+            + adjustment.follow_up_instruction_input_billable,
+            40,
+        )
+        self.assertEqual(adjustment.source, "captured_estimate")
+
+    @mock.patch.object(benchmark, "already_completed", return_value=False)
+    @mock.patch.object(benchmark, "_load_posix_core", return_value="POSIX CORE")
+    @mock.patch.object(benchmark, "_load_posix_tldr", return_value={"od": ["od -An -tx1 file"]})
+    @mock.patch.object(benchmark, "invoke_cli")
+    @mock.patch.object(benchmark, "parse_response")
+    def test_run_single_captures_stub_output_not_full_run1_output(
+        self,
+        parse_response_mock: mock.Mock,
+        invoke_cli_mock: mock.Mock,
+        _load_posix_tldr_mock: mock.Mock,
+        _load_posix_core_mock: mock.Mock,
+        _already_completed_mock: mock.Mock,
+    ) -> None:
+        invoke_cli_mock.side_effect = [
+            benchmark.CLIInvocation(stdout="run1", latency_ms=10),
+            benchmark.CLIInvocation(stdout="run2", latency_ms=20),
+        ]
+        run1_tokens = TokenUsage(
+            input=20,
+            input_cached=0,
+            output=24,
+            thoughts=0,
+            billable=30,
+            cost_usd=None,
+            cost_source="calculated",
+            raw={"input_tokens": 20, "cached_input_tokens": 0, "output_tokens": 24},
+        )
+        run2_tokens = TokenUsage(
+            input=12,
+            input_cached=0,
+            output=6,
+            thoughts=0,
+            billable=18,
+            cost_usd=None,
+            cost_source="calculated",
+            raw={"prompt": 12, "cached": 0, "candidates": 6},
+        )
+        parse_response_mock.side_effect = [
+            (
+                "TOOL_CALL: get_posix_syntax(od)\nHere is extra explanatory text.",
+                run1_tokens,
+                "claude-opus-4-6",
+                ExecutionMetrics(latency_ms=10, step_count=1, tool_call_count=0, tool_calls_by_type={}),
+            ),
+            (
+                "od -An -tx1 file",
+                run2_tokens,
+                "claude-opus-4-6",
+                ExecutionMetrics(latency_ms=20, step_count=1, tool_call_count=0, tool_calls_by_type={}),
+            ),
+        ]
+
+        question = {
+            "id": "T10",
+            "question": "Hex dump this file",
+            "expected_commands": ["od"],
+            "required_concepts": [],
+            "minimal_answer": "od -An -tx1 file",
+            "tier": 2,
+        }
+        result = benchmark.run_single(
+            "claude",
+            question,
+            run_k=0,
+            judge=None,
+            delay=0.0,
+            timeout_seconds=120,
+            inject_posix=True,
+            execute=False,
+        )
+        adjustment = result.tokens.raw.get("tool_simulation_adjustment", {})
+        self.assertTrue(adjustment)
+        self.assertGreater(adjustment["tool_call_output"], 0)
+        self.assertLess(adjustment["tool_call_output"], run1_tokens.output)
+
+
 class ValidityReportingTests(unittest.TestCase):
+    def test_save_summary_includes_tool_simulation_integrity_diagnostics(self) -> None:
+        simulated = make_result(
+            "T10",
+            response="TOOL_CALL: get_posix_syntax(od)\n\n[TOOL RESULT]: ['od -An -tx1 file']\n\nod -An -tx1 file",
+            tokens=TokenUsage(
+                input=20,
+                input_cached=0,
+                output=8,
+                thoughts=0,
+                billable=10,
+                cost_usd=None,
+                cost_source="calculated",
+                raw={
+                    "tool_simulation_adjustment": {
+                        "replay_input_billable": 7,
+                        "tool_call_output": 5,
+                        "adjusted_billable": -2,
+                        "prompt_replay_input_billable": 4,
+                        "replayed_tool_call_input_billable": 3,
+                        "tool_result_input_billable": 2,
+                        "follow_up_instruction_input_billable": 1,
+                        "source": "captured_estimate",
+                        "integrity_violation": True,
+                        "integrity_violation_reason": "captured tool-simulation adjustment produced negative adjusted billable",
+                        "integrity_violation_amount": 2,
+                    }
+                },
+            ),
+            latency_ms=120,
+            posix_compliant=True,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            original_results_dir = benchmark.RESULTS_DIR
+            benchmark.RESULTS_DIR = Path(tmpdir)
+            try:
+                summary_path = save_summary({"claude": [simulated]})
+                payload = json.loads(summary_path.read_text())["llms"]["claude"]
+            finally:
+                benchmark.RESULTS_DIR = original_results_dir
+
+        self.assertEqual(payload["total_simulation_adjusted_billable_tokens"], -2)
+        self.assertEqual(payload["tool_simulation_adjustment_sources"], {"captured_estimate": 1})
+        self.assertEqual(payload["tool_simulation_integrity_violation_count"], 1)
+        self.assertEqual(payload["tool_simulation_integrity_violations"][0]["question_id"], "T10")
+        self.assertEqual(payload["tool_simulation_integrity_violations"][0]["amount"], 2)
+
     def test_save_summary_uses_usage_valid_for_tokens_and_visible_for_latency(self) -> None:
         valid = make_result(
             "T01",
@@ -690,6 +912,46 @@ class ValidityReportingTests(unittest.TestCase):
 
         self.assertIn("Usage invalid: 1/2", rendered)
         self.assertIn("Latency ms:     mean=200", rendered)
+
+    def test_generate_report_mentions_tool_simulation_integrity_violations(self) -> None:
+        simulated = make_result(
+            "T10",
+            response="TOOL_CALL: get_posix_syntax(od)\n\n[TOOL RESULT]: ['od -An -tx1 file']\n\nod -An -tx1 file",
+            tokens=TokenUsage(
+                input=20,
+                input_cached=0,
+                output=8,
+                thoughts=0,
+                billable=10,
+                cost_usd=None,
+                cost_source="calculated",
+                raw={
+                    "tool_simulation_adjustment": {
+                        "replay_input_billable": 7,
+                        "tool_call_output": 5,
+                        "adjusted_billable": -2,
+                        "prompt_replay_input_billable": 4,
+                        "replayed_tool_call_input_billable": 3,
+                        "tool_result_input_billable": 2,
+                        "follow_up_instruction_input_billable": 1,
+                        "source": "captured_estimate",
+                        "integrity_violation": True,
+                        "integrity_violation_reason": "captured tool-simulation adjustment produced negative adjusted billable",
+                        "integrity_violation_amount": 2,
+                    }
+                },
+            ),
+            latency_ms=120,
+            posix_compliant=True,
+        )
+
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            benchmark.generate_report({"claude": [simulated]}, [{"id": "T10", "tier": 2, "question": "Question T10"}])
+        rendered = output.getvalue()
+
+        self.assertIn("Tool-sim integrity violations: 1", rendered)
+        self.assertIn("Tool-sim adjustment sources: captured_estimate=1", rendered)
 
 
 if __name__ == "__main__":
