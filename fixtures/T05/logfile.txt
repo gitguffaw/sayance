@@ -1,0 +1,8 @@
+INFO: server started
+ERROR: connection refused
+INFO: server started
+WARN: high memory
+ERROR: connection refused
+INFO: server started
+ERROR: disk full
+WARN: high memory

@@ -1,0 +1,4 @@
+2026-01-15 INFO: server started
+2026-01-15 ERROR: connection refused
+2026-01-15 INFO: retrying
+2026-01-15 Error: timeout on upstream

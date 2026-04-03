@@ -112,7 +112,6 @@ Tasks requiring three tools (e.g., `sort | uniq | comm`) trigger latency spikes 
 ### Security Notes
 - **Tool-call command extraction:** Validate extracted command against the keys of `posix-tldr.json` before building the follow-up prompt.
 - **Question ID path traversal:** Add `re.match(r'^[A-Za-z0-9_-]+$', q_id)` validation in `result_path()`.
-- **No spending cap:** Add a `--budget` flag or confirmation prompt when estimated cost exceeds a threshold.
 
 ## 5. Implementation Steps
 
