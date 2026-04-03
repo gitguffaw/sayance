@@ -1,0 +1,3 @@
+build parse
+parse lex
+lex tokenize

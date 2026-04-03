@@ -18,7 +18,7 @@
     "T03": {
       "fixture_dir": "T03",
       "exec_validation_type": "file_state",
-      "exec_setup_note": "setup/input.txt contains 'foo'; correct POSIX answer is redirect+mv (sed 's/foo/bar/g' input.txt > tmp && mv tmp input.txt). Note: sed -i is non-POSIX but also passes file_state validation — known false-positive for Phase 1"
+      "exec_setup_note": "setup/input.txt contains 'foo'; correct POSIX answer is redirect+mv (sed 's/foo/bar/g' input.txt > tmp && mv tmp input.txt). Note: sed -i is non-POSIX but also passes file_state validation -- known false-positive for Phase 1"
     },
     "T04": {
       "fixture_dir": "T04",
@@ -55,6 +55,106 @@
       "fixture_dir": "T10",
       "exec_validation_type": "stdout",
       "exec_setup_note": "file_a.txt and file_b.txt are pre-sorted; comm file_a.txt file_b.txt shows 3-column set comparison"
+    },
+    "T11": {
+      "fixture_dir": "T11",
+      "exec_validation_type": "stdout",
+      "exec_setup_note": "file.bin contains fixed bytes; od -A x -t x1z file.bin should print the expected hex+ASCII dump"
+    },
+    "T12": {
+      "fixture_dir": "T12",
+      "exec_validation_type": "stdout",
+      "exec_setup_note": "file1 and file2 have aligned rows; paste file1 file2 should tab-join corresponding lines"
+    },
+    "T13": {
+      "fixture_dir": "T13",
+      "exec_validation_type": "stdout",
+      "exec_setup_note": "file contains uppercase text; tr '[:upper:]' '[:lower:]' < file should output lowercase text"
+    },
+    "T14": {
+      "fixture_dir": "T14",
+      "exec_validation_type": "exit_zero",
+      "exec_setup_note": "script.sh is executable and short-lived; nohup ./script.sh & should launch without error"
+    },
+    "T15": {
+      "fixture_dir": "T15",
+      "exec_validation_type": "exit_zero",
+      "exec_setup_note": "symlink points to target.txt; readlink symlink (or ls -l symlink) should exit successfully"
+    },
+    "T16": {
+      "fixture_dir": "T16",
+      "exec_validation_type": "exit_zero",
+      "exec_setup_note": "file.txt exists in fixture root; realpath file.txt should resolve and exit 0"
+    },
+    "T17": {
+      "fixture_dir": "T17",
+      "exec_validation_type": "exit_zero",
+      "exec_setup_note": "run.sh completes quickly; timeout 30 ./run.sh should finish before timeout and exit 0"
+    },
+    "T18": {
+      "fixture_dir": "T18",
+      "exec_validation_type": "file_state",
+      "exec_setup_note": "largefile has 1001 lines; split -l 1000 largefile chunk_ should create expected/chunk_aa and expected/chunk_ab with matching contents"
+    },
+    "T19": {
+      "fixture_dir": "T19",
+      "exec_validation_type": "exit_zero",
+      "exec_setup_note": "at one-shot scheduling command is accepted as success when command exits 0 in the runtime environment"
+    },
+    "T20": {
+      "fixture_dir": "T20",
+      "exec_validation_type": "stdout",
+      "exec_setup_note": "file1 and file2 are comma-delimited with shared ID key in field 1; join -t\",\" file1 file2 should emit matched rows"
+    },
+    "T21": {
+      "fixture_dir": "T21",
+      "exec_validation_type": "stdout",
+      "exec_setup_note": "file has 3 lines; nl file should emit numbered lines"
+    },
+    "T22": {
+      "fixture_dir": "T22",
+      "exec_validation_type": "exit_zero",
+      "exec_setup_note": "pathchk -p portable_name should exit 0 for a portable POSIX filename"
+    },
+    "T23": {
+      "fixture_dir": "T23",
+      "exec_validation_type": "stdout",
+      "exec_setup_note": "file1 and file2 are pre-sorted; comm -23 file1 file2 should print entries only in file1"
+    },
+    "T24": {
+      "fixture_dir": "T24",
+      "exec_validation_type": "stdout",
+      "exec_setup_note": "dependency_pairs.txt encodes a linear dependency chain; tsort < dependency_pairs.txt should output the expected topological order"
+    },
+    "T25": {
+      "fixture_dir": "T25",
+      "exec_validation_type": "stdout",
+      "exec_setup_note": "file has fixed content; cksum file should match expected checksum, byte count, and filename"
+    },
+    "T26": {
+      "fixture_dir": "T26",
+      "exec_validation_type": "stdout",
+      "exec_setup_note": "file_latin1 is ISO-8859-1 encoded text; iconv -f ISO-8859-1 -t UTF-8 file_latin1 should output UTF-8 text"
+    },
+    "T27": {
+      "fixture_dir": "T27",
+      "exec_validation_type": "exit_zero",
+      "exec_setup_note": "mkfifo mypipe should create a named pipe and exit 0 when path is available"
+    },
+    "T28": {
+      "fixture_dir": "T28",
+      "exec_validation_type": "exit_zero",
+      "exec_setup_note": "file exists for print formatting; pr -n file should complete successfully"
+    },
+    "T29": {
+      "fixture_dir": "T29",
+      "exec_validation_type": "stdout",
+      "exec_setup_note": "expr '(' 3 + 5 ')' '*' 2 should output 16"
+    },
+    "T30": {
+      "fixture_dir": "T30",
+      "exec_validation_type": "exit_zero",
+      "exec_setup_note": "file.bin contains binary bytes; uuencode file.bin file.bin should run successfully"
     }
   }
 }
