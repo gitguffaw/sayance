@@ -3396,19 +3396,69 @@ def save_comparison_report(named_summaries: list[tuple[str, dict]]) -> Path:
     def fmt_pct(val: float) -> str:
         return f"{val * 100:.1f}%"
 
-    def delta_cell(current: float, baseline: float, fmt: str = ".0f", suffix: str = "", invert: bool = False) -> str:
-        """Render a value with a delta badge vs the first run (baseline)."""
+    def render_na_cell() -> str:
+        return "<td class='na'>N/A</td>"
+
+    def get_numeric_metric(payload: dict, key: str) -> int | float | None:
+        value = payload.get(key)
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, (int, float)):
+            return value
+        return None
+
+    def render_string_cell(payload: dict, key: str) -> str:
+        value = payload.get(key)
+        if value is None:
+            return render_na_cell()
+        return f"<td>{escape(str(value))}</td>"
+
+    def render_numeric_cell(
+        current: int | float | None,
+        baseline: int | float | None,
+        *,
+        fmt: str,
+        prefix: str = "",
+        suffix: str = "",
+        invert: bool = False,
+        baseline_column: bool = False,
+    ) -> str:
+        if current is None:
+            return render_na_cell()
+        formatted_value = f"{prefix}{current:{fmt}}{suffix}"
+        if baseline_column or baseline is None:
+            return f"<td>{formatted_value}</td>"
+
         diff = current - baseline
         if abs(diff) < 0.001:
             badge = ""
         else:
-            # For metrics where lower is better (tokens, latency), negative diff is good
-            # For compliance rate, positive diff is good
             is_good = (diff < 0) if not invert else (diff > 0)
             color = "good" if is_good else "bad"
             sign = "+" if diff > 0 else ""
-            badge = f' <span class="delta {color}">{sign}{diff:{fmt}}{suffix}</span>'
-        return f"<td>{current:{fmt}}{suffix}{badge}</td>"
+            badge = f' <span class="delta {color}">{sign}{prefix}{diff:{fmt}}{suffix}</span>'
+        return f"<td>{formatted_value}{badge}</td>"
+
+    def render_pct_cell(
+        current: int | float | None,
+        baseline: int | float | None,
+        *,
+        invert: bool,
+        baseline_column: bool = False,
+    ) -> str:
+        if current is None:
+            return render_na_cell()
+        if baseline_column or baseline is None:
+            return f"<td>{fmt_pct(current)}</td>"
+
+        diff = current - baseline
+        if abs(diff) < 0.001:
+            badge = ""
+        else:
+            color = "good" if (diff > 0 if invert else diff < 0) else "bad"
+            sign = "+" if diff > 0 else ""
+            badge = f' <span class="delta {color}">{sign}{diff * 100:.1f}pp</span>'
+        return f"<td>{fmt_pct(current)}{badge}</td>"
 
     # --- Per-LLM comparison tables ---
     llm_sections = []
@@ -3438,7 +3488,7 @@ def save_comparison_report(named_summaries: list[tuple[str, dict]]) -> Path:
             ("Mean Steps", "mean_step_count", ".1f", "", False),
             ("Total Output Tokens", "total_output_tokens", "d", "", False),
             ("Total Excess Tokens", "total_estimated_excess_output_tokens", "d", "", False),
-            ("Total Billable Tokens", "total_billable_tokens", "d", "", False),
+            ("Total Billable Tokens (provider-semantic)", "total_billable_tokens", "d", "", False),
             ("Total Cost (USD)", "total_cost_usd", ".4f", "$", False),
             ("Issue 8 Refusals", "issue8_refusal_count", "d", "", False),
         ]
@@ -3446,32 +3496,30 @@ def save_comparison_report(named_summaries: list[tuple[str, dict]]) -> Path:
         metric_rows = []
         for label, key, fmt, prefix, invert in metrics:
             cells = []
+            baseline_value = get_numeric_metric(baseline, key) if fmt != "s" else None
             for i, (name, data) in enumerate(rows_data):
-                val = data.get(key, 0)
                 if fmt == "s":
-                    cells.append(f"<td>{escape(str(val))}</td>")
+                    cells.append(render_string_cell(data, key))
                 elif fmt == ".1%":
-                    if i == 0:
-                        cells.append(f"<td>{fmt_pct(val)}</td>")
-                    else:
-                        diff = val - baseline.get(key, 0)
-                        color = "good" if (diff > 0 if invert else diff < 0) else "bad"
-                        sign = "+" if diff > 0 else ""
-                        badge = f' <span class="delta {color}">{sign}{diff * 100:.1f}pp</span>' if abs(diff) > 0.001 else ""
-                        cells.append(f"<td>{fmt_pct(val)}{badge}</td>")
+                    cells.append(
+                        render_pct_cell(
+                            get_numeric_metric(data, key),
+                            baseline_value,
+                            invert=invert,
+                            baseline_column=(i == 0),
+                        )
+                    )
                 else:
-                    if i == 0:
-                        cells.append(f"<td>{prefix}{val:{fmt}}</td>")
-                    else:
-                        diff = val - baseline.get(key, 0)
-                        if abs(diff) < 0.001:
-                            badge = ""
-                        else:
-                            is_good = (diff < 0) if not invert else (diff > 0)
-                            color = "good" if is_good else "bad"
-                            sign = "+" if diff > 0 else ""
-                            badge = f' <span class="delta {color}">{sign}{prefix}{diff:{fmt}}</span>'
-                        cells.append(f"<td>{prefix}{val:{fmt}}{badge}</td>")
+                    cells.append(
+                        render_numeric_cell(
+                            get_numeric_metric(data, key),
+                            baseline_value,
+                            fmt=fmt,
+                            prefix=prefix,
+                            invert=invert,
+                            baseline_column=(i == 0),
+                        )
+                    )
             metric_rows.append(f"<tr><td class='metric-name'>{escape(label)}</td>{''.join(cells)}</tr>")
 
         # Inefficiency modes comparison
@@ -3509,14 +3557,18 @@ def save_comparison_report(named_summaries: list[tuple[str, dict]]) -> Path:
             errors = data.get("errors", [])
             if errors:
                 for err in errors:
-                    error_rows.append(f"<tr><td>{escape(name)}</td><td>{escape(err['question_id'])}</td><td>{escape(err['error'])}</td><td>{err['latency_ms']:,}ms</td></tr>")
+                    kind = str(err.get("kind", "provider_error")).replace("_", " ")
+                    error_rows.append(
+                        f"<tr><td>{escape(name)}</td><td>{escape(kind)}</td><td>{escape(err['question_id'])}</td>"
+                        f"<td>{escape(err['error'])}</td><td>{err['latency_ms']:,}ms</td></tr>"
+                    )
 
         error_section = ""
         if error_rows:
             error_section = f"""
             <h3>Errors</h3>
             <table class="comp-table">
-              <thead><tr><th>Run</th><th>Question</th><th>Error</th><th>Latency</th></tr></thead>
+              <thead><tr><th>Run</th><th>Type</th><th>Question</th><th>Error</th><th>Latency</th></tr></thead>
               <tbody>{''.join(error_rows)}</tbody>
             </table>
             """
@@ -3684,6 +3736,10 @@ def save_comparison_report(named_summaries: list[tuple[str, dict]]) -> Path:
       font-weight: 600;
       white-space: nowrap;
     }}
+    .na {{
+      color: var(--muted);
+      font-style: italic;
+    }}
     .delta {{
       display: inline-block;
       padding: 2px 6px;
@@ -3759,7 +3815,7 @@ def save_comparison_report(named_summaries: list[tuple[str, dict]]) -> Path:
     <section class="hero" id="overview">
       <p class="eyebrow">POSIX Benchmark Comparison</p>
       <h1>Side-by-side across {num_runs} runs</h1>
-      <p>Comparing benchmark results across different conditions. The first run listed is the baseline — deltas are computed against it.</p>
+      <p>Comparing benchmark results across different conditions. The first run listed is the baseline. Deltas are shown only when both runs report the metric, and billable-token totals remain provider-semantic rather than cross-provider normalized.</p>
       <div class="hero-grid">
         <div class="hero-stat"><span>Runs</span><strong>{num_runs}</strong></div>
         <div class="hero-stat"><span>Models</span><strong>{len(all_llms)}</strong></div>
