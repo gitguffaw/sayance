@@ -67,6 +67,8 @@ class TokenUsage:
     cost_usd: float | None      # None if not reported by provider
     cost_source: str             # "reported" or "calculated"
     raw: dict                    # original CLI JSON for reproducibility
+    usage_valid: bool = True
+    usage_invalid_reason: str = ""
 
 
 @dataclass(frozen=True)
@@ -433,30 +435,187 @@ def parse_gemini_tokens(raw_json: dict) -> TokenUsage:
     )
 
 
+def invalid_token_usage(reason: str, raw: dict | None = None) -> TokenUsage:
+    """Return a token payload that preserves explicit usage-invalid state."""
+    return TokenUsage(
+        input=0,
+        input_cached=0,
+        output=0,
+        thoughts=0,
+        billable=0,
+        cost_usd=None,
+        cost_source="usage_invalid",
+        raw=raw or {},
+        usage_valid=False,
+        usage_invalid_reason=reason,
+    )
+
+
+def coerce_token_int(value: object, field_name: str) -> tuple[int | None, str | None]:
+    """Coerce a token counter to a non-negative integer without raising."""
+    if value is None:
+        return 0, None
+    if isinstance(value, bool):
+        return None, f"{field_name} must be an integer, got bool"
+    if isinstance(value, int):
+        if value < 0:
+            return None, f"{field_name} must be non-negative, got {value}"
+        return value, None
+    if isinstance(value, float):
+        if not value.is_integer():
+            return None, f"{field_name} must be an integer, got {value!r}"
+        if value < 0:
+            return None, f"{field_name} must be non-negative, got {value!r}"
+        return int(value), None
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return None, f"{field_name} must be an integer, got empty string"
+        try:
+            parsed = int(stripped, 10)
+        except ValueError:
+            return None, f"{field_name} must be an integer, got {value!r}"
+        if parsed < 0:
+            return None, f"{field_name} must be non-negative, got {value!r}"
+        return parsed, None
+    return None, f"{field_name} must be an integer, got {type(value).__name__}"
+
+
+def _find_usage_dicts(obj: object, *, depth: int = 0, max_depth: int = 4) -> list[dict]:
+    """Find nested usage dicts in a Codex event without assuming one fixed shape."""
+    if depth > max_depth or not isinstance(obj, dict):
+        return []
+
+    found: list[dict] = []
+    usage_value = obj.get("usage")
+    if isinstance(usage_value, dict):
+        found.append(usage_value)
+
+    for value in obj.values():
+        if isinstance(value, dict):
+            found.extend(_find_usage_dicts(value, depth=depth + 1, max_depth=max_depth))
+    return found
+
+
+def _normalize_usage_snapshot(usage: dict) -> tuple[dict | None, str | None]:
+    fields = ("input_tokens", "cached_input_tokens", "output_tokens")
+    normalized: dict[str, int] = {}
+    for field_name in fields:
+        value, error = coerce_token_int(usage.get(field_name, 0), field_name)
+        if error:
+            return None, error
+        assert value is not None
+        normalized[field_name] = value
+    return normalized, None
+
+
+def _merge_codex_usage_snapshots(usage_snapshots: list[dict[str, int]]) -> tuple[dict[str, int], list[dict[str, int]]]:
+    """Merge Codex usage snapshots while avoiding duplicate cumulative double counts."""
+    if len(usage_snapshots) == 1:
+        return usage_snapshots[0], usage_snapshots
+
+    def _dominates(a: dict[str, int], b: dict[str, int]) -> bool:
+        return (
+            a["input_tokens"] >= b["input_tokens"]
+            and a["cached_input_tokens"] >= b["cached_input_tokens"]
+            and a["output_tokens"] >= b["output_tokens"]
+        )
+
+    unique_snapshots = {
+        (
+            snapshot["input_tokens"],
+            snapshot["cached_input_tokens"],
+            snapshot["output_tokens"],
+        ): snapshot
+        for snapshot in usage_snapshots
+    }
+    selected_usage = max(unique_snapshots.values(), key=lambda usage: (
+        usage["input_tokens"],
+        usage["cached_input_tokens"],
+        usage["output_tokens"],
+    ))
+    snapshots_used = sorted(
+        unique_snapshots.values(),
+        key=lambda usage: (
+            usage["input_tokens"],
+            usage["cached_input_tokens"],
+            usage["output_tokens"],
+        ),
+    )
+
+    cumulative_in_order = all(
+        _dominates(usage_snapshots[i + 1], usage_snapshots[i])
+        for i in range(len(usage_snapshots) - 1)
+    )
+    selected_key = (
+        selected_usage["input_tokens"],
+        selected_usage["cached_input_tokens"],
+        selected_usage["output_tokens"],
+    )
+    selected_occurrences = sum(
+        1
+        for snapshot in usage_snapshots
+        if (
+            snapshot["input_tokens"],
+            snapshot["cached_input_tokens"],
+            snapshot["output_tokens"],
+        ) == selected_key
+    )
+    cumulative_with_duplicates = selected_occurrences > 1 and all(
+        _dominates(selected_usage, snapshot)
+        for snapshot in usage_snapshots
+    )
+
+    if cumulative_in_order or cumulative_with_duplicates:
+        return selected_usage, snapshots_used
+
+    # Treat as independent snapshots and sum exact-unique entries.
+    merged = {"input_tokens": 0, "cached_input_tokens": 0, "output_tokens": 0}
+    for snapshot in snapshots_used:
+        merged["input_tokens"] += snapshot["input_tokens"]
+        merged["cached_input_tokens"] += snapshot["cached_input_tokens"]
+        merged["output_tokens"] += snapshot["output_tokens"]
+    return merged, snapshots_used
+
+
 def parse_codex_tokens(raw_stdout: str) -> TokenUsage:
     """Parse token usage from Codex JSONL output."""
-    usage_events: list[dict] = []
+    usage_snapshots: list[dict] = []
+    malformed_usages: list[str] = []
     for line in raw_stdout.strip().splitlines():
         line = line.strip()
         if not line:
             continue
         try:
             event = json.loads(line)
-            if event.get("type") == "turn.completed" and "usage" in event:
-                usage = event["usage"]
-                if isinstance(usage, dict):
-                    usage_events.append(usage)
         except json.JSONDecodeError:
             continue
+        for usage in _find_usage_dicts(event):
+            normalized, error = _normalize_usage_snapshot(usage)
+            if error:
+                malformed_usages.append(error)
+                continue
+            assert normalized is not None
+            usage_snapshots.append(normalized)
 
-    input_tokens = sum(int(usage.get("input_tokens", 0)) for usage in usage_events)
-    cached = sum(int(usage.get("cached_input_tokens", 0)) for usage in usage_events)
-    output_tokens = sum(int(usage.get("output_tokens", 0)) for usage in usage_events)
-    raw_usage: dict = {}
-    if len(usage_events) == 1:
-        raw_usage = usage_events[0]
-    elif usage_events:
-        raw_usage = {"turns": usage_events}
+    if not usage_snapshots:
+        reason = malformed_usages[0] if malformed_usages else "missing Codex usage telemetry"
+        return invalid_token_usage(
+            reason,
+            raw={"usage_errors": malformed_usages} if malformed_usages else {},
+        )
+
+    selected_usage, snapshots_used = _merge_codex_usage_snapshots(usage_snapshots)
+
+    input_tokens = selected_usage["input_tokens"]
+    cached = selected_usage["cached_input_tokens"]
+    output_tokens = selected_usage["output_tokens"]
+    raw_usage: dict = selected_usage
+    if len(snapshots_used) > 1:
+        raw_usage = {
+            **selected_usage,
+            "usage_snapshots": snapshots_used,
+        }
 
     return TokenUsage(
         input=input_tokens,
