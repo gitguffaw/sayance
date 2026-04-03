@@ -23,6 +23,10 @@ LLMs are blind to most POSIX utilities. They reach for `tar` instead of `pax`, w
 
 The benchmark (`run_benchmark.py`) is a utility for proving the solution works — it is not the product. The product is the bridge.
 
+Validation uses two lanes:
+- Lane A (legacy, unchanged): benchmark simulation path for comparability.
+- Lane B (additive): installed product-path conformance for `SKILL.md` + `posix-lookup`.
+
 The canonical source of truth is **POSIX.1-2024 (Issue 8)**: https://pubs.opengroup.org/onlinepubs/9799919799/idx/utilities.html — which defines **155 utilities**.
 
 ## Running the Benchmark
@@ -35,6 +39,10 @@ python3 run_benchmark.py --dry-run
 
 # Validate bridge completeness (core + tldr)
 python3 run_benchmark.py --validate-bridge
+
+# Lane B product conformance (installed skill + CLI)
+make test-product
+make test-product-negative
 
 # Run specific LLMs
 python3 run_benchmark.py --llms gemini
@@ -71,7 +79,7 @@ Single-file CLI tool (`run_benchmark.py`) that:
 - `skill/posix-lookup` — **Tier 2 CLI** — Python 3 binary, zero deps, called via bash
 - `posix-tldr.json` — Syntax lookup database (shared by CLI and benchmark)
 - `posix-core.md` — Tier 1 semantic map (also embedded in SKILL.md)
-- `Makefile` — `make test`, `make install`, `make uninstall`
+- `Makefile` — `make test`, `make test-product`, `make test-product-negative`, `make install`, `make uninstall`
 - `posix-utilities.txt` — All 155 POSIX Issue 8 utilities (source of truth)
 - `benchmark_data.json` — Structured questions with expected answers and required concepts
 - `run_benchmark.py` — Benchmark runner

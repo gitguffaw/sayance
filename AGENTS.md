@@ -25,6 +25,8 @@ Use Python directly; there is no virtualenv or build step.
 - `python3 run_benchmark.py --inject-posix` runs the Step-Up simulation (Track 2): injects `posix-core.md` into the prompt and simulates Tier 2 tool calls. It now fails fast if bridge coverage is incomplete.
 - `python3 run_benchmark.py --execute` runs extracted commands against fixtures for execution validation (Track 3).
 - `python3 run_benchmark.py --inject-posix --execute` combines Step-Up + execution validation (Track 3b).
+- `make test-product` runs Lane B installed product-path conformance checks in an isolated `HOME`.
+- `make test-product-negative` runs Lane B failure-injection checks (missing file, broken symlink, malformed JSON).
 - `python3 -m py_compile run_benchmark.py` is the fastest syntax sanity check before committing.
 
 ## Coding Style & Naming Conventions
@@ -33,7 +35,10 @@ Follow the existing Python style in `run_benchmark.py`: 4-space indentation, exp
 
 ## Testing Guidelines
 
-There is no dedicated `tests/` directory yet, so use dry runs and focused benchmark runs as the primary validation path. For logic changes, run `python3 -m py_compile run_benchmark.py` and at least one targeted command such as `python3 run_benchmark.py --dry-run --questions Q1`. If you change parsing, grading, or result serialization, note a sample JSON path from `results/`, but do not commit generated output.
+There is no dedicated `tests/` directory yet. Use a dual-lane validation approach:
+- Lane A (legacy): dry runs and focused benchmark runs.
+- Lane B (additive): installed product-path checks via `make test-product`.
+For logic changes, run `python3 -m py_compile run_benchmark.py`, at least one targeted Lane A command such as `python3 run_benchmark.py --dry-run --questions Q1`, and Lane B product conformance when packaging/skill behavior is touched. If you change parsing, grading, or result serialization, note a sample JSON path from `results/`, but do not commit generated output.
 
 ## Commit & Pull Request Guidelines
 

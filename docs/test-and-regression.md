@@ -15,6 +15,24 @@ A regression is any change to the codebase, prompt, question set, or tool that m
 
 ---
 
+## Dual-Lane Validation Model
+
+Use both lanes together:
+
+- **Lane A (legacy, unchanged):** benchmark simulation checks in `run_benchmark.py` for comparability and metric tracking.
+- **Lane B (additive):** installed product-path conformance checks for `SKILL.md` + `posix-lookup`.
+
+Lane A does not replace Lane B, and Lane B does not replace Lane A.
+
+Lane B commands:
+
+```bash
+make test-product
+make test-product-negative
+```
+
+---
+
 ## Before Every Benchmark Run
 
 1. **Syntax check:**
@@ -45,11 +63,44 @@ This keeps Gemini at one request every 30 seconds and avoids concurrent calls.
 
 ---
 
+## Lane B Product Conformance Checks
+
+Run these for packaging/distribution changes and before releasing skill updates:
+
+1. Happy-path conformance:
+   ```bash
+   make test-product
+   ```
+2. Failure-injection sensitivity:
+   ```bash
+   make test-product-negative
+   ```
+
+`make test-product` verifies install/uninstall in an isolated `HOME`, Claude/Codex skill file placement, CLI discoverability, lookup behavior, and 155-entry coverage.
+
+`make test-product-negative` intentionally breaks installed artifacts and confirms failures are detected for:
+- missing installed file
+- broken symlink target
+- malformed installed JSON
+
+---
+
 ## After Every Run
 
 1. Check that a `summary-<timestamp>.json` was written to `results/`.
 2. Open it and verify `valid_results` equals `total_results` for each LLM you ran.
 3. If `valid_results < total_results`, open the individual result files in `results/<llm>/` to find which questions failed and why.
+
+---
+
+## Manual Activation Canary (Lane B)
+
+Use this quick human check to verify real session loading behavior:
+
+1. Restart Claude Code or Codex.
+2. Ask a representative task that should require Tier 1 discovery + Tier 2 lookup.
+3. Confirm the response reflects bridge behavior (correct POSIX utility selection and lookup-informed syntax).
+4. If behavior looks un-bridged, run `make test-product` and inspect installed skill paths first.
 
 ---
 
