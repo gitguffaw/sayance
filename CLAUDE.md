@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - CLAUDE.md is canonical for benchmark behavior, runtime assumptions, provider quirks, prompt semantics, and result interpretation.
 - AGENTS.md is canonical for process, code style, validation commands, PR hygiene, and engineering workflow.
 - `benchmark_data.json` (`meta.question_rules`) is canonical for question-rule semantics.
-- POSIX.1-2024 Issue 8 is canonical for utility semantics and POSIX standard scope.
+- POSIX.1-2024 is canonical for utility semantics and POSIX standard scope.
 - Sync rule: when a topic changes in one file that affects the other, update both in the same change.
 - Conflict rule: behavior/runtime conflicts resolve to CLAUDE.md; process/style conflicts resolve to AGENTS.md.
 - For coding/process constraints, runbook details, and commit behavior, follow AGENTS.md.
@@ -32,6 +32,9 @@ Command examples below are convenience references. Canonical command/runbook det
 ```bash
 # Dry run (no API calls)
 python3 run_benchmark.py --dry-run
+
+# Validate bridge completeness (core + tldr)
+python3 run_benchmark.py --validate-bridge
 
 # Run specific LLMs
 python3 run_benchmark.py --llms gemini
@@ -72,18 +75,22 @@ Single-file CLI tool (`run_benchmark.py`) that:
 - `posix-utilities.txt` — All 155 POSIX Issue 8 utilities (source of truth)
 - `benchmark_data.json` — Structured questions with expected answers and required concepts
 - `run_benchmark.py` — Benchmark runner
+- `fixtures/` — Per-question test fixtures for Track 3 execution validation
+- `fixtures/manifest.json` — Maps question IDs to fixture specs and validation types
 - `docs/plans/` — Implementation plans (the deepened plan is the current roadmap)
 
 ## Known Issues
 
-- [OBSERVED 2026-04-02] **Gemini MCP prefix**: Gemini CLI prepends "MCP issues detected..." to output. Must strip before any JSON parsing.
+- [OBSERVED 2026-04-02] **Gemini MCP prefix**: Gemini CLI prepends "MCP issues detected..." to output. Must strip before any JSON parsing. `strip_cli_noise()` handles this plus ~10 other known noise prefixes.
 - [OBSERVED 2026-04-02] **Gemini quota planning**: For this repo, assume Gemini is safe at one benchmark call every 30 seconds and no more than 50 calls per day unless the active account limits clearly show otherwise. A 30-question Track 1 baseline fits. Track 2 may exceed the daily quota because the Step-Up simulation can trigger a second Gemini call for a question.
 - [OBSERVED 2026-04-02] **Codex git-check behavior**: Use `--skip-git-repo-check` when running outside a git repository. In this repo, use it only if you need to bypass local checks.
 - [OBSERVED 2026-04-02] **POSIX Issue 8 vs 7**: `readlink`, `realpath`, and `timeout` are now POSIX (Issue 8, 2024). LLMs trained on older data will incorrectly call these "not POSIX." `c99` is now `c17`. The batch `q*` utilities and `fort77` were removed.
+- [OBSERVED 2026-04-03] **Bridge completeness gate**: Incomplete semantic bridge coverage can corrupt Step-Up benchmark runs. `run_benchmark.py --inject-posix` now performs strict preflight validation and exits if `posix-core.md` or `posix-tldr.json` drift from 155-utility coverage.
 
 ## Important Context
 
 - The primary metric is **token cost**, not accuracy. Accuracy is secondary.
 - Token counts differ across providers (different tokenizers). Use native tokens for cost, tiktoken o200k_base for cross-model comparison.
 - Cache state (cold vs warm) creates 10x cost difference on Anthropic. Track per result.
-- LLM-as-judge is susceptible to prompt injection. Never use the same model as both test subject and judge.
+- LLM-as-judge is susceptible to prompt injection. Grading uses base64-encoded responses to mitigate. Never use the same model as both test subject and judge.
+- `benchmark_data.json` (questions and expected answers), `posix-tldr.json`, and `fixtures/` are frozen datasets for cross-model comparison. Do not modify them to fix benchmark results unless we are creating new base data because.

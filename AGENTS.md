@@ -17,9 +17,14 @@ This repository is a small, stdlib-only Python benchmark. `run_benchmark.py` is 
 Use Python directly; there is no virtualenv or build step.
 
 - `python3 run_benchmark.py --dry-run` checks question selection and CLI wiring without making API calls.
+- `python3 run_benchmark.py --validate-bridge` verifies `posix-core.md` + `posix-tldr.json` cover all 155 utilities and exits.
 - `python3 run_benchmark.py --llms gemini claude` runs selected providers only.
 - `python3 run_benchmark.py --questions Q1 Q2 --k 3` repeats specific questions for comparison.
 - `python3 run_benchmark.py --judge claude` enables grading when you want token and accuracy data.
+- `python3 run_benchmark.py --no-grade` skips LLM-as-judge grading (token-only mode).
+- `python3 run_benchmark.py --inject-posix` runs the Step-Up simulation (Track 2): injects `posix-core.md` into the prompt and simulates Tier 2 tool calls. It now fails fast if bridge coverage is incomplete.
+- `python3 run_benchmark.py --execute` runs extracted commands against fixtures for execution validation (Track 3).
+- `python3 run_benchmark.py --inject-posix --execute` combines Step-Up + execution validation (Track 3b).
 - `python3 -m py_compile run_benchmark.py` is the fastest syntax sanity check before committing.
 
 ## Coding Style & Naming Conventions

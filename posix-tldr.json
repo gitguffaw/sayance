@@ -1,43 +1,273 @@
 {
-  "sort": [
-    "Order by second column only: sort -t',' -k2,2 file.csv",
-    "Sort numeric: sort -n file",
-    "Unique sort: sort -u file"
+  "admin": [
+    "SCCS administration command: admin [options] file"
   ],
-  "find": [
-    "Find files modified in last 24h: find / -name '*.conf' -mtime -1"
+  "alias": [
+    "Define shell alias: alias name='value'",
+    "List aliases: alias"
   ],
-  "sed": [
-    "Replace all occurrences: sed 's/foo/bar/g' file > tmp && mv tmp file",
-    "DO NOT USE -i (not POSIX). Always use redirect and mv."
+  "ar": [
+    "Create/update object archive: ar -rv libfoo.a file1.o file2.o"
   ],
-  "cut": [
-    "Extract 3rd column: cut -d: -f3 /etc/passwd"
+  "asa": [
+    "Interpret ASA carriage-control chars: asa file"
   ],
-  "uniq": [
-    "Count unique lines (must sort first): sort file | uniq | wc -l"
+  "at": [
+    "Schedule one-time job: echo './script.sh' | at 0300 tomorrow"
   ],
-  "pax": [
-    "Create portable archive: pax -w -f archive.pax directory/",
-    "Copy directory tree: pax -rw src/ dest/",
-    "DO NOT USE tar (not guaranteed POSIX)."
+  "awk": [
+    "Field processing: awk -F: '{print $1}' file"
   ],
-  "grep": [
-    "Case-insensitive search: grep -i 'error' *.log"
+  "basename": [
+    "Strip directory prefix: basename /path/to/file.txt"
   ],
-  "printf": [
-    "Portable output: printf 'yes\\n'",
-    "Prefer printf over echo in POSIX shell scripts."
+  "batch": [
+    "Queue command for deferred execution: batch <<'EOF'\ncommand\nEOF"
   ],
-  "test": [
-    "Check if file is readable: test -r file"
+  "bc": [
+    "Evaluate expression: echo '2^10' | bc"
   ],
-  "cp": [
-    "Recursive copy: cp -R src/ dest/"
+  "bg": [
+    "Resume suspended job in background: bg %1"
+  ],
+  "c17": [
+    "Compile C source (Issue 8 name): c17 -o prog prog.c"
+  ],
+  "cal": [
+    "Print calendar: cal 2026"
+  ],
+  "cat": [
+    "Concatenate files: cat file1 file2"
+  ],
+  "cd": [
+    "Change working directory: cd /path/to/dir"
+  ],
+  "cflow": [
+    "Generate C call graph: cflow source.c"
+  ],
+  "chgrp": [
+    "Change group ownership: chgrp group file"
+  ],
+  "chmod": [
+    "Change mode bits: chmod 644 file"
+  ],
+  "chown": [
+    "Change file owner: chown user file"
+  ],
+  "cksum": [
+    "Compute checksum: cksum file",
+    "DO NOT USE md5sum."
+  ],
+  "cmp": [
+    "Compare files byte-by-byte: cmp file1 file2"
   ],
   "comm": [
     "Compare sorted files: comm file1 file2",
     "Show lines unique to file1: comm -23 file1 file2"
+  ],
+  "command": [
+    "Invoke command bypassing shell functions: command ls"
+  ],
+  "compress": [
+    "Compress file (LZW): compress file"
+  ],
+  "cp": [
+    "Recursive copy: cp -R src/ dest/"
+  ],
+  "crontab": [
+    "Install crontab from file: crontab mycron"
+  ],
+  "csplit": [
+    "Split by regex context: csplit file '/^SECTION/' '{*}'"
+  ],
+  "ctags": [
+    "Generate tag index: ctags *.c *.h"
+  ],
+  "cut": [
+    "Extract 3rd column: cut -d: -f3 /etc/passwd"
+  ],
+  "cxref": [
+    "Generate C cross-reference: cxref source.c"
+  ],
+  "date": [
+    "Display current date/time: date"
+  ],
+  "dd": [
+    "Block-level copy/convert: dd if=in.bin of=out.bin bs=1m"
+  ],
+  "delta": [
+    "Create SCCS delta: delta s.file"
+  ],
+  "df": [
+    "Report filesystem free space: df -k"
+  ],
+  "diff": [
+    "Show textual differences: diff file1 file2"
+  ],
+  "dirname": [
+    "Strip final path component: dirname /path/to/file.txt"
+  ],
+  "du": [
+    "Estimate disk usage: du -sk dir"
+  ],
+  "echo": [
+    "Print text (prefer printf in scripts): echo 'hello'"
+  ],
+  "ed": [
+    "Run ed command script: ed -s file < edits.ed"
+  ],
+  "env": [
+    "Run command with environment: env VAR=value command"
+  ],
+  "ex": [
+    "Non-interactive ex command: ex -s file <<'EOF'\n%s/old/new/g\nwq\nEOF"
+  ],
+  "expand": [
+    "Convert tabs to spaces: expand file"
+  ],
+  "expr": [
+    "Arithmetic: expr '(' 3 + 5 ')' '*' 2"
+  ],
+  "false": [
+    "Return failing status code: false"
+  ],
+  "fc": [
+    "List/edit shell history: fc -l"
+  ],
+  "fg": [
+    "Bring job to foreground: fg %1"
+  ],
+  "file": [
+    "Detect file type heuristically: file target"
+  ],
+  "find": [
+    "Find files modified in last 24h: find / -name '*.conf' -mtime -1"
+  ],
+  "fold": [
+    "Wrap long lines: fold -w 80 file"
+  ],
+  "fuser": [
+    "Show processes using file: fuser path"
+  ],
+  "gencat": [
+    "Build message catalog: gencat catalog.msg source.msg"
+  ],
+  "get": [
+    "Extract SCCS revision: get s.file"
+  ],
+  "getconf": [
+    "Query configuration value: getconf PATH"
+  ],
+  "getopts": [
+    "Parse shell options in script: getopts 'ab:' opt"
+  ],
+  "gettext": [
+    "Lookup localized message: gettext domain 'msgid'"
+  ],
+  "grep": [
+    "Case-insensitive search: grep -i 'error' *.log"
+  ],
+  "hash": [
+    "Remember command locations: hash ls"
+  ],
+  "head": [
+    "Show first lines: head -n 20 file"
+  ],
+  "iconv": [
+    "Convert encoding: iconv -f ISO-8859-1 -t UTF-8 file"
+  ],
+  "id": [
+    "Print user/group identity: id"
+  ],
+  "ipcrm": [
+    "Remove IPC object: ipcrm -q 12345"
+  ],
+  "ipcs": [
+    "List IPC facilities: ipcs"
+  ],
+  "jobs": [
+    "List shell jobs: jobs"
+  ],
+  "join": [
+    "Merge on shared key: join -t',' file1 file2"
+  ],
+  "kill": [
+    "Send signal: kill -TERM 1234"
+  ],
+  "lex": [
+    "Generate lexical analyzer: lex scanner.l"
+  ],
+  "link": [
+    "Create hard link: link existing newlink"
+  ],
+  "ln": [
+    "Create link: ln source target"
+  ],
+  "locale": [
+    "Show locale settings: locale"
+  ],
+  "localedef": [
+    "Compile locale definition: localedef -i input -f charmap locale_name"
+  ],
+  "logger": [
+    "Write message to system log: logger 'message'"
+  ],
+  "logname": [
+    "Print login name: logname"
+  ],
+  "lp": [
+    "Submit file to print queue: lp file"
+  ],
+  "ls": [
+    "Show symlink target: ls -l symlink"
+  ],
+  "m4": [
+    "Run macro processor: m4 input.m4"
+  ],
+  "mailx": [
+    "Send mail: printf 'body\n' | mailx -s 'subject' user@example.com"
+  ],
+  "make": [
+    "Run default build target: make"
+  ],
+  "man": [
+    "Read manual page: man utility"
+  ],
+  "mesg": [
+    "Control terminal write permission: mesg n"
+  ],
+  "mkdir": [
+    "Create directory path: mkdir -p newdir"
+  ],
+  "mkfifo": [
+    "Create named pipe: mkfifo mypipe"
+  ],
+  "more": [
+    "Paginate file output: more file"
+  ],
+  "msgfmt": [
+    "Compile message catalog: msgfmt -o out.mo messages.po"
+  ],
+  "mv": [
+    "Move or rename file: mv old new"
+  ],
+  "newgrp": [
+    "Start shell with new group: newgrp group"
+  ],
+  "ngettext": [
+    "Plural-aware message lookup: ngettext domain 'one' 'many' count"
+  ],
+  "nice": [
+    "Run command with lower priority: nice -n 10 command"
+  ],
+  "nl": [
+    "Add line numbers: nl file"
+  ],
+  "nm": [
+    "List object symbols: nm file.o"
+  ],
+  "nohup": [
+    "Run in background safely: nohup ./script.sh &"
   ],
   "od": [
     "Hex dump: od -A x -t x1z file",
@@ -46,14 +276,35 @@
   "paste": [
     "Combine side-by-side: paste file1 file2"
   ],
-  "tr": [
-    "Uppercase to lowercase: tr '[:upper:]' '[:lower:]' < file"
+  "patch": [
+    "Apply unified diff: patch < changes.diff"
   ],
-  "nohup": [
-    "Run in background safely: nohup ./script.sh &"
+  "pathchk": [
+    "Check if filename is portable: pathchk -p filename"
   ],
-  "ls": [
-    "Show symlink target: ls -l symlink"
+  "pax": [
+    "Create portable archive: pax -w -f archive.pax directory/",
+    "Copy directory tree: pax -rw src/ dest/",
+    "DO NOT USE tar (not guaranteed POSIX)."
+  ],
+  "pr": [
+    "Paginate and number lines: pr -n file"
+  ],
+  "printf": [
+    "Portable output: printf 'yes\\n'",
+    "Prefer printf over echo in POSIX shell scripts."
+  ],
+  "prs": [
+    "Print SCCS file info: prs s.file"
+  ],
+  "ps": [
+    "List running processes: ps -ef"
+  ],
+  "pwd": [
+    "Print working directory: pwd"
+  ],
+  "read": [
+    "Read a line in shell script: read var"
   ],
   "readlink": [
     "Resolve symlink: readlink symlink"
@@ -61,47 +312,166 @@
   "realpath": [
     "Get absolute canonical path: realpath file"
   ],
-  "timeout": [
-    "Kill command if slower than 30s: timeout 30 command"
+  "renice": [
+    "Adjust process priority: renice 5 -p 1234"
+  ],
+  "rm": [
+    "Remove files: rm file"
+  ],
+  "rmdel": [
+    "Remove SCCS delta: rmdel -r1.2 s.file"
+  ],
+  "rmdir": [
+    "Remove empty directory: rmdir emptydir"
+  ],
+  "sact": [
+    "Show SCCS editing status: sact s.file"
+  ],
+  "sccs": [
+    "Front-end for SCCS commands: sccs get file"
+  ],
+  "sed": [
+    "Replace all occurrences: sed 's/foo/bar/g' file > tmp && mv tmp file",
+    "DO NOT USE -i (not POSIX). Always use redirect and mv."
+  ],
+  "sh": [
+    "Run POSIX shell script: sh script.sh"
+  ],
+  "sleep": [
+    "Pause for seconds: sleep 5"
+  ],
+  "sort": [
+    "Order by second column only: sort -t',' -k2,2 file.csv",
+    "Sort numeric: sort -n file",
+    "Unique sort: sort -u file"
   ],
   "split": [
     "Split into 1000 line chunks: split -l 1000 largefile chunk_"
   ],
-  "at": [
-    "Schedule one-time job: echo './script.sh' | at 0300 tomorrow"
+  "strings": [
+    "Extract printable strings: strings binaryfile"
   ],
-  "join": [
-    "Merge on shared key: join -t',' file1 file2"
+  "strip": [
+    "Strip symbols from object file: strip binary"
   ],
-  "nl": [
-    "Add line numbers: nl file"
+  "stty": [
+    "Inspect/set terminal settings: stty -a"
   ],
-  "wc": [
-    "Count lines: wc -l file"
+  "tabs": [
+    "Set terminal tab stops: tabs -8"
   ],
-  "pathchk": [
-    "Check if filename is portable: pathchk -p filename"
+  "tail": [
+    "Show last lines: tail -n 20 file"
+  ],
+  "talk": [
+    "Start interactive talk session: talk user"
+  ],
+  "tee": [
+    "Copy stdin to file and stdout: command | tee out.log"
+  ],
+  "test": [
+    "Check if file is readable: test -r file"
+  ],
+  "time": [
+    "Measure command runtime: time command"
+  ],
+  "timeout": [
+    "Kill command if slower than 30s: timeout 30 command"
+  ],
+  "touch": [
+    "Update timestamps or create file: touch file"
+  ],
+  "tput": [
+    "Query terminal capability: tput cols"
+  ],
+  "tr": [
+    "Uppercase to lowercase: tr '[:upper:]' '[:lower:]' < file"
+  ],
+  "true": [
+    "Return success status code: true"
   ],
   "tsort": [
     "Topological sort: tsort < dependency_pairs.txt"
   ],
-  "cksum": [
-    "Compute checksum: cksum file",
-    "DO NOT USE md5sum."
+  "tty": [
+    "Print terminal device name: tty"
   ],
-  "iconv": [
-    "Convert encoding: iconv -f ISO-8859-1 -t UTF-8 file"
+  "type": [
+    "Identify command type in shell: type command"
   ],
-  "mkfifo": [
-    "Create named pipe: mkfifo mypipe"
+  "ulimit": [
+    "Show/set resource limits in shell: ulimit -a"
   ],
-  "pr": [
-    "Paginate and number lines: pr -n file"
+  "umask": [
+    "Show/set file mode creation mask: umask 022"
   ],
-  "expr": [
-    "Arithmetic: expr '(' 3 + 5 ')' '*' 2"
+  "unalias": [
+    "Remove alias: unalias name"
+  ],
+  "uname": [
+    "Show system name/info: uname -a"
+  ],
+  "uncompress": [
+    "Restore compressed file: uncompress file.Z"
+  ],
+  "unexpand": [
+    "Convert spaces to tabs: unexpand file"
+  ],
+  "unget": [
+    "Undo SCCS pending delta: unget s.file"
+  ],
+  "uniq": [
+    "Count unique lines (must sort first): sort file | uniq | wc -l"
+  ],
+  "unlink": [
+    "Remove directory entry: unlink file"
+  ],
+  "uucp": [
+    "Queue UUCP file copy: uucp source system!dest"
+  ],
+  "uudecode": [
+    "Decode uuencoded text: uudecode encoded.txt"
   ],
   "uuencode": [
     "Encode binary for email: uuencode file file | mail user@example.com"
+  ],
+  "uustat": [
+    "Show UUCP status: uustat"
+  ],
+  "uux": [
+    "Queue remote UUCP execution: uux 'system!command'"
+  ],
+  "val": [
+    "Validate SCCS file: val s.file"
+  ],
+  "vi": [
+    "Open file in vi editor: vi file"
+  ],
+  "wait": [
+    "Wait for background jobs: wait"
+  ],
+  "wc": [
+    "Count lines: wc -l file"
+  ],
+  "what": [
+    "Extract SCCS identification strings: what file"
+  ],
+  "who": [
+    "List logged-in users: who"
+  ],
+  "write": [
+    "Write message to another user terminal: write user"
+  ],
+  "xargs": [
+    "Build command lines from stdin: find . -type f | xargs ls -l"
+  ],
+  "xgettext": [
+    "Extract translatable strings: xgettext source.c"
+  ],
+  "yacc": [
+    "Generate parser from grammar: yacc grammar.y"
+  ],
+  "zcat": [
+    "Write compressed file to stdout: zcat file.Z"
   ]
 }

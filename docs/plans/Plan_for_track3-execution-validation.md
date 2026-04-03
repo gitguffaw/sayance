@@ -18,6 +18,13 @@ That retry cost — extra tokens + extra wall-clock time — is the true delta b
 
 Track 3 proves this delta by actually running the suggested commands and measuring what happens when they fail.
 
+## Prerequisite Status (updated 2026-04-03)
+
+- Bridge completeness gate is now in place.
+- `posix-tldr.json` coverage is now 155/155 utilities.
+- `run_benchmark.py --validate-bridge` exists and passes on current mainline.
+- `--inject-posix` now fails fast on bridge coverage drift.
+
 ---
 
 ## Intended Outcome

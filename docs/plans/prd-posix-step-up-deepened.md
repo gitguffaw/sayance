@@ -6,7 +6,7 @@ Outcome:
 
 ## Status Summary
 
-**Last updated:** 2026-04-02  
+**Last updated:** 2026-04-03  
 **Track 1 (Raw Capability):** Complete — all three providers, 30 questions, k=1  
 **Track 2 (Step-Up):** Complete — all three providers, 30 questions, k=1  
 **Track 3 (Execution Validation):** Not started — see `docs/plans/Plan_for_track3-execution-validation.md`
@@ -29,6 +29,16 @@ Track 1 and Track 2 only prove compliance rates in a controlled environment. Nei
 
 - The double-invocation tool simulation in `run_benchmark.py` double-counts input tokens in merged totals. Use `total_simulation_adjusted_billable_tokens` (not `total_billable_tokens`) when comparing tracks.
 - Codex token accounting only captures the last JSONL `turn.completed` event. Multi-step runs (mean 8.1–9.5 steps) may undercount total usage by 3-10x. Codex cost figures should be treated as lower bounds.
+
+### Data Integrity Incident (2026-04-03)
+
+- Historical Gemini/Codex/Opus Step-Up runs are considered compromised where semantic bridge coverage was incomplete.
+- Root cause: incomplete Tier 2 (`posix-tldr.json`) coverage and missing bridge preflight enforcement.
+- Mitigation shipped:
+  - `posix-tldr.json` expanded to full 155-utility coverage (matching `posix-utilities.txt`).
+  - `run_benchmark.py` now has strict preflight validation (`--validate-bridge`).
+  - `--inject-posix` now fails fast if `posix-core.md` or `posix-tldr.json` drift from 155-utility coverage.
+- Operational consequence: affected historical runs must be treated as invalid for comparison and rerun under the new gate.
 
 ---
 
@@ -61,8 +71,8 @@ A progressive, low-token reference mechanism that mirrors human developer workfl
 - The 2-tier progressive disclosure pattern is architecturally sound for this constraint space. The clean separation (Tier 1 = discovery, Tier 2 = syntax) prevents scope creep and keeps token budgets predictable.
 - CLI-via-bash was chosen over MCP after a structured engineering debate. MCP adds ~79-120 tokens of schema overhead per session; bash is always registered. The CLI also works across Claude Code, Cursor, Codex, Gemini CLI — any agent with shell access.
 
-**Tier 2 Coverage Gap:**
-Tier 2 currently covers only 29 of ~85 non-trivial utilities. This creates a "discovery-to-lookup cliff" — the agent finds a utility in Tier 1 but gets no syntax from Tier 2. Expanding Tier 2 to cover all utilities tested in `benchmark_data.json` is the minimum; covering all non-trivial utilities is the goal. At 155 utilities x ~50 tokens each, the full Tier 2 database is ~7,750 tokens — a lookup problem, not a search problem.
+**Tier 2 Coverage Status (updated 2026-04-03):**
+Tier 2 now covers all 155 POSIX Issue 8 utilities listed in `posix-utilities.txt`, eliminating the discovery-to-lookup cliff. Coverage is enforced by a benchmark preflight gate before Step-Up runs.
 
 **CLI Distribution (Chosen over MCP):**
 The `posix-lookup` CLI is a zero-dependency Python 3 script that returns syntax info from `posix-tldr.json`. It is invoked via bash, which is always available in the LLM's tool schema.
@@ -121,14 +131,15 @@ Tasks requiring three tools (e.g., `sort | uniq | comm`) trigger latency spikes 
 `posix-core.md` exists, covers all 155 POSIX Issue 8 utilities, grouped by 8 categorical namespaces.
 
 ### Step 2: Expand Tier 2 Coverage
-**Status: Partial — 29 utilities covered**
+**Status: ✅ Complete — 155 utilities covered (2026-04-03)**
 
-*   **Task:** Expand `posix-tldr.json` to cover all utilities tested in `benchmark_data.json` and add graceful fallback for missing utilities.
-*   **Gap:** Verify every `expected_commands` value in `benchmark_data.json` has a corresponding entry in `posix-tldr.json`.
+*   **Task:** Expand `posix-tldr.json` to full POSIX Issue 8 coverage and enforce bridge integrity.
+*   **Delivered:** `posix-tldr.json` now contains 155 entries and is validated against `posix-utilities.txt`.
 *   **Acceptance Criteria:**
-    *   [ ] Every `expected_commands` value in `benchmark_data.json` has a corresponding entry in `posix-tldr.json`.
-    *   [ ] Tool returns a structured "not yet covered" response for utilities in Tier 1 but missing from Tier 2.
-    *   [ ] Array input validated: min 1, max 10 utility names per call.
+    *   [x] Every `expected_commands` value in `benchmark_data.json` has a corresponding entry in `posix-tldr.json`.
+    *   [x] Tier 2 coverage expanded from ~30 entries to 155 entries.
+    *   [x] Preflight validator added (`python3 run_benchmark.py --validate-bridge`).
+    *   [x] `--inject-posix` fails fast when bridge coverage is incomplete.
 
 ### Step 3: Harden the Test Harness
 **Status: Partial**
@@ -136,7 +147,7 @@ Tasks requiring three tools (e.g., `sort | uniq | comm`) trigger latency spikes 
 `--inject-posix` is wired. Tool simulation works via text pattern matching. Open items:
 
 *   [ ] Rate-limit backoff with exponential jitter for all CLI invocations.
-*   [ ] Tool-call command extraction validates against `posix-tldr.json` keys.
+*   [x] Bridge preflight now validates `posix-tldr.json` key integrity and expected-command coverage before Step-Up runs.
 *   [ ] Question ID sanitized with `re.match(r'^[A-Za-z0-9_-]+$', q_id)`.
 *   [ ] Question order randomized per run with a fixed seed for reproducibility.
 
@@ -177,14 +188,14 @@ All three providers completed with 30/30 valid results.
 
 **Key observation:** Output token counts are not the right efficiency metric for Codex in Track 2. Codex uses the tool correctly (86.7% compliance) but narrates every step. The real efficiency question — does correct-first-time reduce total real-world cost versus retry loops — is Track 3's job.
 
-### Step 6: Ship Skill Distribution (CLI + PAI Pack)
+### Step 6: Ship Skill Distribution (CLI + Claude Code Skill)
 **Status: ✅ Complete**
 
 Built and deployed the production delivery mechanism for the POSIX Bridge:
 
 *   **Architecture decision (QNT-53):** CLI skill via bash chosen over MCP after structured multi-agent debate. Zero schema tokens, universal agent compatibility.
 *   **`posix-lookup` CLI (QNT-54):** Python 3 binary, zero deps, pure stdlib. Modes: lookup, --list, --json.
-*   **`skill/SKILL.md` (QNT-55):** PAI skill combining Tier 1 semantic map + Tier 2 CLI instruction. Auto-loads into Claude Code sessions (~925 tokens, cached).
+*   **`skill/SKILL.md` (QNT-55):** Claude Code skill combining Tier 1 semantic map + Tier 2 CLI instruction. Auto-loads into sessions (~925 tokens, cached).
 *   **`Makefile` (QNT-56):** `make test`, `make install`, `make uninstall` pipeline.
 *   **`skill/` directory (QNT-57):** Source of truth for distributable artifacts in the repo.
 

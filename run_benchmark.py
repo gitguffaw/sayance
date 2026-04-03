@@ -10,6 +10,7 @@ Usage:
     python3 run_benchmark.py --llms gemini           # Run only Gemini (free, validate first)
     python3 run_benchmark.py --judge claude           # Use Claude as grader
     python3 run_benchmark.py --questions T01 T17      # Run specific questions only
+    python3 run_benchmark.py --validate-bridge        # Verify bridge coverage (core + tldr)
     python3 run_benchmark.py --dry-run                # Show what would be run
     python3 run_benchmark.py --no-grade               # Skip accuracy grading, tokens only
     python3 run_benchmark.py --delay 2                # 2-second pause between calls
@@ -37,6 +38,9 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent
 DATA_FILE = SCRIPT_DIR / "benchmark_data.json"
+POSIX_CORE_FILE = SCRIPT_DIR / "posix-core.md"
+POSIX_TLDR_FILE = SCRIPT_DIR / "posix-tldr.json"
+POSIX_UTILITIES_FILE = SCRIPT_DIR / "posix-utilities.txt"
 FIXTURES_DIR = SCRIPT_DIR / "fixtures"
 RESULTS_DIR = SCRIPT_DIR / "results"
 RESULTS_DIR_STEPUP = SCRIPT_DIR / "results-stepup"
@@ -215,13 +219,14 @@ ISSUE8_COMMANDS = {"readlink", "realpath", "timeout"}
 
 _posix_core_cache: str | None = None
 _posix_tldr_cache: dict | None = None
+_posix_utilities_cache: list[str] | None = None
 
 
 def _load_posix_core() -> str | None:
     global _posix_core_cache
     if _posix_core_cache is None:
         try:
-            _posix_core_cache = (SCRIPT_DIR / "posix-core.md").read_text()
+            _posix_core_cache = POSIX_CORE_FILE.read_text()
         except (FileNotFoundError, OSError) as e:
             print(f"  WARNING: Could not load posix-core.md: {e}")
             return None
@@ -231,8 +236,21 @@ def _load_posix_core() -> str | None:
 def _load_posix_tldr() -> dict:
     global _posix_tldr_cache
     if _posix_tldr_cache is None:
-        _posix_tldr_cache = json.loads((SCRIPT_DIR / "posix-tldr.json").read_text())
+        _posix_tldr_cache = json.loads(POSIX_TLDR_FILE.read_text())
     return dict(_posix_tldr_cache)
+
+
+def _load_posix_utilities() -> list[str]:
+    global _posix_utilities_cache
+    if _posix_utilities_cache is None:
+        utilities: list[str] = []
+        for line in POSIX_UTILITIES_FILE.read_text().splitlines():
+            entry = line.strip().lower()
+            if not entry or entry.startswith("#"):
+                continue
+            utilities.append(entry)
+        _posix_utilities_cache = utilities
+    return list(_posix_utilities_cache)
 
 
 def normalize_utility_name(raw_command: str) -> str | None:
@@ -1180,6 +1198,97 @@ def load_questions(question_ids: list[str] | None = None) -> list[dict]:
         questions = [q for q in questions if q["id"] in question_ids]
 
     return questions
+
+
+def validate_posix_bridge(
+    questions: list[dict],
+    *,
+    require_full_coverage: bool,
+) -> list[str]:
+    """Validate semantic bridge completeness and return human-readable errors."""
+    errors: list[str] = []
+
+    try:
+        tldr = _load_posix_tldr()
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        return [f"Could not load {POSIX_TLDR_FILE.name}: {e}"]
+
+    try:
+        utilities = _load_posix_utilities()
+    except (FileNotFoundError, OSError) as e:
+        return [f"Could not load {POSIX_UTILITIES_FILE.name}: {e}"]
+
+    core_text = _load_posix_core()
+    if core_text is None:
+        errors.append(f"Could not load {POSIX_CORE_FILE.name}.")
+        core_text = ""
+    core_lower = core_text.lower()
+
+    tldr_keys = {str(name).lower() for name in tldr.keys()}
+    utility_set = set(utilities)
+
+    def in_core(name: str) -> bool:
+        return bool(re.search(rf"\b{re.escape(name)}\b", core_lower))
+
+    def preview(items: list[str], limit: int = 20) -> str:
+        if not items:
+            return ""
+        if len(items) <= limit:
+            return ", ".join(items)
+        return f"{', '.join(items[:limit])}, ... (+{len(items) - limit} more)"
+
+    expected_commands = sorted({
+        command.strip().lower()
+        for question in questions
+        for command in question.get("expected_commands", [])
+        if isinstance(command, str) and command.strip()
+    })
+
+    missing_expected_tldr = [cmd for cmd in expected_commands if cmd not in tldr_keys]
+    if missing_expected_tldr:
+        errors.append(
+            "Missing expected commands in "
+            f"{POSIX_TLDR_FILE.name}: {preview(missing_expected_tldr)}"
+        )
+
+    missing_expected_core = [cmd for cmd in expected_commands if not in_core(cmd)]
+    if missing_expected_core:
+        errors.append(
+            "Missing expected commands in "
+            f"{POSIX_CORE_FILE.name}: {preview(missing_expected_core)}"
+        )
+
+    empty_tldr_entries = sorted(
+        str(name)
+        for name, value in tldr.items()
+        if not isinstance(value, list) or not any(isinstance(item, str) and item.strip() for item in value)
+    )
+    if empty_tldr_entries:
+        errors.append(f"Empty or invalid entries in {POSIX_TLDR_FILE.name}: {preview(empty_tldr_entries)}")
+
+    if require_full_coverage:
+        missing_tldr_utility = [name for name in utilities if name not in tldr_keys]
+        if missing_tldr_utility:
+            errors.append(
+                "Missing POSIX utilities in "
+                f"{POSIX_TLDR_FILE.name}: {preview(missing_tldr_utility)}"
+            )
+
+        missing_core_utility = [name for name in utilities if not in_core(name)]
+        if missing_core_utility:
+            errors.append(
+                "Missing POSIX utilities in "
+                f"{POSIX_CORE_FILE.name}: {preview(missing_core_utility)}"
+            )
+
+        unknown_tldr_entries = sorted(tldr_keys - utility_set)
+        if unknown_tldr_entries:
+            errors.append(
+                "Unknown utility keys in "
+                f"{POSIX_TLDR_FILE.name}: {preview(unknown_tldr_entries)}"
+            )
+
+    return errors
 
 
 # ---------------------------------------------------------------------------
@@ -2979,6 +3088,10 @@ def main():
         help="Show what would be run without executing",
     )
     parser.add_argument(
+        "--validate-bridge", action="store_true",
+        help="Validate POSIX bridge completeness (core + tldr) and exit",
+    )
+    parser.add_argument(
         "--no-grade", action="store_true",
         help="Skip accuracy grading, measure tokens only",
     )
@@ -3042,6 +3155,17 @@ def main():
         print(f"  Results may be unreliable due to prompt injection risk.\n")
 
     questions = load_questions(args.questions)
+
+    if args.validate_bridge or args.inject_posix:
+        bridge_errors = validate_posix_bridge(questions, require_full_coverage=True)
+        if bridge_errors:
+            print("  ERROR: POSIX bridge validation failed:")
+            for error in bridge_errors:
+                print(f"    - {error}")
+            raise SystemExit(1)
+        print("  POSIX bridge validation passed: core + tldr cover all 155 utilities.")
+        if args.validate_bridge:
+            return
 
     all_results = run_benchmark(
         llms=args.llms,

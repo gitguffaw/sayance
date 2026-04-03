@@ -116,12 +116,17 @@ make uninstall  # remove skill and CLI
 # Dry run (no API calls)
 python3 run_benchmark.py --dry-run
 
+# Validate bridge completeness (required before trusted Step-Up runs)
+python3 run_benchmark.py --validate-bridge
+
 # Run baseline (no injection)
 python3 run_benchmark.py --llms claude codex gemini
 
 # Run with Step-Up injection
 python3 run_benchmark.py --llms claude codex gemini --inject-posix
 ```
+
+`--inject-posix` now fails fast if `posix-core.md` or `posix-tldr.json` do not fully cover the 155 POSIX Issue 8 utilities.
 
 For Gemini, add `--max-workers 1 --delay 30` if you're on a tight API quota.
 
