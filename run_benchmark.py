@@ -96,7 +96,7 @@ class ResponseAnalysis:
     missing_required_concepts: list[str] = field(default_factory=list)
     posix_compliant: bool = False
     issue8_refusal: bool = False
-    failure_mode: str = "unknown"
+    inefficiency_mode: str = "unknown"
     estimated_excess_output_tokens: int = 0
 
 
@@ -181,6 +181,8 @@ NOISE_PREFIXES = (
 
 DEFAULT_CLI_TIMEOUT_SECONDS = 120
 DEFAULT_SHUFFLE_SEED = 20260329
+DEFAULT_CLAUDE_MODEL = "claude-opus-4-6"
+DEFAULT_CODEX_MODEL = "gpt-5.4"
 TOOL_CALL_PATTERN = re.compile(r"TOOL_CALL:\s*get_posix_syntax\((.*?)\)")
 UTILITY_NAME_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9]*$")
 
@@ -320,9 +322,20 @@ def flatten_numeric_metrics(
     return flattened
 
 
-def invoke_cli(llm: str, prompt: str, *, timeout_seconds: int = DEFAULT_CLI_TIMEOUT_SECONDS) -> CLIInvocation:
+def invoke_cli(
+    llm: str,
+    prompt: str,
+    *,
+    timeout_seconds: int = DEFAULT_CLI_TIMEOUT_SECONDS,
+    claude_model: str | None = None,
+    codex_model: str | None = None,
+) -> CLIInvocation:
     """Send a prompt to an LLM CLI and return raw stdout plus latency."""
     cmd = LLM_COMMANDS[llm].copy()
+    if llm == "claude" and claude_model:
+        cmd.extend(["--model", claude_model])
+    if llm == "codex" and codex_model:
+        cmd.extend(["--model", codex_model])
     cmd.append(prompt)
 
     started = time.perf_counter()
@@ -523,6 +536,7 @@ def parse_response(
     llm: str,
     raw_stdout: str,
     latency_ms: int,
+    codex_model: str | None = None,
 ) -> tuple[str, TokenUsage, str, ExecutionMetrics]:
     """Parse CLI output into response text, token usage, model name, and execution metrics."""
     if llm == "codex":
@@ -534,7 +548,7 @@ def parse_response(
                     input=0, input_cached=0, output=0, thoughts=0,
                     billable=0, cost_usd=None, cost_source="error",
                     raw=maybe_error,
-                ), _detect_codex_model(), ExecutionMetrics(
+                ), (codex_model or _detect_codex_model()), ExecutionMetrics(
                     latency_ms=latency_ms,
                     step_count=1,
                     tool_call_count=0,
@@ -545,7 +559,7 @@ def parse_response(
 
         # Codex: JSONL format, extract text from item.completed events
         tokens = parse_codex_tokens(raw_stdout)
-        model = _detect_codex_model()
+        model = codex_model or _detect_codex_model()
         text_parts = []
         for line in raw_stdout.strip().splitlines():
             try:
@@ -735,17 +749,17 @@ def analyze_response(
     verbosity_ratio = round(response_word_count / max(minimal_word_count, 1), 2)
 
     if issue8_refusal:
-        failure_mode = "issue8_stale_knowledge"
+        inefficiency_mode = "issue8_stale_knowledge"
     elif trap_hits:
-        failure_mode = "non_posix_substitution"
+        inefficiency_mode = "non_posix_substitution"
     elif not expected_hits:
-        failure_mode = "workaround_instead_of_native_utility"
+        inefficiency_mode = "workaround_instead_of_native_utility"
     elif llm == "codex" and (execution.tool_call_count > 0 or execution.step_count > 20):
-        failure_mode = "tool_heavy_detour"
+        inefficiency_mode = "tool_heavy_detour"
     elif tokens.output > max(minimal_word_count * 12, 150):
-        failure_mode = "over_explaining"
+        inefficiency_mode = "over_explaining"
     else:
-        failure_mode = "minimal_or_near_minimal"
+        inefficiency_mode = "minimal_or_near_minimal"
 
     estimated_excess_output_tokens = (
         tokens.output
@@ -765,7 +779,7 @@ def analyze_response(
         missing_required_concepts=missing_concepts,
         posix_compliant=posix_compliant,
         issue8_refusal=issue8_refusal,
-        failure_mode=failure_mode,
+        inefficiency_mode=inefficiency_mode,
         estimated_excess_output_tokens=estimated_excess_output_tokens,
     )
 
@@ -803,6 +817,9 @@ def load_existing_result(provider: str, question: dict, run_k: int) -> QuestionR
             tool_calls_by_type={},
         )
         analysis_data = data.get("analysis")
+        if analysis_data and "inefficiency_mode" not in analysis_data and "failure_mode" in analysis_data:
+            analysis_data = dict(analysis_data)
+            analysis_data["inefficiency_mode"] = analysis_data.pop("failure_mode")
         analysis = ResponseAnalysis(**analysis_data) if analysis_data else analyze_response(
             question=question,
             response=data["response"],
@@ -1133,6 +1150,8 @@ def grade_response(
     response: str,
     *,
     timeout_seconds: int,
+    claude_model: str | None = None,
+    codex_model: str | None = None,
 ) -> AccuracyGrade:
     """Use an LLM to grade another LLM's response."""
     import base64
@@ -1147,7 +1166,13 @@ def grade_response(
         response_b64=response_b64,
     )
 
-    raw = invoke_cli(judge, prompt, timeout_seconds=timeout_seconds)
+    raw = invoke_cli(
+        judge,
+        prompt,
+        timeout_seconds=timeout_seconds,
+        claude_model=claude_model,
+        codex_model=codex_model,
+    )
     raw_cleaned = strip_cli_noise(raw.stdout)
 
     # Extract JSON with score field.
@@ -1304,6 +1329,8 @@ def run_single(
     timeout_seconds: int,
     inject_posix: bool = False,
     execute: bool = False,
+    claude_model: str | None = None,
+    codex_model: str | None = None,
 ) -> QuestionResult:
     """Run a single question against a single LLM and return the result."""
     if delay > 0:
@@ -1326,11 +1353,18 @@ def run_single(
     # Detect cache state (first call to this provider = cold)
     cache_state = "warm" if already_completed(llm, q_id, 0) else "unknown"
 
-    invocation = invoke_cli(llm, prompt, timeout_seconds=timeout_seconds)
+    invocation = invoke_cli(
+        llm,
+        prompt,
+        timeout_seconds=timeout_seconds,
+        claude_model=claude_model,
+        codex_model=codex_model,
+    )
     response_text, tokens, model, execution = parse_response(
         llm,
         invocation.stdout,
         invocation.latency_ms,
+        codex_model=codex_model,
     )
 
     # Determine cache state from actual token data
@@ -1366,8 +1400,19 @@ def run_single(
                 f"{prompt}\n\nAssistant: {tool_call}\n\n"
                 f"TOOL_RESULT:\n{json.dumps(syntax)}\nNow complete the task."
             )
-            inv2 = invoke_cli(llm, follow_up, timeout_seconds=timeout_seconds)
-            resp2, tok2, _, exec2 = parse_response(llm, inv2.stdout, inv2.latency_ms)
+            inv2 = invoke_cli(
+                llm,
+                follow_up,
+                timeout_seconds=timeout_seconds,
+                claude_model=claude_model,
+                codex_model=codex_model,
+            )
+            resp2, tok2, _, exec2 = parse_response(
+                llm,
+                inv2.stdout,
+                inv2.latency_ms,
+                codex_model=codex_model,
+            )
 
             response_text = f"{tool_call}\n\n[TOOL RESULT]: {syntax}\n\n{resp2}"
 
@@ -1404,6 +1449,8 @@ def run_single(
             question,
             response_text,
             timeout_seconds=timeout_seconds,
+            claude_model=claude_model,
+            codex_model=codex_model,
         )
 
     # Track 3: execute the extracted command if --execute was passed
@@ -1456,6 +1503,8 @@ def run_provider_batch(
     seed: int,
     inject_posix: bool = False,
     execute: bool = False,
+    claude_model: str | None = None,
+    codex_model: str | None = None,
 ) -> list[QuestionResult]:
     """Run all questions for a single provider with concurrency."""
     workers = max_workers or PROVIDER_CONCURRENCY.get(llm, 2)
@@ -1491,6 +1540,8 @@ def run_provider_batch(
                 timeout_seconds,
                 inject_posix,
                 execute,
+                claude_model,
+                codex_model,
             )
             futures[future] = (q["id"], run_idx)
 
@@ -1518,7 +1569,7 @@ def run_provider_batch(
                         f"thoughts:{result.tokens.thoughts} "
                         f"billable:{result.tokens.billable} "
                         f"lat:{result.execution.latency_ms}ms "
-                        f"mode:{result.analysis.failure_mode}"
+                        f"mode:{result.analysis.inefficiency_mode}"
                         f"{acc}{exec_info}"
                     )
                 else:
@@ -1541,6 +1592,8 @@ def run_benchmark(
     seed: int,
     inject_posix: bool = False,
     execute: bool = False,
+    claude_model: str | None = None,
+    codex_model: str | None = None,
 ) -> dict[str, list[QuestionResult]]:
     """Run the full benchmark across all providers."""
     total_calls = len(questions) * len(llms) * k
@@ -1599,6 +1652,8 @@ def run_benchmark(
                 seed,
                 inject_posix,
                 execute,
+                claude_model,
+                codex_model,
             )
             provider_futures[future] = llm
 
@@ -1618,7 +1673,7 @@ def run_benchmark(
 # ---------------------------------------------------------------------------
 
 def generate_report(all_results: dict[str, list[QuestionResult]], questions: list[dict]) -> None:
-    """Print a formatted benchmark report with efficiency and failure-mode metrics."""
+    """Print a formatted benchmark report with efficiency and inefficiency-mode metrics."""
     if not all_results:
         return
 
@@ -1653,7 +1708,7 @@ def generate_report(all_results: dict[str, list[QuestionResult]], questions: lis
         costs = [r.tokens.cost_usd for r in valid if r.tokens.cost_usd is not None]
         compliant = [r for r in valid if r.analysis.posix_compliant]
         issue8_refusals = [r for r in valid if r.analysis.issue8_refusal]
-        failure_modes = Counter(r.analysis.failure_mode for r in valid)
+        inefficiency_modes = Counter(r.analysis.inefficiency_mode for r in valid)
         adjustments = [tool_simulation_adjustment(r.tokens) for r in valid]
 
         def stats(values: list[int | float]) -> str:
@@ -1704,10 +1759,10 @@ def generate_report(all_results: dict[str, list[QuestionResult]], questions: lis
         )
         print(f"    Issue 8 refusals: {len(issue8_refusals)}")
         print(f"    Tool calls: {sum(r.execution.tool_call_count for r in valid)} total")
-        if failure_modes:
+        if inefficiency_modes:
             print(
-                "    Failure modes: "
-                + ", ".join(f"{mode}={count}" for mode, count in failure_modes.most_common())
+                "    Inefficiency modes: "
+                + ", ".join(f"{mode}={count}" for mode, count in inefficiency_modes.most_common())
             )
 
         graded = [r for r in valid if r.accuracy and r.accuracy.score >= 0]
@@ -1776,7 +1831,7 @@ def generate_report(all_results: dict[str, list[QuestionResult]], questions: lis
             f"    {r.llm:>8} [{r.id}] T{tier} "
             f"out:{r.tokens.output:>5} excess:{r.analysis.estimated_excess_output_tokens:>5} "
             f"lat:{r.execution.latency_ms:>5}ms gap:{r.analysis.minimal_answer_gap_words:>4}w "
-            f"{compliance:>5} {r.analysis.failure_mode}"
+            f"{compliance:>5} {r.analysis.inefficiency_mode}"
         )
         print(f"             {r.question[:65]}")
         print(f"             minimal: {r.analysis.minimal_answer}")
@@ -1801,7 +1856,7 @@ def save_summary(all_results: dict[str, list[QuestionResult]]) -> Path:
     for llm, results in all_results.items():
         valid = [r for r in results if r.tokens.billable > 0]
         model = valid[0].model if valid else "unknown"
-        failure_modes = Counter(r.analysis.failure_mode for r in valid)
+        inefficiency_modes = Counter(r.analysis.inefficiency_mode for r in valid)
         adjustments = [tool_simulation_adjustment(r.tokens) for r in valid]
         summary["llms"][llm] = {
             "model": model,
@@ -1838,7 +1893,9 @@ def save_summary(all_results: dict[str, list[QuestionResult]]) -> Path:
                 if valid else 0
             ),
             "issue8_refusal_count": sum(1 for r in valid if r.analysis.issue8_refusal),
-            "failure_modes": dict(failure_modes),
+            "inefficiency_modes": dict(inefficiency_modes),
+            # Back-compat for older compare/report tooling.
+            "failure_modes": dict(inefficiency_modes),
             "errors": [
                 {
                     "question_id": r.id,
@@ -1908,7 +1965,7 @@ def save_visual_report(
         errors = [r for r in results if r.response.startswith("[ERROR]")]
         if not valid:
             continue
-        failure_modes = Counter(r.analysis.failure_mode for r in valid)
+        inefficiency_modes = Counter(r.analysis.inefficiency_mode for r in valid)
         model_cards.append({
             "llm": llm,
             "model": valid[0].model,
@@ -1923,7 +1980,7 @@ def save_visual_report(
             "mean_steps": mean([r.execution.step_count for r in valid]),
             "tool_calls": sum(r.execution.tool_call_count for r in valid),
             "total_cost": sum(r.tokens.cost_usd for r in valid if r.tokens.cost_usd is not None),
-            "failure_modes": failure_modes,
+            "inefficiency_modes": inefficiency_modes,
             "errors": errors,
         })
 
@@ -1985,7 +2042,7 @@ def save_visual_report(
             <span class="pill model-pill">{escape(result.llm.upper())}</span>
             <span class="pill tier-pill">T{tier}</span>
             <span class="pill mode-pill {escape(status_class)}">{escape(status)}</span>
-            <span class="pill failure-pill">{escape(result.analysis.failure_mode.replace('_', ' ') if not is_error else result.response.removeprefix('[ERROR] '))}</span>
+            <span class="pill failure-pill">{escape(result.analysis.inefficiency_mode.replace('_', ' ') if not is_error else result.response.removeprefix('[ERROR] '))}</span>
           </div>
           <h3>{escape(result.id)} · {escape(result.question)}</h3>
           <div class="task-stats">
@@ -2032,9 +2089,9 @@ def save_visual_report(
     # --- Model sections ---
     model_sections = []
     for card in model_cards:
-        failure_summary = ", ".join(
+        inefficiency_summary = ", ".join(
             f"{name.replace('_', ' ')}={count}"
-            for name, count in card["failure_modes"].most_common()
+            for name, count in card["inefficiency_modes"].most_common()
         )
         error_html = ""
         if card["errors"]:
@@ -2069,7 +2126,7 @@ def save_visual_report(
           <div class="micro-stats">
             <div><span>Mean steps</span><strong>{card["mean_steps"]:.1f}</strong></div>
             {cost_line}
-            <div><span>Failure modes</span><strong>{escape(failure_summary or 'none')}</strong></div>
+            <div><span>Inefficiency modes</span><strong>{escape(inefficiency_summary or 'none')}</strong></div>
           </div>
           {error_html}
         </section>
@@ -2733,19 +2790,22 @@ def save_comparison_report(named_summaries: list[tuple[str, dict]]) -> Path:
                         cells.append(f"<td>{prefix}{val:{fmt}}{badge}</td>")
             metric_rows.append(f"<tr><td class='metric-name'>{escape(label)}</td>{''.join(cells)}</tr>")
 
-        # Failure modes comparison
+        # Inefficiency modes comparison
+        def get_modes(payload: dict) -> dict:
+            return payload.get("inefficiency_modes", payload.get("failure_modes", {}))
+
         all_modes: list[str] = []
         for _, data in rows_data:
-            for mode in data.get("failure_modes", {}):
+            for mode in get_modes(data):
                 if mode not in all_modes:
                     all_modes.append(mode)
 
         fm_rows = []
         for mode in all_modes:
             cells = []
-            baseline_val = baseline.get("failure_modes", {}).get(mode, 0)
+            baseline_val = get_modes(baseline).get(mode, 0)
             for i, (name, data) in enumerate(rows_data):
-                val = data.get("failure_modes", {}).get(mode, 0)
+                val = get_modes(data).get(mode, 0)
                 if i == 0:
                     cells.append(f"<td>{val}</td>")
                 else:
@@ -2789,7 +2849,7 @@ def save_comparison_report(named_summaries: list[tuple[str, dict]]) -> Path:
             <thead><tr><th>Metric</th>{header_cells}</tr></thead>
             <tbody>{''.join(metric_rows)}</tbody>
           </table>
-          <h3>Failure Modes</h3>
+          <h3>Inefficiency Modes</h3>
           <table class="comp-table">
             <thead><tr><th>Mode</th>{header_cells}</tr></thead>
             <tbody>{''.join(fm_rows)}</tbody>
@@ -3080,6 +3140,16 @@ def main():
         help="Abort an external CLI call if it exceeds this many seconds (default: 120)",
     )
     parser.add_argument(
+        "--claude-model",
+        default=DEFAULT_CLAUDE_MODEL,
+        help=f"Claude model override for benchmark runs (default: {DEFAULT_CLAUDE_MODEL})",
+    )
+    parser.add_argument(
+        "--codex-model",
+        default=DEFAULT_CODEX_MODEL,
+        help=f"Codex model override for benchmark runs (default: {DEFAULT_CODEX_MODEL})",
+    )
+    parser.add_argument(
         "--max-workers", type=int, default=None,
         help="Max concurrent calls per provider (overrides defaults)",
     )
@@ -3179,6 +3249,8 @@ def main():
         seed=args.seed,
         inject_posix=args.inject_posix,
         execute=args.execute,
+        claude_model=args.claude_model,
+        codex_model=args.codex_model,
     )
 
     if all_results:
