@@ -40,7 +40,10 @@ class ComparisonReportTests(unittest.TestCase):
                 "posix_compliance_rate": 1.0,
                 "mean_output_tokens": 10,
                 "mean_latency_ms": 100,
+                "mean_latency_seconds": 0.1,
                 "mean_step_count": 1.0,
+                "total_input_tokens": 50,
+                "total_cached_tokens": 10,
                 "total_output_tokens": 10,
                 "total_estimated_excess_output_tokens": 3,
                 "total_billable_tokens": 25,
@@ -64,7 +67,10 @@ class ComparisonReportTests(unittest.TestCase):
                 "total_results": 1,
                 "posix_compliance_rate": 0.5,
                 "mean_latency_ms": 90,
+                "mean_latency_seconds": 0.09,
                 "mean_step_count": 1.2,
+                "total_input_tokens": 60,
+                "total_cached_tokens": 11,
                 "total_output_tokens": 12,
                 "total_estimated_excess_output_tokens": 5,
                 "total_cost_usd": 1.2345,
@@ -98,15 +104,7 @@ class ComparisonReportTests(unittest.TestCase):
         self.assertIn("class='na'>N/A</td>", mean_output_row.group(1))
         self.assertNotIn("delta", mean_output_row.group(1))
 
-        cost_row = re.search(
-            r"<tr><td class='metric-name'>Total Cost \(USD\)</td>(.*?)</tr>",
-            html,
-            re.DOTALL,
-        )
-        self.assertIsNotNone(cost_row)
-        self.assertIn("class='na'>N/A</td>", cost_row.group(1))
-        self.assertIn("$1.2345", cost_row.group(1))
-        self.assertNotIn("delta", cost_row.group(1))
+        self.assertNotIn("Total Cost (USD)", html)
 
 
 class SeriesComparisonTests(unittest.TestCase):

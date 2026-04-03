@@ -355,6 +355,25 @@ def normalize_model_override(raw_model: str | None) -> str | None:
     return normalized
 
 
+def format_seconds_from_ms(ms: int | float) -> str:
+    """Render milliseconds as a concise seconds string."""
+    seconds = max(float(ms), 0.0) / 1000.0
+    if seconds >= 10:
+        return f"{seconds:.1f}s"
+    return f"{seconds:.2f}s"
+
+
+def prune_timestamped_artifacts(directory: Path, pattern: str, keep_path: Path) -> None:
+    """Delete old timestamped artifacts, keeping only the most recent path."""
+    for candidate in sorted(directory.glob(pattern)):
+        if candidate == keep_path:
+            continue
+        try:
+            candidate.unlink()
+        except OSError:
+            continue
+
+
 def strip_cli_noise(output: str) -> str:
     """Remove known CLI prefixes that corrupt JSON parsing.
 
@@ -2484,6 +2503,7 @@ def save_summary(
     all_results: dict[str, list[QuestionResult]],
     *,
     requested_models: dict[str, str | None] | None = None,
+    retain_latest_only: bool = False,
 ) -> Path:
     """Save a combined summary JSON file."""
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -2526,6 +2546,8 @@ def save_summary(
             "report_visible_results": len(visible_results),
             "usage_invalid_results": len(invalid_usage),
             "invalid_usage_reasons": dict(invalid_usage_reason_counts(results)),
+            "total_input_tokens": sum(r.tokens.input for r in token_results),
+            "total_cached_tokens": sum(r.tokens.input_cached for r in token_results),
             "total_billable_tokens": sum(r.tokens.billable for r in token_results),
             "total_simulation_adjusted_billable_tokens": sum(
                 adjustment.adjusted_billable for adjustment in adjustments
@@ -2564,6 +2586,10 @@ def save_summary(
             "mean_latency_ms": (
                 sum(r.execution.latency_ms for r in visible_results) / len(visible_results) if visible_results else 0
             ),
+            "mean_latency_seconds": (
+                (sum(r.execution.latency_ms for r in visible_results) / len(visible_results) / 1000.0)
+                if visible_results else 0
+            ),
             "mean_step_count": (
                 sum(r.execution.step_count for r in visible_results) / len(visible_results) if visible_results else 0
             ),
@@ -2587,6 +2613,8 @@ def save_summary(
             summary["llms"][llm]["exec_passed"] = successes
 
     summary_path.write_text(json.dumps(summary, indent=2))
+    if retain_latest_only:
+        prune_timestamped_artifacts(RESULTS_DIR, "summary-*.json", summary_path)
     print(f"  Summary saved: {summary_path}")
     return summary_path
 
@@ -2594,6 +2622,8 @@ def save_summary(
 def save_visual_report(
     all_results: dict[str, list[QuestionResult]],
     questions: list[dict],
+    *,
+    retain_latest_only: bool = False,
 ) -> Path:
     """Save a self-contained HTML report with charts and task scorecards."""
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -2633,7 +2663,7 @@ def save_visual_report(
 
     max_output = max((r.tokens.output for r in all_visible), default=1)
     max_excess = max((r.analysis.estimated_excess_output_tokens for r in all_visible), default=1)
-    max_latency = max((r.execution.latency_ms for r in all_visible), default=1)
+    max_latency_seconds = max((r.execution.latency_ms / 1000.0 for r in all_visible), default=1.0)
 
     # --- Model cards ---
     model_cards = []
@@ -2660,7 +2690,7 @@ def save_visual_report(
             "issue8_refusal_count": sum(1 for r in visible_results if r.analysis.issue8_refusal),
             "mean_output": mean([r.tokens.output for r in token_results]),
             "mean_excess": mean([r.analysis.estimated_excess_output_tokens for r in token_results]),
-            "mean_latency": mean([r.execution.latency_ms for r in visible_results]),
+            "mean_latency": mean([r.execution.latency_ms / 1000.0 for r in visible_results]),
             "mean_steps": mean([r.execution.step_count for r in visible_results]),
             "tool_calls": sum(r.execution.tool_call_count for r in visible_results),
             "total_cost": sum(r.tokens.cost_usd for r in token_results if r.tokens.cost_usd is not None),
@@ -2687,7 +2717,7 @@ def save_visual_report(
                 "rate": compliant / len(tier_results),
                 "mean_output": mean([r.tokens.output for r in tier_results]),
                 "mean_excess": mean([r.analysis.estimated_excess_output_tokens for r in tier_results]),
-                "mean_latency": mean([r.execution.latency_ms for r in tier_results]),
+                "mean_latency": mean([r.execution.latency_ms / 1000.0 for r in tier_results]),
             })
 
     top_gap_results = sorted(
@@ -2703,7 +2733,13 @@ def save_visual_report(
         key=lambda r: (r.id, r.llm),
     )
 
-    def metric_bar(value: float, max_value: float, label: str, suffix: str = "") -> str:
+    def metric_bar(
+        value: float,
+        max_value: float,
+        label: str,
+        suffix: str = "",
+        value_fmt: str = ".0f",
+    ) -> str:
         width = 0 if max_value <= 0 else min(100, (value / max_value) * 100)
         return (
             "<div class='metric-row'>"
@@ -2711,7 +2747,7 @@ def save_visual_report(
             "<div class='metric-track'>"
             f"<div class='metric-fill' style='width:{width:.1f}%'></div>"
             "</div>"
-            f"<div class='metric-value'>{value:.0f}{escape(suffix)}</div>"
+            f"<div class='metric-value'>{value:{value_fmt}}{escape(suffix)}</div>"
             "</div>"
         )
 
@@ -2738,7 +2774,7 @@ def save_visual_report(
           <div class="task-stats">
             <div><strong>Output</strong><span>{result.tokens.output}</span></div>
             <div><strong>Excess</strong><span>{result.analysis.estimated_excess_output_tokens}</span></div>
-            <div><strong>Latency</strong><span>{result.execution.latency_ms} ms</span></div>
+            <div><strong>Latency</strong><span>{format_seconds_from_ms(result.execution.latency_ms)}</span></div>
             <div><strong>Gap</strong><span>{result.analysis.minimal_answer_gap_words} words</span></div>
           </div>
           <div class="code-pair">
@@ -2787,7 +2823,7 @@ def save_visual_report(
         if card["errors"]:
             error_items = "".join(
                 f"<li><strong>{escape(r.id)}</strong>: {escape(r.response.removeprefix('[ERROR] '))} "
-                f"(after {r.execution.latency_ms:,}ms)</li>"
+                f"(after {format_seconds_from_ms(r.execution.latency_ms)})</li>"
                 for r in card["errors"]
             )
             error_html = f"""
@@ -2800,7 +2836,7 @@ def save_visual_report(
         if card["invalid_usage"]:
             invalid_items = "".join(
                 f"<li><strong>{escape(r.id)}</strong>: {escape(r.tokens.usage_invalid_reason)} "
-                f"(after {r.execution.latency_ms:,}ms)</li>"
+                f"(after {format_seconds_from_ms(r.execution.latency_ms)})</li>"
                 for r in card["invalid_usage"]
             )
             invalid_usage_html = f"""
@@ -2825,7 +2861,7 @@ def save_visual_report(
           <p class="caption">{card["count"]}/{card["total"]} tasks visible · {card["usage_valid_count"]} usage-valid · {card["issue8_refusal_count"]} Issue 8 refusals · {card["tool_calls"]} tool calls</p>
           {metric_bar(card["mean_output"], max(max_output, 1), "Mean output tokens")}
           {metric_bar(card["mean_excess"], max(max_excess, 1), "Mean excess output")}
-          {metric_bar(card["mean_latency"], max(max_latency, 1), "Mean latency", " ms")}
+          {metric_bar(card["mean_latency"], max(max_latency_seconds, 1.0), "Mean latency", " s", ".2f")}
           <div class="micro-stats">
             <div><span>Mean steps</span><strong>{card["mean_steps"]:.1f}</strong></div>
             {cost_line}
@@ -2847,7 +2883,7 @@ def save_visual_report(
           <td class="{rate_color}">{row['compliant']}/{row['count']} ({pct(row['rate'])})</td>
           <td>{row['mean_output']:.0f}</td>
           <td>{row['mean_excess']:.0f}</td>
-          <td>{row['mean_latency']:.0f}ms</td>
+          <td>{row['mean_latency']:.2f}s</td>
         </tr>
         """)
 
@@ -3389,6 +3425,8 @@ def save_visual_report(
 """
 
     report_path.write_text(html_doc)
+    if retain_latest_only:
+        prune_timestamped_artifacts(RESULTS_DIR, "report-*.html", report_path)
     print(f"  Visual report saved: {report_path}")
     return report_path
 
@@ -3420,6 +3458,20 @@ def save_comparison_report(named_summaries: list[tuple[str, dict]]) -> Path:
         return "<td class='na'>N/A</td>"
 
     def get_numeric_metric(payload: dict, key: str) -> int | float | None:
+        if key == "__billable_minus_output__":
+            billable = payload.get("total_billable_tokens")
+            output = payload.get("total_output_tokens")
+            if isinstance(billable, (int, float)) and isinstance(output, (int, float)):
+                return billable - output
+            return None
+        if key == "mean_latency_seconds":
+            seconds = payload.get("mean_latency_seconds")
+            if isinstance(seconds, (int, float)):
+                return seconds
+            millis = payload.get("mean_latency_ms")
+            if isinstance(millis, (int, float)):
+                return float(millis) / 1000.0
+            return None
         value = payload.get(key)
         if isinstance(value, bool):
             return None
@@ -3504,12 +3556,14 @@ def save_comparison_report(named_summaries: list[tuple[str, dict]]) -> Path:
             ("Total Results", "total_results", "d", "", False),
             ("Compliance Rate", "posix_compliance_rate", ".1%", "", True),
             ("Mean Output Tokens", "mean_output_tokens", ".0f", "", False),
-            ("Mean Latency (ms)", "mean_latency_ms", ".0f", "", False),
+            ("Mean Latency (s)", "mean_latency_seconds", ".2f", "", False),
             ("Mean Steps", "mean_step_count", ".1f", "", False),
+            ("Total Input Tokens", "total_input_tokens", "d", "", False),
+            ("Total Cached Tokens", "total_cached_tokens", "d", "", False),
             ("Total Output Tokens", "total_output_tokens", "d", "", False),
             ("Total Excess Tokens", "total_estimated_excess_output_tokens", "d", "", False),
             ("Total Billable Tokens (provider-semantic)", "total_billable_tokens", "d", "", False),
-            ("Total Cost (USD)", "total_cost_usd", ".4f", "$", False),
+            ("Billable - Output Tokens", "__billable_minus_output__", "d", "", False),
             ("Issue 8 Refusals", "issue8_refusal_count", "d", "", False),
         ]
 
@@ -3580,7 +3634,7 @@ def save_comparison_report(named_summaries: list[tuple[str, dict]]) -> Path:
                     kind = str(err.get("kind", "provider_error")).replace("_", " ")
                     error_rows.append(
                         f"<tr><td>{escape(name)}</td><td>{escape(kind)}</td><td>{escape(err['question_id'])}</td>"
-                        f"<td>{escape(err['error'])}</td><td>{err['latency_ms']:,}ms</td></tr>"
+                        f"<td>{escape(err['error'])}</td><td>{format_seconds_from_ms(err.get('latency_ms', 0))}</td></tr>"
                     )
 
         error_section = ""
@@ -3835,7 +3889,7 @@ def save_comparison_report(named_summaries: list[tuple[str, dict]]) -> Path:
     <section class="hero" id="overview">
       <p class="eyebrow">POSIX Benchmark Comparison</p>
       <h1>Side-by-side across {num_runs} runs</h1>
-      <p>Comparing benchmark results across different conditions. The first run listed is the baseline. Deltas are shown only when both runs report the metric, and billable-token totals remain provider-semantic rather than cross-provider normalized.</p>
+      <p>Comparing benchmark results across different conditions. The first run listed is the baseline. Deltas are shown only when both runs report the metric. Billable tokens are provider-semantic and include input/output accounting, so compare them alongside input/cached/output totals.</p>
       <div class="hero-grid">
         <div class="hero-stat"><span>Runs</span><strong>{num_runs}</strong></div>
         <div class="hero-stat"><span>Models</span><strong>{len(all_llms)}</strong></div>
@@ -3985,6 +4039,7 @@ def main():
                 parser.error("--results-dir relative paths must not contain '..'")
             custom_results_dir = SCRIPT_DIR.joinpath(*relative_parts)
         RESULTS_DIR = custom_results_dir
+    retain_latest_artifacts = bool(args.results_dir)
 
     judge = None if args.no_grade else args.judge
 
@@ -4055,8 +4110,16 @@ def main():
 
     if all_results:
         generate_report(all_results, questions)
-        save_summary(all_results, requested_models=requested_models)
-        save_visual_report(all_results, questions)
+        save_summary(
+            all_results,
+            requested_models=requested_models,
+            retain_latest_only=retain_latest_artifacts,
+        )
+        save_visual_report(
+            all_results,
+            questions,
+            retain_latest_only=retain_latest_artifacts,
+        )
 
 
 if __name__ == "__main__":
