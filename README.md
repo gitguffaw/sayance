@@ -148,6 +148,13 @@ make test-product-negative
 
 Lane B does not replace Lane A; it catches install/activation packaging regressions that the benchmark simulation cannot.
 
+GitHub enforcement note (current repo state, observed 2026-04-03):
+- Actions workflows can run.
+- Required status-check merge gating for protected branches is not currently available on this private repo plan.
+- Until that changes, treat Lane B as a local pre-merge/release gate by running:
+  - `make test-product`
+  - `make test-product-negative`
+
 ## Repository Map
 
 | File | Purpose |
