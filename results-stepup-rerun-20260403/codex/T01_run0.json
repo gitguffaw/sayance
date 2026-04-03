@@ -1,0 +1,61 @@
+{
+  "id": "T01",
+  "llm": "codex",
+  "model": "gpt-5.3-codex",
+  "run_k": 0,
+  "question": "I have a CSV file where each row has multiple columns. I need to order the rows strictly by the second column's value only \u2014 not by anything else on the line.",
+  "response": "TOOL_CALL: get_posix_syntax(sort)\n\n[TOOL RESULT]: [\"Order by second column only: sort -t',' -k2,2 file.csv\", 'Sort numeric: sort -n file', 'Unique sort: sort -u file']\n\n```sh\nsort -t',' -k2,2 file.csv > sorted.csv\n```",
+  "tokens": {
+    "input": 59206,
+    "input_cached": 39680,
+    "output": 2133,
+    "thoughts": 0,
+    "billable": 21659,
+    "cost_usd": null,
+    "cost_source": "calculated",
+    "raw": {
+      "run1": {
+        "input_tokens": 29574,
+        "cached_input_tokens": 10624,
+        "output_tokens": 885
+      },
+      "run2": {
+        "input_tokens": 29632,
+        "cached_input_tokens": 29056,
+        "output_tokens": 1248
+      }
+    }
+  },
+  "execution": {
+    "latency_ms": 46680,
+    "step_count": 9,
+    "tool_call_count": 1,
+    "tool_calls_by_type": {
+      "get_posix_syntax": 1
+    }
+  },
+  "analysis": {
+    "minimal_answer": "sort -t',' -k2,2 file.csv",
+    "minimal_word_count": 4,
+    "minimal_shell_token_count": 4,
+    "response_word_count": 31,
+    "minimal_answer_gap_words": 27,
+    "verbosity_ratio": 7.75,
+    "expected_command_hits": [
+      "sort"
+    ],
+    "trap_hits": [],
+    "missing_required_concepts": [
+      "field delimiter",
+      "key range"
+    ],
+    "posix_compliant": true,
+    "issue8_refusal": false,
+    "failure_mode": "tool_heavy_detour",
+    "estimated_excess_output_tokens": 2129
+  },
+  "accuracy": null,
+  "execution_record": null,
+  "cache_state": "warm",
+  "timestamp": "2026-04-02T22:48:58.900730"
+}

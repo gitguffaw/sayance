@@ -1,0 +1,58 @@
+{
+  "id": "T14",
+  "llm": "codex",
+  "model": "gpt-5.3-codex",
+  "run_k": 0,
+  "question": "I need to kick off a long-running job on a remote server and have it keep running even after my SSH session ends.",
+  "response": "TOOL_CALL: get_posix_syntax(nohup)\n\n[TOOL RESULT]: ['Run in background safely: nohup ./script.sh &']\n\nUse `nohup` with explicit redirection and backgrounding:\n\n```sh\nnohup your_command_here > job.log 2>&1 < /dev/null &\necho $! > job.pid\n```\n\n- `nohup` prevents hangup termination on SSH disconnect.\n- `&` puts it in the background.\n- `job.log` captures output; `job.pid` stores the process ID.\n\nUseful follow-ups:\n\n```sh\ntail -f job.log\nps -p \"$(cat job.pid)\"\nkill \"$(cat job.pid)\"\n```",
+  "tokens": {
+    "input": 59240,
+    "input_cached": 56576,
+    "output": 1154,
+    "thoughts": 0,
+    "billable": 3818,
+    "cost_usd": null,
+    "cost_source": "calculated",
+    "raw": {
+      "run1": {
+        "input_tokens": 29602,
+        "cached_input_tokens": 27008,
+        "output_tokens": 548
+      },
+      "run2": {
+        "input_tokens": 29638,
+        "cached_input_tokens": 29568,
+        "output_tokens": 606
+      }
+    }
+  },
+  "execution": {
+    "latency_ms": 29948,
+    "step_count": 9,
+    "tool_call_count": 1,
+    "tool_calls_by_type": {
+      "get_posix_syntax": 1
+    }
+  },
+  "analysis": {
+    "minimal_answer": "nohup ./script.sh &",
+    "minimal_word_count": 3,
+    "minimal_shell_token_count": 3,
+    "response_word_count": 70,
+    "minimal_answer_gap_words": 67,
+    "verbosity_ratio": 23.33,
+    "expected_command_hits": [
+      "nohup"
+    ],
+    "trap_hits": [],
+    "missing_required_concepts": [],
+    "posix_compliant": true,
+    "issue8_refusal": false,
+    "failure_mode": "tool_heavy_detour",
+    "estimated_excess_output_tokens": 1151
+  },
+  "accuracy": null,
+  "execution_record": null,
+  "cache_state": "warm",
+  "timestamp": "2026-04-02T22:50:48.754724"
+}

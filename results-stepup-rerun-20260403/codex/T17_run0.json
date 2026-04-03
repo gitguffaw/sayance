@@ -1,0 +1,60 @@
+{
+  "id": "T17",
+  "llm": "codex",
+  "model": "gpt-5.3-codex",
+  "run_k": 0,
+  "question": "I need to run an external command, but automatically abort it if it hasn't finished within 30 seconds.",
+  "response": "TOOL_CALL: get_posix_syntax(timeout)\n\n[TOOL RESULT]: ['Kill command if slower than 30s: timeout 30 command']\n\n`timeout 30 your_external_command`",
+  "tokens": {
+    "input": 59156,
+    "input_cached": 40064,
+    "output": 978,
+    "thoughts": 0,
+    "billable": 20070,
+    "cost_usd": null,
+    "cost_source": "calculated",
+    "raw": {
+      "run1": {
+        "input_tokens": 29560,
+        "cached_input_tokens": 10624,
+        "output_tokens": 553
+      },
+      "run2": {
+        "input_tokens": 29596,
+        "cached_input_tokens": 29440,
+        "output_tokens": 425
+      }
+    }
+  },
+  "execution": {
+    "latency_ms": 25823,
+    "step_count": 9,
+    "tool_call_count": 1,
+    "tool_calls_by_type": {
+      "get_posix_syntax": 1
+    }
+  },
+  "analysis": {
+    "minimal_answer": "timeout 30 command",
+    "minimal_word_count": 3,
+    "minimal_shell_token_count": 3,
+    "response_word_count": 16,
+    "minimal_answer_gap_words": 13,
+    "verbosity_ratio": 5.33,
+    "expected_command_hits": [
+      "timeout"
+    ],
+    "trap_hits": [],
+    "missing_required_concepts": [
+      "POSIX Issue 8"
+    ],
+    "posix_compliant": true,
+    "issue8_refusal": false,
+    "failure_mode": "tool_heavy_detour",
+    "estimated_excess_output_tokens": 975
+  },
+  "accuracy": null,
+  "execution_record": null,
+  "cache_state": "warm",
+  "timestamp": "2026-04-02T22:43:40.759756"
+}

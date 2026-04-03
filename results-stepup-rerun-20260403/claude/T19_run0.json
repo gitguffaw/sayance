@@ -1,0 +1,64 @@
+{
+  "id": "T19",
+  "llm": "claude",
+  "model": "claude-opus-4-6",
+  "run_k": 0,
+  "question": "I want to schedule a script to run once, tomorrow morning around 3am. It shouldn't repeat \u2014 just that one time.",
+  "response": "Here's what you need:\n\n```sh\necho '/path/to/your-script.sh' | at 0300 tomorrow\n```\n\n**How it works:**\n- `at` schedules a **one-time** execution \u2014 no repeat, no cleanup needed.\n- `0300` is 3:00 AM in HHMM format.\n- `tomorrow` is a time spec `at` understands natively.\n- The command(s) piped via stdin run in a copy of your current environment.\n\n**Other useful forms:**\n```sh\n# Inline command instead of a script\necho 'pg_dump mydb > /backups/snap.sql' | at 0300 tomorrow\n\n# Check queued jobs\natq\n\n# Remove a queued job (by job number from atq)\natrm 42\n```\n\nAfter scheduling, `at` prints a job number. Use `atq` to verify it's queued, or `atrm <id>` to cancel.",
+  "tokens": {
+    "input": 5,
+    "input_cached": 74184,
+    "output": 549,
+    "thoughts": 0,
+    "billable": 74738,
+    "cost_usd": 0.1940055,
+    "cost_source": "reported",
+    "raw": {
+      "input_tokens": 5,
+      "cache_creation_input_tokens": 24898,
+      "cache_read_input_tokens": 49286,
+      "output_tokens": 549,
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 24898,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "",
+      "iterations": [],
+      "speed": "standard"
+    }
+  },
+  "execution": {
+    "latency_ms": 19616,
+    "step_count": 1,
+    "tool_call_count": 0,
+    "tool_calls_by_type": {}
+  },
+  "analysis": {
+    "minimal_answer": "echo './script.sh' | at 0300 tomorrow",
+    "minimal_word_count": 6,
+    "minimal_shell_token_count": 6,
+    "response_word_count": 114,
+    "minimal_answer_gap_words": 108,
+    "verbosity_ratio": 19.0,
+    "expected_command_hits": [
+      "at"
+    ],
+    "trap_hits": [],
+    "missing_required_concepts": [
+      "one-time scheduling"
+    ],
+    "posix_compliant": true,
+    "issue8_refusal": false,
+    "failure_mode": "over_explaining",
+    "estimated_excess_output_tokens": 543
+  },
+  "accuracy": null,
+  "execution_record": null,
+  "cache_state": "warm",
+  "timestamp": "2026-04-02T22:44:37.397419"
+}

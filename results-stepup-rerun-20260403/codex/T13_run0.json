@@ -1,0 +1,60 @@
+{
+  "id": "T13",
+  "llm": "codex",
+  "model": "gpt-5.3-codex",
+  "run_k": 0,
+  "question": "I need to change every capital letter in a text file to its lowercase equivalent.",
+  "response": "TOOL_CALL: get_posix_syntax(tr)\n\n[TOOL RESULT]: [\"Uppercase to lowercase: tr '[:upper:]' '[:lower:]' < file\"]\n\nUse `tr` with input/output redirection:\n\n```sh\ntr '[:upper:]' '[:lower:]' < input.txt > output.txt\n```\n\nIf you need to replace the original file:\n\n```sh\ntr '[:upper:]' '[:lower:]' < input.txt > input.txt.tmp && mv input.txt.tmp input.txt\n```",
+  "tokens": {
+    "input": 59151,
+    "input_cached": 58112,
+    "output": 1934,
+    "thoughts": 0,
+    "billable": 2973,
+    "cost_usd": null,
+    "cost_source": "calculated",
+    "raw": {
+      "run1": {
+        "input_tokens": 29555,
+        "cached_input_tokens": 29056,
+        "output_tokens": 1174
+      },
+      "run2": {
+        "input_tokens": 29596,
+        "cached_input_tokens": 29056,
+        "output_tokens": 760
+      }
+    }
+  },
+  "execution": {
+    "latency_ms": 46812,
+    "step_count": 9,
+    "tool_call_count": 1,
+    "tool_calls_by_type": {
+      "get_posix_syntax": 1
+    }
+  },
+  "analysis": {
+    "minimal_answer": "tr '[:upper:]' '[:lower:]' < file",
+    "minimal_word_count": 5,
+    "minimal_shell_token_count": 5,
+    "response_word_count": 47,
+    "minimal_answer_gap_words": 42,
+    "verbosity_ratio": 9.4,
+    "expected_command_hits": [
+      "tr"
+    ],
+    "trap_hits": [],
+    "missing_required_concepts": [
+      "character classes"
+    ],
+    "posix_compliant": true,
+    "issue8_refusal": false,
+    "failure_mode": "tool_heavy_detour",
+    "estimated_excess_output_tokens": 1929
+  },
+  "accuracy": null,
+  "execution_record": null,
+  "cache_state": "warm",
+  "timestamp": "2026-04-02T22:48:12.214411"
+}

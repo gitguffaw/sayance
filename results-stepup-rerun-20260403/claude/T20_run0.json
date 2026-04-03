@@ -1,0 +1,64 @@
+{
+  "id": "T20",
+  "llm": "claude",
+  "model": "claude-opus-4-6",
+  "run_k": 0,
+  "question": "I have two data files that share a common ID field. I want to merge the rows where the IDs match so I get a single combined output.",
+  "response": "**Both files must be sorted on the join field first.** Here's the pattern:\n\n```bash\n# 1. Sort both files on the key field (field 1 by default)\nsort -t',' -k1,1 file1.csv > file1_sorted.csv\nsort -t',' -k1,1 file2.csv > file2_sorted.csv\n\n# 2. Join on the shared ID (field 1)\njoin -t',' file1_sorted.csv file2_sorted.csv\n```\n\n**Key flags:**\n\n| Flag | Purpose |\n|------|---------|\n| `-t','` | Set field delimiter (comma, tab, etc.) |\n| `-1 N` | Join on field N of file 1 (default: 1) |\n| `-2 N` | Join on field N of file 2 (default: 1) |\n| `-o FORMAT` | Select which fields to output |\n| `-a 1` or `-a 2` | Include unmatched lines (like a LEFT/RIGHT join) |\n\n**Example** \u2014 if the ID is field 1 in both files and they're comma-delimited:\n\n```bash\nsort -t',' -k1,1 customers.csv > c.tmp\nsort -t',' -k1,1 orders.csv    > o.tmp\njoin -t',' c.tmp o.tmp\n```\n\nThis outputs only rows where the ID appears in **both** files (inner join). Add `-a 1` to also include unmatched rows from the first file.",
+  "tokens": {
+    "input": 5,
+    "input_cached": 74155,
+    "output": 696,
+    "thoughts": 0,
+    "billable": 74856,
+    "cost_usd": 0.19904025,
+    "cost_source": "reported",
+    "raw": {
+      "input_tokens": 5,
+      "cache_creation_input_tokens": 25137,
+      "cache_read_input_tokens": 49018,
+      "output_tokens": 696,
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 25137,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "",
+      "iterations": [],
+      "speed": "standard"
+    }
+  },
+  "execution": {
+    "latency_ms": 19211,
+    "step_count": 1,
+    "tool_call_count": 0,
+    "tool_calls_by_type": {}
+  },
+  "analysis": {
+    "minimal_answer": "join -t',' file1 file2",
+    "minimal_word_count": 4,
+    "minimal_shell_token_count": 4,
+    "response_word_count": 181,
+    "minimal_answer_gap_words": 177,
+    "verbosity_ratio": 45.25,
+    "expected_command_hits": [
+      "join"
+    ],
+    "trap_hits": [],
+    "missing_required_concepts": [
+      "sorted input"
+    ],
+    "posix_compliant": true,
+    "issue8_refusal": false,
+    "failure_mode": "over_explaining",
+    "estimated_excess_output_tokens": 692
+  },
+  "accuracy": null,
+  "execution_record": null,
+  "cache_state": "warm",
+  "timestamp": "2026-04-02T22:44:13.613108"
+}

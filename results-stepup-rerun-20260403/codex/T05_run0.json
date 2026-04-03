@@ -1,0 +1,62 @@
+{
+  "id": "T05",
+  "llm": "codex",
+  "model": "gpt-5.3-codex",
+  "run_k": 0,
+  "question": "I have a log file with many duplicate lines. How do I count how many distinct lines it contains?",
+  "response": "TOOL_CALL: get_posix_syntax(sort)\n\n[TOOL RESULT]: [\"Order by second column only: sort -t',' -k2,2 file.csv\", 'Sort numeric: sort -n file', 'Unique sort: sort -u file']\n\nUse:\n\n```sh\nsort -u logfile.txt | wc -l\n```\n\nThis sorts lines, removes duplicates (`-u`), then counts the remaining distinct lines.",
+  "tokens": {
+    "input": 59178,
+    "input_cached": 58496,
+    "output": 2220,
+    "thoughts": 0,
+    "billable": 2902,
+    "cost_usd": null,
+    "cost_source": "calculated",
+    "raw": {
+      "run1": {
+        "input_tokens": 29560,
+        "cached_input_tokens": 29056,
+        "output_tokens": 1807
+      },
+      "run2": {
+        "input_tokens": 29618,
+        "cached_input_tokens": 29440,
+        "output_tokens": 413
+      }
+    }
+  },
+  "execution": {
+    "latency_ms": 51629,
+    "step_count": 9,
+    "tool_call_count": 1,
+    "tool_calls_by_type": {
+      "get_posix_syntax": 1
+    }
+  },
+  "analysis": {
+    "minimal_answer": "sort file | uniq | wc -l",
+    "minimal_word_count": 7,
+    "minimal_shell_token_count": 7,
+    "response_word_count": 44,
+    "minimal_answer_gap_words": 37,
+    "verbosity_ratio": 6.29,
+    "expected_command_hits": [
+      "sort",
+      "wc"
+    ],
+    "trap_hits": [],
+    "missing_required_concepts": [
+      "uniq",
+      "pipeline"
+    ],
+    "posix_compliant": true,
+    "issue8_refusal": false,
+    "failure_mode": "tool_heavy_detour",
+    "estimated_excess_output_tokens": 2213
+  },
+  "accuracy": null,
+  "execution_record": null,
+  "cache_state": "warm",
+  "timestamp": "2026-04-02T22:47:29.206835"
+}

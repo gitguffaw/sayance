@@ -1,0 +1,49 @@
+{
+  "id": "T02",
+  "llm": "codex",
+  "model": "gpt-5.3-codex",
+  "run_k": 0,
+  "question": "I need to know which `.conf` files anywhere on the system have changed since yesterday.",
+  "response": "[ERROR] timeout",
+  "tokens": {
+    "input": 0,
+    "input_cached": 0,
+    "output": 0,
+    "thoughts": 0,
+    "billable": 0,
+    "cost_usd": null,
+    "cost_source": "error",
+    "raw": {
+      "error": "timeout"
+    }
+  },
+  "execution": {
+    "latency_ms": 120005,
+    "step_count": 1,
+    "tool_call_count": 0,
+    "tool_calls_by_type": {}
+  },
+  "analysis": {
+    "minimal_answer": "find / -name '*.conf' -mtime -1",
+    "minimal_word_count": 6,
+    "minimal_shell_token_count": 6,
+    "response_word_count": 2,
+    "minimal_answer_gap_words": 0,
+    "verbosity_ratio": 0.33,
+    "expected_command_hits": [],
+    "trap_hits": [],
+    "missing_required_concepts": [
+      "-mtime",
+      "-name",
+      "find"
+    ],
+    "posix_compliant": false,
+    "issue8_refusal": false,
+    "failure_mode": "workaround_instead_of_native_utility",
+    "estimated_excess_output_tokens": 0
+  },
+  "accuracy": null,
+  "execution_record": null,
+  "cache_state": "cold",
+  "timestamp": "2026-04-02T22:45:40.766516"
+}

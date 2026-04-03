@@ -1,0 +1,60 @@
+{
+  "id": "T06",
+  "llm": "codex",
+  "model": "gpt-5.3-codex",
+  "run_k": 0,
+  "question": "I need to bundle a directory into a single archive file. It has to work reliably across different Unix systems \u2014 Linux, macOS, the BSDs.",
+  "response": "TOOL_CALL: get_posix_syntax(pax)\n\n[TOOL RESULT]: ['Create portable archive: pax -w -f archive.pax directory/', 'Copy directory tree: pax -rw src/ dest/', 'DO NOT USE tar (not guaranteed POSIX).']\n\nUse POSIX `pax`:\n\n```sh\npax -w -f bundle.pax your_directory/\n```\n\nThat creates one portable archive file (`bundle.pax`) for Linux, macOS, and BSD systems.\n\nTo restore it later:\n\n```sh\npax -r -f bundle.pax\n```",
+  "tokens": {
+    "input": 59201,
+    "input_cached": 58880,
+    "output": 1524,
+    "thoughts": 0,
+    "billable": 1845,
+    "cost_usd": null,
+    "cost_source": "calculated",
+    "raw": {
+      "run1": {
+        "input_tokens": 29570,
+        "cached_input_tokens": 29440,
+        "output_tokens": 797
+      },
+      "run2": {
+        "input_tokens": 29631,
+        "cached_input_tokens": 29440,
+        "output_tokens": 727
+      }
+    }
+  },
+  "execution": {
+    "latency_ms": 45996,
+    "step_count": 9,
+    "tool_call_count": 1,
+    "tool_calls_by_type": {
+      "get_posix_syntax": 1
+    }
+  },
+  "analysis": {
+    "minimal_answer": "pax -w -f archive.pax directory/",
+    "minimal_word_count": 5,
+    "minimal_shell_token_count": 5,
+    "response_word_count": 59,
+    "minimal_answer_gap_words": 54,
+    "verbosity_ratio": 11.8,
+    "expected_command_hits": [
+      "pax"
+    ],
+    "trap_hits": [],
+    "missing_required_concepts": [
+      "not tar"
+    ],
+    "posix_compliant": true,
+    "issue8_refusal": false,
+    "failure_mode": "tool_heavy_detour",
+    "estimated_excess_output_tokens": 1519
+  },
+  "accuracy": null,
+  "execution_record": null,
+  "cache_state": "warm",
+  "timestamp": "2026-04-02T22:47:25.398436"
+}

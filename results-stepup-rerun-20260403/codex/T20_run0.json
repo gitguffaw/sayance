@@ -1,0 +1,60 @@
+{
+  "id": "T20",
+  "llm": "codex",
+  "model": "gpt-5.3-codex",
+  "run_k": 0,
+  "question": "I have two data files that share a common ID field. I want to merge the rows where the IDs match so I get a single combined output.",
+  "response": "TOOL_CALL: get_posix_syntax(join)\n\n[TOOL RESULT]: [\"Merge on shared key: join -t',' file1 file2\"]\n\n`join -t',' file1.csv file2.csv > merged.csv`\n\nThis merges rows where the first field (your shared ID) matches in both files and writes the combined rows to `merged.csv`. Ensure both files are sorted by that ID field first.",
+  "tokens": {
+    "input": 59174,
+    "input_cached": 58880,
+    "output": 1501,
+    "thoughts": 0,
+    "billable": 1795,
+    "cost_usd": null,
+    "cost_source": "calculated",
+    "raw": {
+      "run1": {
+        "input_tokens": 29569,
+        "cached_input_tokens": 29440,
+        "output_tokens": 697
+      },
+      "run2": {
+        "input_tokens": 29605,
+        "cached_input_tokens": 29440,
+        "output_tokens": 804
+      }
+    }
+  },
+  "execution": {
+    "latency_ms": 41586,
+    "step_count": 9,
+    "tool_call_count": 1,
+    "tool_calls_by_type": {
+      "get_posix_syntax": 1
+    }
+  },
+  "analysis": {
+    "minimal_answer": "join -t',' file1 file2",
+    "minimal_word_count": 4,
+    "minimal_shell_token_count": 4,
+    "response_word_count": 49,
+    "minimal_answer_gap_words": 45,
+    "verbosity_ratio": 12.25,
+    "expected_command_hits": [
+      "join"
+    ],
+    "trap_hits": [],
+    "missing_required_concepts": [
+      "sorted input"
+    ],
+    "posix_compliant": true,
+    "issue8_refusal": false,
+    "failure_mode": "tool_heavy_detour",
+    "estimated_excess_output_tokens": 1497
+  },
+  "accuracy": null,
+  "execution_record": null,
+  "cache_state": "warm",
+  "timestamp": "2026-04-02T22:49:40.492100"
+}

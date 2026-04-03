@@ -1,0 +1,60 @@
+{
+  "id": "T19",
+  "llm": "codex",
+  "model": "gpt-5.3-codex",
+  "run_k": 0,
+  "question": "I want to schedule a script to run once, tomorrow morning around 3am. It shouldn't repeat \u2014 just that one time.",
+  "response": "TOOL_CALL: get_posix_syntax(at)\n\n[TOOL RESULT]: [\"Schedule one-time job: echo './script.sh' | at 0300 tomorrow\"]\n\nUse this command:\n\n```sh\necho '/absolute/path/script.sh' | at 0300 tomorrow\n```\n\n`at` jobs run one time only (no repeat).  \nOptional checks: `atq` to list queued jobs, `atrm <jobid>` to cancel.",
+  "tokens": {
+    "input": 59245,
+    "input_cached": 56576,
+    "output": 1594,
+    "thoughts": 0,
+    "billable": 4263,
+    "cost_usd": null,
+    "cost_source": "calculated",
+    "raw": {
+      "run1": {
+        "input_tokens": 29603,
+        "cached_input_tokens": 27008,
+        "output_tokens": 883
+      },
+      "run2": {
+        "input_tokens": 29642,
+        "cached_input_tokens": 29568,
+        "output_tokens": 711
+      }
+    }
+  },
+  "execution": {
+    "latency_ms": 40037,
+    "step_count": 9,
+    "tool_call_count": 1,
+    "tool_calls_by_type": {
+      "get_posix_syntax": 1
+    }
+  },
+  "analysis": {
+    "minimal_answer": "echo './script.sh' | at 0300 tomorrow",
+    "minimal_word_count": 6,
+    "minimal_shell_token_count": 6,
+    "response_word_count": 43,
+    "minimal_answer_gap_words": 37,
+    "verbosity_ratio": 7.17,
+    "expected_command_hits": [
+      "at"
+    ],
+    "trap_hits": [],
+    "missing_required_concepts": [
+      "one-time scheduling"
+    ],
+    "posix_compliant": true,
+    "issue8_refusal": false,
+    "failure_mode": "tool_heavy_detour",
+    "estimated_excess_output_tokens": 1588
+  },
+  "accuracy": null,
+  "execution_record": null,
+  "cache_state": "warm",
+  "timestamp": "2026-04-02T22:51:05.283181"
+}

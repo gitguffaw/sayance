@@ -1,0 +1,53 @@
+{
+  "id": "T08",
+  "llm": "codex",
+  "model": "gpt-5.3-codex",
+  "run_k": 0,
+  "question": "I'm writing a shell script that needs to check whether a file both exists and is readable, then print 'yes' or 'no'. It needs to work on any system, not just Linux.",
+  "response": "```sh\nif [ -r \"$path\" ]; then\n  printf '%s\\n' yes\nelse\n  printf '%s\\n' no\nfi\n```\n\n`[ -r \"$path\" ]` is POSIX and only succeeds when the path exists and is readable.",
+  "tokens": {
+    "input": 29578,
+    "input_cached": 29056,
+    "output": 2423,
+    "thoughts": 0,
+    "billable": 2945,
+    "cost_usd": null,
+    "cost_source": "calculated",
+    "raw": {
+      "input_tokens": 29578,
+      "cached_input_tokens": 29056,
+      "output_tokens": 2423
+    }
+  },
+  "execution": {
+    "latency_ms": 48798,
+    "step_count": 4,
+    "tool_call_count": 0,
+    "tool_calls_by_type": {}
+  },
+  "analysis": {
+    "minimal_answer": "if test -r file; then printf 'yes\\n'; else printf 'no\\n'; fi",
+    "minimal_word_count": 11,
+    "minimal_shell_token_count": 11,
+    "response_word_count": 32,
+    "minimal_answer_gap_words": 21,
+    "verbosity_ratio": 2.91,
+    "expected_command_hits": [
+      "printf"
+    ],
+    "trap_hits": [],
+    "missing_required_concepts": [
+      "test -r",
+      "printf not echo",
+      "no bashisms"
+    ],
+    "posix_compliant": true,
+    "issue8_refusal": false,
+    "failure_mode": "over_explaining",
+    "estimated_excess_output_tokens": 2412
+  },
+  "accuracy": null,
+  "execution_record": null,
+  "cache_state": "warm",
+  "timestamp": "2026-04-02T22:50:25.242385"
+}

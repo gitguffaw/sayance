@@ -1,0 +1,69 @@
+{
+  "id": "T08",
+  "llm": "claude",
+  "model": "claude-opus-4-6",
+  "run_k": 0,
+  "question": "I'm writing a shell script that needs to check whether a file both exists and is readable, then print 'yes' or 'no'. It needs to work on any system, not just Linux.",
+  "response": "Use the POSIX `test` builtin (listed under CORE_TRIVIAL \u2014 no lookup needed). The `-f` and `-r` primaries are defined by POSIX.1-2024:\n\n```sh\n#!/bin/sh\nif [ -f \"$1\" ] && [ -r \"$1\" ]; then\n    printf 'yes\\n'\nelse\n    printf 'no\\n'\nfi\n```\n\n**Key points:**\n\n- `[ -f \"$1\" ]` \u2014 true if the file exists and is a regular file.\n- `[ -r \"$1\" ]` \u2014 true if the file exists and is readable.\n- Two separate `test` expressions joined by `&&` instead of `-a` (the `-a` operator is marked obsolescent in POSIX Issue 8).\n- `printf` over `echo` \u2014 `echo` behavior with escape sequences varies across implementations; `printf` is portable.\n- `#!/bin/sh` \u2014 not `#!/bin/bash`. Ensures any POSIX-conformant shell can run it.\n- Double-quote `\"$1\"` to handle filenames with spaces or glob characters.\n\nIf you need to check any file type (not just regular files), replace `-f` with `-e` (exists, regardless of type).",
+  "tokens": {
+    "input": 3,
+    "input_cached": 24520,
+    "output": 426,
+    "thoughts": 0,
+    "billable": 24949,
+    "cost_usd": 0.163915,
+    "cost_source": "reported",
+    "raw": {
+      "input_tokens": 3,
+      "cache_creation_input_tokens": 24520,
+      "cache_read_input_tokens": 0,
+      "output_tokens": 426,
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 24520,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "",
+      "iterations": [],
+      "speed": "standard"
+    }
+  },
+  "execution": {
+    "latency_ms": 12174,
+    "step_count": 1,
+    "tool_call_count": 0,
+    "tool_calls_by_type": {}
+  },
+  "analysis": {
+    "minimal_answer": "if test -r file; then printf 'yes\\n'; else printf 'no\\n'; fi",
+    "minimal_word_count": 11,
+    "minimal_shell_token_count": 11,
+    "response_word_count": 153,
+    "minimal_answer_gap_words": 142,
+    "verbosity_ratio": 13.91,
+    "expected_command_hits": [
+      "test",
+      "printf"
+    ],
+    "trap_hits": [
+      "\\becho\\b"
+    ],
+    "missing_required_concepts": [
+      "test -r",
+      "printf not echo",
+      "no bashisms"
+    ],
+    "posix_compliant": false,
+    "issue8_refusal": false,
+    "failure_mode": "non_posix_substitution",
+    "estimated_excess_output_tokens": 426
+  },
+  "accuracy": null,
+  "execution_record": null,
+  "cache_state": "warm",
+  "timestamp": "2026-04-02T22:44:17.780332"
+}

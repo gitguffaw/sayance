@@ -1,0 +1,62 @@
+{
+  "id": "T12",
+  "llm": "claude",
+  "model": "claude-opus-4-6",
+  "run_k": 0,
+  "question": "I have two files with related data. I want to combine them so that each line shows the corresponding entries from both files next to each other.",
+  "response": "```bash\npaste file1 file2\n```\n\nThis outputs each line of `file1` next to the corresponding line of `file2`, separated by a tab. For a custom delimiter:\n\n```bash\npaste -d ',' file1 file2\n```",
+  "tokens": {
+    "input": 4,
+    "input_cached": 49247,
+    "output": 265,
+    "thoughts": 0,
+    "billable": 49516,
+    "cost_usd": 0.17352350000000002,
+    "cost_source": "reported",
+    "raw": {
+      "input_tokens": 4,
+      "cache_creation_input_tokens": 24740,
+      "cache_read_input_tokens": 24507,
+      "output_tokens": 265,
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 24740,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "",
+      "iterations": [],
+      "speed": "standard"
+    }
+  },
+  "execution": {
+    "latency_ms": 17825,
+    "step_count": 1,
+    "tool_call_count": 0,
+    "tool_calls_by_type": {}
+  },
+  "analysis": {
+    "minimal_answer": "paste file1 file2",
+    "minimal_word_count": 3,
+    "minimal_shell_token_count": 3,
+    "response_word_count": 33,
+    "minimal_answer_gap_words": 30,
+    "verbosity_ratio": 11.0,
+    "expected_command_hits": [
+      "paste"
+    ],
+    "trap_hits": [],
+    "missing_required_concepts": [],
+    "posix_compliant": true,
+    "issue8_refusal": false,
+    "failure_mode": "over_explaining",
+    "estimated_excess_output_tokens": 262
+  },
+  "accuracy": null,
+  "execution_record": null,
+  "cache_state": "warm",
+  "timestamp": "2026-04-02T22:43:00.750569"
+}

@@ -1,0 +1,62 @@
+{
+  "id": "T28",
+  "llm": "claude",
+  "model": "claude-opus-4-6",
+  "run_k": 0,
+  "question": "I need to format a text file so it looks good when printed \u2014 nicely paginated with headers.",
+  "response": "Here's how to use `pr`:\n\n```bash\n# Basic pagination with default header (date, filename, page number)\npr file.txt\n\n# Paginate with line numbers\npr -n file.txt\n\n# Set page length (e.g., 60 lines) and width (e.g., 72 columns)\npr -l 60 -w 72 file.txt\n\n# Custom header text\npr -h \"My Document Title\" file.txt\n\n# Multi-column output (e.g., 2 columns)\npr -2 file.txt\n\n# Combine: numbered lines, custom header, send to printer\npr -n -h \"Report Q1\" file.txt | lp\n```\n\n**What `pr` gives you by default:**\n- 66-line pages (standard US letter)\n- 5-line header with date, filename, and page number\n- 5-line footer (blank trailer)\n\nNo scripts needed \u2014 `pr` is purpose-built for exactly this.",
+  "tokens": {
+    "input": 4,
+    "input_cached": 49258,
+    "output": 465,
+    "thoughts": 0,
+    "billable": 49727,
+    "cost_usd": 0.17863825,
+    "cost_source": "reported",
+    "raw": {
+      "input_tokens": 4,
+      "cache_creation_input_tokens": 24759,
+      "cache_read_input_tokens": 24499,
+      "output_tokens": 465,
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 24759,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "",
+      "iterations": [],
+      "speed": "standard"
+    }
+  },
+  "execution": {
+    "latency_ms": 27198,
+    "step_count": 1,
+    "tool_call_count": 0,
+    "tool_calls_by_type": {}
+  },
+  "analysis": {
+    "minimal_answer": "pr -n file",
+    "minimal_word_count": 3,
+    "minimal_shell_token_count": 3,
+    "response_word_count": 117,
+    "minimal_answer_gap_words": 114,
+    "verbosity_ratio": 39.0,
+    "expected_command_hits": [
+      "pr"
+    ],
+    "trap_hits": [],
+    "missing_required_concepts": [],
+    "posix_compliant": true,
+    "issue8_refusal": false,
+    "failure_mode": "over_explaining",
+    "estimated_excess_output_tokens": 462
+  },
+  "accuracy": null,
+  "execution_record": null,
+  "cache_state": "warm",
+  "timestamp": "2026-04-02T22:44:02.099008"
+}

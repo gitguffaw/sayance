@@ -1,0 +1,68 @@
+{
+  "id": "T03",
+  "llm": "claude",
+  "model": "claude-opus-4-6",
+  "run_k": 0,
+  "question": "I need to swap every occurrence of the word 'foo' with 'bar' throughout a text file. The change needs to be saved back to disk.",
+  "response": "The POSIX-portable way to do this:\n\n```sh\nsed 's/foo/bar/g' file.txt > tmp && mv tmp file.txt\n```\n\nKey points:\n\n- The `g` flag on the `s` command replaces **all** occurrences per line, not just the first.\n- **Do not use `sed -i`** \u2014 the `-i` (in-place) flag is a GNU/BSD extension and not part of POSIX.\n- The portable pattern is: redirect to a temp file, then `mv` it back over the original.\n\nReplace `file.txt` with your actual filename.",
+  "tokens": {
+    "input": 5,
+    "input_cached": 74300,
+    "output": 496,
+    "thoughts": 0,
+    "billable": 74801,
+    "cost_usd": 0.1949235,
+    "cost_source": "reported",
+    "raw": {
+      "input_tokens": 5,
+      "cache_creation_input_tokens": 25278,
+      "cache_read_input_tokens": 49022,
+      "output_tokens": 496,
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 25278,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "",
+      "iterations": [],
+      "speed": "standard"
+    }
+  },
+  "execution": {
+    "latency_ms": 16031,
+    "step_count": 1,
+    "tool_call_count": 0,
+    "tool_calls_by_type": {}
+  },
+  "analysis": {
+    "minimal_answer": "sed 's/foo/bar/g' file > tmp && mv tmp file",
+    "minimal_word_count": 9,
+    "minimal_shell_token_count": 9,
+    "response_word_count": 79,
+    "minimal_answer_gap_words": 70,
+    "verbosity_ratio": 8.78,
+    "expected_command_hits": [
+      "sed"
+    ],
+    "trap_hits": [
+      "sed\\s+-i\\b"
+    ],
+    "missing_required_concepts": [
+      "sed s///g",
+      "no -i flag",
+      "redirect and mv"
+    ],
+    "posix_compliant": false,
+    "issue8_refusal": false,
+    "failure_mode": "non_posix_substitution",
+    "estimated_excess_output_tokens": 496
+  },
+  "accuracy": null,
+  "execution_record": null,
+  "cache_state": "warm",
+  "timestamp": "2026-04-02T22:42:46.792659"
+}

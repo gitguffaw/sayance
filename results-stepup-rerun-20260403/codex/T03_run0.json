@@ -1,0 +1,62 @@
+{
+  "id": "T03",
+  "llm": "codex",
+  "model": "gpt-5.3-codex",
+  "run_k": 0,
+  "question": "I need to swap every occurrence of the word 'foo' with 'bar' throughout a text file. The change needs to be saved back to disk.",
+  "response": "TOOL_CALL: get_posix_syntax(sed)\n\n[TOOL RESULT]: [\"Replace all occurrences: sed 's/foo/bar/g' file > tmp && mv tmp file\", 'DO NOT USE -i (not POSIX). Always use redirect and mv.']\n\nRun this (replace `file` with your filename):\n\n```sh\nsed 's/foo/bar/g' file > tmp && mv tmp file\n```",
+  "tokens": {
+    "input": 59199,
+    "input_cached": 58112,
+    "output": 1235,
+    "thoughts": 0,
+    "billable": 2322,
+    "cost_usd": null,
+    "cost_source": "calculated",
+    "raw": {
+      "run1": {
+        "input_tokens": 29570,
+        "cached_input_tokens": 29056,
+        "output_tokens": 546
+      },
+      "run2": {
+        "input_tokens": 29629,
+        "cached_input_tokens": 29056,
+        "output_tokens": 689
+      }
+    }
+  },
+  "execution": {
+    "latency_ms": 30694,
+    "step_count": 9,
+    "tool_call_count": 1,
+    "tool_calls_by_type": {
+      "get_posix_syntax": 1
+    }
+  },
+  "analysis": {
+    "minimal_answer": "sed 's/foo/bar/g' file > tmp && mv tmp file",
+    "minimal_word_count": 9,
+    "minimal_shell_token_count": 9,
+    "response_word_count": 45,
+    "minimal_answer_gap_words": 36,
+    "verbosity_ratio": 5.0,
+    "expected_command_hits": [
+      "sed"
+    ],
+    "trap_hits": [],
+    "missing_required_concepts": [
+      "sed s///g",
+      "no -i flag",
+      "redirect and mv"
+    ],
+    "posix_compliant": true,
+    "issue8_refusal": false,
+    "failure_mode": "tool_heavy_detour",
+    "estimated_excess_output_tokens": 1226
+  },
+  "accuracy": null,
+  "execution_record": null,
+  "cache_state": "warm",
+  "timestamp": "2026-04-02T22:43:57.257613"
+}

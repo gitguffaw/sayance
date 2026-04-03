@@ -1,0 +1,62 @@
+{
+  "id": "T02",
+  "llm": "claude",
+  "model": "claude-opus-4-6",
+  "run_k": 0,
+  "question": "I need to know which `.conf` files anywhere on the system have changed since yesterday.",
+  "response": "`find` is CORE_TRIVIAL \u2014 no lookup needed. Two approaches:\n\n**Quick (last 24 hours):**\n```bash\nfind / -name \"*.conf\" -type f -mtime -1 2>/dev/null\n```\n\n**Precise (since start of yesterday):**\n```bash\ntouch -t \"$(date -v-1d +%Y%m%d0000)\" /tmp/.yesterday_ref\nfind / -name \"*.conf\" -type f -newer /tmp/.yesterday_ref 2>/dev/null\nrm /tmp/.yesterday_ref\n```\n\nThe second form uses `touch` to create a reference file stamped at yesterday midnight, then `find -newer` compares against it. `2>/dev/null` suppresses permission-denied noise from directories you can't read.\n\nTo limit scope (recommended \u2014 system-wide search is slow):\n```bash\nfind /etc /usr/local/etc -name \"*.conf\" -type f -mtime -1 2>/dev/null\n```\n\nWant me to run one of these?",
+  "tokens": {
+    "input": 3,
+    "input_cached": 24496,
+    "output": 1148,
+    "thoughts": 0,
+    "billable": 25647,
+    "cost_usd": 0.181815,
+    "cost_source": "reported",
+    "raw": {
+      "input_tokens": 3,
+      "cache_creation_input_tokens": 24496,
+      "cache_read_input_tokens": 0,
+      "output_tokens": 1148,
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 24496,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "",
+      "iterations": [],
+      "speed": "standard"
+    }
+  },
+  "execution": {
+    "latency_ms": 24513,
+    "step_count": 1,
+    "tool_call_count": 0,
+    "tool_calls_by_type": {}
+  },
+  "analysis": {
+    "minimal_answer": "find / -name '*.conf' -mtime -1",
+    "minimal_word_count": 6,
+    "minimal_shell_token_count": 6,
+    "response_word_count": 105,
+    "minimal_answer_gap_words": 99,
+    "verbosity_ratio": 17.5,
+    "expected_command_hits": [
+      "find"
+    ],
+    "trap_hits": [],
+    "missing_required_concepts": [],
+    "posix_compliant": true,
+    "issue8_refusal": false,
+    "failure_mode": "over_explaining",
+    "estimated_excess_output_tokens": 1142
+  },
+  "accuracy": null,
+  "execution_record": null,
+  "cache_state": "warm",
+  "timestamp": "2026-04-02T22:42:56.421248"
+}
