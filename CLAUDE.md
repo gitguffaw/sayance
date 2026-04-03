@@ -18,8 +18,8 @@ LLMs are blind to most POSIX utilities. They reach for `tar` instead of `pax`, w
 
 **This project builds the semantic bridge that fixes that.** A two-tier reference injection system gives LLMs just enough context to discover and correctly use the 155 utilities defined in POSIX.1-2024 (Issue 8) — saving both time and tokens.
 
-- **Tier 1 (`posix-core.md`):** ~800-token semantic map injected into agent context. Tells the LLM what exists.
-- **Tier 2 (`get_posix_syntax` tool):** MCP tool backed by `posix-tldr.json`. Tells the LLM how to use it correctly.
+- **Tier 1 (`posix-core.md` / `skill/SKILL.md`):** ~925-token semantic map injected into agent context via Claude Code skill. Tells the LLM what exists.
+- **Tier 2 (`posix-lookup` CLI):** Zero-dependency Python 3 binary backed by `posix-tldr.json`, called via bash. Tells the LLM how to use it correctly. No MCP — zero schema token overhead.
 
 The benchmark (`run_benchmark.py`) is a utility for proving the solution works — it is not the product. The product is the bridge.
 
@@ -64,11 +64,15 @@ Single-file CLI tool (`run_benchmark.py`) that:
 
 ## Key Files
 
+- `skill/SKILL.md` — **The product** — Claude Code skill (Tier 1 map + Tier 2 CLI instruction)
+- `skill/posix-lookup` — **Tier 2 CLI** — Python 3 binary, zero deps, called via bash
+- `posix-tldr.json` — Syntax lookup database (shared by CLI and benchmark)
+- `posix-core.md` — Tier 1 semantic map (also embedded in SKILL.md)
+- `Makefile` — `make test`, `make install`, `make uninstall`
 - `posix-utilities.txt` — All 155 POSIX Issue 8 utilities (source of truth)
 - `benchmark_data.json` — Structured questions with expected answers and required concepts
-- `run_benchmark.py` — Benchmark runner (being rebuilt for token measurement)
+- `run_benchmark.py` — Benchmark runner
 - `docs/plans/` — Implementation plans (the deepened plan is the current roadmap)
-- `docs/brainstorms/` — Design exploration documents
 
 ## Known Issues
 

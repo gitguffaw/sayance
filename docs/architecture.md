@@ -28,13 +28,22 @@ comm: compare two sorted lists
 
 This file is capped at ~800 tokens. Its only job is to make sure the agent knows the tool exists so it doesn't reach for a non-POSIX substitute. It does not contain full syntax.
 
-### Tier 2 — The Syntax Lookup Tool (`get_posix_syntax`)
+### Tier 2 — The Syntax Lookup CLI (`posix-lookup`)
 
-An agent-native tool the LLM can call before executing a Tier 1 utility. It accepts one or more utility names and returns the exact, pure-POSIX syntax strings — no GNU extensions, no BSD variants.
+A CLI binary the LLM calls via bash before executing a Tier 1 utility. It accepts a utility name and returns the exact, pure-POSIX syntax strings — no GNU extensions, no BSD variants.
 
-The agent is instructed to always call this tool before using any utility it found in Tier 1. This prevents the "Rebellious Agent" failure mode: the LLM sees `pax` in Tier 1, decides it already knows the syntax, and confidently writes `pax -z` (which doesn't exist).
+```bash
+$ posix-lookup pax
+  Create portable archive: pax -w -f archive.pax directory/
+  Copy directory tree: pax -rw src/ dest/
+  DO NOT USE tar (not guaranteed POSIX).
+```
 
-The tool is backed by `posix-tldr.json`, a local structured file. The LLM never reads that file directly — it always goes through the tool interface, which prevents token flooding from a naive `cat posix-tldr.json`.
+The agent is instructed to always call `posix-lookup <utility>` before using any utility it found in Tier 1. This prevents the "Rebellious Agent" failure mode: the LLM sees `pax` in Tier 1, decides it already knows the syntax, and confidently writes `pax -z` (which doesn't exist).
+
+The CLI is backed by `posix-tldr.json`, a local structured file. The LLM never reads that file directly — it always goes through the CLI, which prevents token flooding from a naive `cat posix-tldr.json`.
+
+**Why a CLI instead of an MCP tool?** The LLM's bash tool is always registered in its schema — zero additional context tokens. An MCP tool would add ~79-120 tokens of schema overhead per session for a capability bash already provides. The CLI also works in any agent environment with shell access, not just MCP-compatible clients.
 
 ---
 
@@ -45,9 +54,9 @@ User prompt
     |
     v
 [Tier 1] Does posix-core.md tell me a native tool exists for this?
-    |-- YES --> Call get_posix_syntax(tool_name)
+    |-- YES --> Run: posix-lookup <utility>
     |               |
-    |           [Tier 2] Returns exact POSIX syntax
+    |           [Tier 2] Returns exact POSIX syntax via bash
     |               |-- Use it, answer the question
     |
     |-- NO --> Use general knowledge (expected to be rare)
@@ -57,14 +66,17 @@ User prompt
 
 ## Key Design Decisions
 
-**Why a tool instead of a file?**  
-If we expose `posix-tldr.json` directly to the shell, the agent will run `cat posix-tldr.json`, flooding its context with thousands of tokens. Wrapping it behind a tool forces single-utility lookups.
+**Why a CLI binary instead of an MCP server?**  
+The LLM's bash tool is always registered in its schema — zero additional context tokens. An MCP tool would add ~79-120 tokens of permanent schema overhead. The CLI also works in any agent environment with shell access (Claude Code, Cursor, Codex, Gemini CLI), not just MCP-compatible clients. MCP remains a future option if multi-client structured tool access becomes a priority.
+
+**Why a CLI instead of a raw file?**  
+If we expose `posix-tldr.json` directly to the shell, the agent will run `cat posix-tldr.json`, flooding its context with thousands of tokens. Wrapping it behind a CLI forces single-utility lookups.
 
 **Why not just inject the full POSIX man pages?**  
 Context tax. A single `sed` man page is ~4,000 tokens. Injecting all 155 would consume the entire context window before the user's question is even answered.
 
 **Why not rely on ALL CAPS warnings like "DO NOT GUESS SYNTAX"?**  
-Prompt instructions are fragile. A confident LLM will ignore them. Structural enforcement — requiring a tool call before a shell call — is far more reliable than text warnings.
+Prompt instructions are fragile. A confident LLM will ignore them. Structural enforcement — requiring a CLI call before a shell call — is far more reliable than text warnings.
 
 **Why is Tier 1 grouped by namespace?**  
 The LLM processes the list hierarchically. Grouping under `[TEXT_DATA_PROC]`, `[FILE_DIR_OPS]`, etc. reduces the search space for intent-matching and prevents the LLM from pattern-matching on the wrong utility.

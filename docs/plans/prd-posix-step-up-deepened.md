@@ -51,7 +51,7 @@ The POSIX.1-2024 Issue 8 spec rationale confirms the addition of `readlink`, `re
 A progressive, low-token reference mechanism that mirrors human developer workflows.
 
 *   **Tier 1 (`posix-core.md`):** A heavily condensed semantic map of the 155 utilities injected into the agent's context as a Factory Skill. It provides a 2-4 word semantic hook (e.g., `pax: portable archive (NOT tar)`) so the agent knows the tool exists. Max size: ~1,200 tokens.
-*   **Tier 2 (Syntax Lookup Tool):** An agent-native tool (`get_posix_syntax`) backed by a local database (`posix-tldr.json`). Agents are instructed to call this tool *before* executing a Tier 1 utility in the shell. Accepts batch arrays for pipeline lookups.
+*   **Tier 2 (Syntax Lookup CLI):** A CLI binary (`posix-lookup`) backed by a local database (`posix-tldr.json`). Agents are instructed to run `posix-lookup <utility>` via bash *before* executing a Tier 1 utility in the shell. Chosen over MCP to avoid schema token overhead and maximize cross-platform reach (any agent with bash access).
 
 *Future consideration:* If Tier 2 coverage proves insufficient after Track 3 validation, a Tier 3 spec search tool can be added. This is deferred until data motivates it.
 
@@ -59,58 +59,28 @@ A progressive, low-token reference mechanism that mirrors human developer workfl
 
 **Architecture Validation:**
 - The 2-tier progressive disclosure pattern is architecturally sound for this constraint space. The clean separation (Tier 1 = discovery, Tier 2 = syntax) prevents scope creep and keeps token budgets predictable.
-- Two tools is the sweet spot for MCP tool economics. Every tool schema costs tokens every turn. More than 2 tools adds context-window tax; fewer loses the discovery/syntax separation.
+- CLI-via-bash was chosen over MCP after a structured engineering debate. MCP adds ~79-120 tokens of schema overhead per session; bash is always registered. The CLI also works across Claude Code, Cursor, Codex, Gemini CLI — any agent with shell access.
 
 **Tier 2 Coverage Gap:**
 Tier 2 currently covers only 29 of ~85 non-trivial utilities. This creates a "discovery-to-lookup cliff" — the agent finds a utility in Tier 1 but gets no syntax from Tier 2. Expanding Tier 2 to cover all utilities tested in `benchmark_data.json` is the minimum; covering all non-trivial utilities is the goal. At 155 utilities x ~50 tokens each, the full Tier 2 database is ~7,750 tokens — a lookup problem, not a search problem.
 
-**Tool Schema Best Practices:**
-The `get_posix_syntax` tool schema should be designed for maximum LLM tool-calling reliability:
+**CLI Distribution (Chosen over MCP):**
+The `posix-lookup` CLI is a zero-dependency Python 3 script that returns syntax info from `posix-tldr.json`. It is invoked via bash, which is always available in the LLM's tool schema.
 
-```json
-{
-  "name": "get_posix_syntax",
-  "description": "Look up exact POSIX.1-2024 (Issue 8) syntax for one or more utilities. Returns pure-POSIX synopsis, flags, and common traps. NO GNU/BSD extensions. Call this BEFORE using any utility from the POSIX semantic map.",
-  "inputSchema": {
-    "type": "object",
-    "properties": {
-      "utilities": {
-        "type": "array",
-        "items": { "type": "string" },
-        "minItems": 1,
-        "maxItems": 10,
-        "description": "POSIX utility names. For pipelines, include all tools (e.g. ['sort', 'uniq', 'comm'])."
-      }
-    },
-    "required": ["utilities"]
-  },
-  "annotations": {
-    "readOnlyHint": true,
-    "idempotentHint": true,
-    "openWorldHint": false
-  }
-}
+```bash
+$ posix-lookup sed
+  Replace all occurrences: sed 's/foo/bar/g' file > tmp && mv tmp file
+  DO NOT USE -i (not POSIX). Always use redirect and mv.
+
+$ posix-lookup --json od
+{"od": ["Hex dump: od -A x -t x1z file", "DO NOT USE xxd or hexdump."]}
 ```
 
-**Tool Result Format:**
-Return compact JSON keyed by utility name:
-```json
-{
-  "sed": {
-    "synopsis": "sed [-n] script [file...]",
-    "posix_flags": ["-n", "-e"],
-    "traps": ["NO -i (GNU)", "NO -r (GNU)"],
-    "example": "sed 's/old/new/g' input > output"
-  }
-}
-```
-For errors, return the POSIX alternative directly: `"'xxd' is NOT POSIX. For hex dump, use: od -A x -t x1z"`.
+For pipeline lookups, the LLM calls `posix-lookup` once per utility. This is simpler than batch arrays and leverages the LLM's strongest tool-calling behavior (bash).
 
-**Cross-Provider Forced Tool Use:**
-All three major providers support forcing specific tool calls:
-- Claude: `tool_choice: {"type": "tool", "name": "get_posix_syntax"}`
-- OpenAI: `tool_choice: {"type": "function", "function": {"name": "..."}}`
-- Gemini: `toolConfig.functionCallingConfig.mode: "ANY"` + `allowedFunctionNames`
+**Why not MCP?** MCP was evaluated in a structured 3-agent engineering debate. The conclusion: MCP adds ~79-120 tokens of schema overhead, requires a persistent server process, and limits reach to MCP-compatible clients. The CLI approach costs zero schema tokens and works anywhere with a terminal. MCP remains a future option for structured multi-client access.
+
+**Future MCP path:** The CLI lookup function is isolated and trivially wrappable in a FastMCP server (~50 lines) if multi-client structured tool access (Cursor, Cline, Zed) becomes a priority.
 
 ## 3. Design Principles for Tier 1 Semantic Hooks
 
@@ -129,12 +99,12 @@ Each entry in `posix-core.md` follows these rules:
 ### The Rebellious Agent (Hallucination)
 The LLM reads `pax` in Tier 1 but ignores Tier 2 and confidently guesses the syntax (e.g., `pax -z`).
 
-*Mitigation:* MCP `instructions` field provides always-on baseline enforcement. Rich error results from Tier 2 correct misconceptions inline. The benchmark tracks `tool_calls_by_type` to detect non-compliance.
+*Mitigation:* The skill instruction ("Run `posix-lookup <utility>` to get exact syntax before executing") leverages the LLM's strongest tool-calling behavior — bash invocation. The CLI returns error messages that correct misconceptions inline. The benchmark tracks tool usage patterns to detect non-compliance.
 
 *Observed in Track 2:* Codex showed `tool_heavy_detour` as its dominant pattern (25/30 questions) — meaning it called the tool correctly but narrated every step verbosely. This is not a compliance failure.
 
 ### The Context Flood
-The `posix-tldr.json` database is wrapped behind the `get_posix_syntax` tool interface with a hard array cap of 10 utilities per call. The agent never has raw file access.
+The `posix-tldr.json` database is wrapped behind the `posix-lookup` CLI. The agent calls it one utility at a time via bash. It never has raw file access to the JSON.
 
 ### Complex Pipelines
 Tasks requiring three tools (e.g., `sort | uniq | comm`) trigger latency spikes if looked up sequentially. The tool accepts arrays and returns a keyed JSON object.
@@ -208,7 +178,18 @@ All three providers completed with 30/30 valid results.
 
 **Key observation:** Output token counts are not the right efficiency metric for Codex in Track 2. Codex uses the tool correctly (86.7% compliance) but narrates every step. The real efficiency question — does correct-first-time reduce total real-world cost versus retry loops — is Track 3's job.
 
-### Step 6: Track 3 — Execution Validation
+### Step 6: Ship Skill Distribution (CLI + PAI Pack)
+**Status: ✅ Complete**
+
+Built and deployed the production delivery mechanism for the POSIX Bridge:
+
+*   **Architecture decision (QNT-53):** CLI skill via bash chosen over MCP after structured multi-agent debate. Zero schema tokens, universal agent compatibility.
+*   **`posix-lookup` CLI (QNT-54):** Python 3 binary, zero deps, pure stdlib. Modes: lookup, --list, --json.
+*   **`skill/SKILL.md` (QNT-55):** PAI skill combining Tier 1 semantic map + Tier 2 CLI instruction. Auto-loads into Claude Code sessions (~925 tokens, cached).
+*   **`Makefile` (QNT-56):** `make test`, `make install`, `make uninstall` pipeline.
+*   **`skill/` directory (QNT-57):** Source of truth for distributable artifacts in the repo.
+
+### Step 7: Track 3 — Execution Validation
 **Status: Not started**
 
 See `docs/plans/Plan_for_track3-execution-validation.md` for full spec.

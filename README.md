@@ -37,22 +37,22 @@ comm: side-by-side sorted-file diff (NOT diff)
 
 The agent scans this and thinks: "oh, `comm` exists — I should look it up instead of writing a Python script."
 
-### Tier 2 — Syntax Lookup (`posix-tldr.json`)
+### Tier 2 — Syntax Lookup (`posix-lookup` CLI)
 
-A structured database of POSIX syntax, flags, and common traps. In the benchmark, Tier 2 is simulated — `run_benchmark.py` intercepts tool call patterns in the LLM's response and injects lookup results from `posix-tldr.json`. The production goal is an MCP tool (`get_posix_syntax`) that agents call directly.
+A CLI tool backed by `posix-tldr.json` that returns POSIX-correct syntax, flags, and common traps. The LLM calls it via bash — no MCP server, no schema tokens, no persistent process.
 
-```json
-{
-  "sed": {
-    "synopsis": "sed [-n] script [file...]",
-    "posix_flags": ["-n", "-e"],
-    "traps": ["NO -i (GNU)", "NO -r (GNU)"],
-    "example": "sed 's/old/new/g' input > output"
-  }
-}
+```bash
+$ posix-lookup pax
+  Create portable archive: pax -w -f archive.pax directory/
+  Copy directory tree: pax -rw src/ dest/
+  DO NOT USE tar (not guaranteed POSIX).
+
+$ posix-lookup sed
+  Replace all occurrences: sed 's/foo/bar/g' file > tmp && mv tmp file
+  DO NOT USE -i (not POSIX). Always use redirect and mv.
 ```
 
-Tier 1 tells the agent what exists. Tier 2 tells it how to use it correctly. Together, they cost under 1,000 tokens of context — and they work.
+Tier 1 tells the agent what exists. Tier 2 tells it how to use it correctly. Together, they cost ~925 tokens of context (cached after first turn) plus ~50-200 tokens per on-demand lookup — and they work.
 
 ## The Proof
 
@@ -88,14 +88,31 @@ We tested this across three providers, 30 real shell tasks, with and without the
 
 Tracks 1 and 2 measure compliance in a controlled text-analysis environment. No commands are actually executed. The real cost story — what happens when a wrong first answer triggers retries, debugging, and workaround scripts — is **Track 3's job**. The hypothesis: the Step-Up's small upfront cost prevents expensive downstream failure loops.
 
-## Quick Start
+## Install the Skill
 
-No virtualenv or build step required. Pure stdlib Python 3.
+No virtualenv needed. Pure stdlib Python 3.
 
 ```bash
-# Syntax check
-python3 -m py_compile run_benchmark.py
+# Install the Claude Code skill + CLI
+make install
 
+# Verify it works
+posix-lookup pax
+posix-lookup --list
+```
+
+After install, restart Claude Code. The skill auto-loads the semantic map into every session. The LLM calls `posix-lookup <utility>` via bash whenever it needs exact syntax.
+
+```bash
+# Dev workflow — edit and iterate
+make test       # test from repo without installing
+make install    # deploy to ~/.claude/skills/posix/
+make uninstall  # remove skill and CLI
+```
+
+## Run the Benchmark
+
+```bash
 # Dry run (no API calls)
 python3 run_benchmark.py --dry-run
 
@@ -112,8 +129,11 @@ For Gemini, add `--max-workers 1 --delay 30` if you're on a tight API quota.
 
 | File | Purpose |
 |------|---------|
-| `posix-core.md` | **Tier 1** — semantic map of all 155 POSIX utilities (~750 tokens, budget 1,200) |
-| `posix-tldr.json` | **Tier 2** — syntax lookup database for `get_posix_syntax` tool |
+| `skill/SKILL.md` | **The Product** — Claude Code skill combining Tier 1 map + Tier 2 CLI instruction |
+| `skill/posix-lookup` | **Tier 2 CLI** — Python 3 binary, zero deps, called via bash |
+| `posix-tldr.json` | Syntax lookup database (shared by CLI and benchmark) |
+| `posix-core.md` | **Tier 1** — semantic map of all 155 POSIX utilities (~925 tokens) |
+| `Makefile` | Build, test, and install pipeline |
 | `run_benchmark.py` | Benchmark runner — provider adapters, grading, reporting |
 | `benchmark_data.json` | 30 intent-based questions with expected POSIX answers |
 | `posix-utilities.txt` | All 155 POSIX Issue 8 utilities (canonical list) |
