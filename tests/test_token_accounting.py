@@ -1,7 +1,13 @@
 import json
 import unittest
 
-from run_benchmark import parse_codex_tokens, parse_gemini_execution, parse_gemini_tokens
+from run_benchmark import (
+    parse_claude_tokens,
+    parse_codex_tokens,
+    parse_gemini_execution,
+    parse_gemini_tokens,
+    raw_usage_input_billable_tokens,
+)
 
 
 def jsonl(*events: dict) -> str:
@@ -332,6 +338,94 @@ class GeminiTokenParsingTests(unittest.TestCase):
         )
         self.assertNotIn("shell.result_count", execution.tool_calls_by_type)
         self.assertNotIn("search.token_count", execution.tool_calls_by_type)
+
+
+class ClaudeTokenParsingTests(unittest.TestCase):
+    def test_parse_claude_tokens_uses_cache_read_for_input_cached(self) -> None:
+        tokens = parse_claude_tokens(
+            {
+                "usage": {
+                    "input_tokens": 100,
+                    "cache_creation_input_tokens": 30,
+                    "cache_read_input_tokens": 7,
+                    "output_tokens": 11,
+                },
+                "total_cost_usd": 0.12,
+            }
+        )
+
+        self.assertTrue(tokens.usage_valid)
+        self.assertEqual(tokens.input, 100)
+        self.assertEqual(tokens.input_cached, 7)
+        self.assertEqual(tokens.billable, 148)
+        self.assertEqual(tokens.cost_source, "reported")
+
+    def test_parse_claude_tokens_accepts_string_fields(self) -> None:
+        tokens = parse_claude_tokens(
+            {
+                "usage": {
+                    "input_tokens": "10",
+                    "cache_creation_input_tokens": "2",
+                    "cache_read_input_tokens": "3",
+                    "output_tokens": "4",
+                }
+            }
+        )
+
+        self.assertTrue(tokens.usage_valid)
+        self.assertEqual(tokens.input, 10)
+        self.assertEqual(tokens.input_cached, 3)
+        self.assertEqual(tokens.billable, 19)
+
+    def test_parse_claude_tokens_treats_null_usage_as_zero_usage(self) -> None:
+        tokens = parse_claude_tokens({"usage": None})
+
+        self.assertTrue(tokens.usage_valid)
+        self.assertEqual(tokens.input, 0)
+        self.assertEqual(tokens.input_cached, 0)
+        self.assertEqual(tokens.output, 0)
+        self.assertEqual(tokens.billable, 0)
+
+    def test_parse_claude_tokens_marks_invalid_field_types(self) -> None:
+        tokens = parse_claude_tokens(
+            {
+                "usage": {
+                    "input_tokens": [],
+                    "output_tokens": 4,
+                }
+            }
+        )
+
+        self.assertFalse(tokens.usage_valid)
+        self.assertIn("Claude input_tokens", tokens.usage_invalid_reason)
+
+    def test_raw_usage_input_billable_tokens_handles_omitted_claude_cache_keys(self) -> None:
+        self.assertEqual(
+            raw_usage_input_billable_tokens({"input_tokens": 12}),
+            12,
+        )
+
+    def test_raw_usage_input_billable_tokens_handles_cache_creation_without_read(self) -> None:
+        self.assertEqual(
+            raw_usage_input_billable_tokens(
+                {
+                    "input_tokens": 12,
+                    "cache_creation_input_tokens": 5,
+                }
+            ),
+            17,
+        )
+
+    def test_raw_usage_input_billable_tokens_preserves_cached_input_semantics(self) -> None:
+        self.assertEqual(
+            raw_usage_input_billable_tokens(
+                {
+                    "input_tokens": 10,
+                    "cached_input_tokens": 4,
+                }
+            ),
+            6,
+        )
 
 
 if __name__ == "__main__":

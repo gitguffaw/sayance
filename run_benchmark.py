@@ -384,12 +384,36 @@ def invoke_cli(
 
 def parse_claude_tokens(raw_json: dict) -> TokenUsage:
     """Parse token usage from Claude CLI JSON output."""
-    usage = raw_json.get("usage", {})
-    input_tokens = usage.get("input_tokens", 0)
-    cache_creation = usage.get("cache_creation_input_tokens", 0)
-    cache_read = usage.get("cache_read_input_tokens", 0)
-    output_tokens = usage.get("output_tokens", 0)
-    input_cached = cache_creation + cache_read
+    usage = raw_json.get("usage")
+    if usage is None:
+        usage = {}
+    if not isinstance(usage, dict):
+        return invalid_token_usage("Claude usage payload is not an object", raw={"usage": usage})
+
+    input_tokens, error = coerce_token_int(usage.get("input_tokens", 0), "Claude input_tokens")
+    if error:
+        return invalid_token_usage(error, raw=usage)
+    cache_creation, error = coerce_token_int(
+        usage.get("cache_creation_input_tokens", 0),
+        "Claude cache_creation_input_tokens",
+    )
+    if error:
+        return invalid_token_usage(error, raw=usage)
+    cache_read, error = coerce_token_int(
+        usage.get("cache_read_input_tokens", 0),
+        "Claude cache_read_input_tokens",
+    )
+    if error:
+        return invalid_token_usage(error, raw=usage)
+    output_tokens, error = coerce_token_int(usage.get("output_tokens", 0), "Claude output_tokens")
+    if error:
+        return invalid_token_usage(error, raw=usage)
+
+    assert input_tokens is not None
+    assert cache_creation is not None
+    assert cache_read is not None
+    assert output_tokens is not None
+    input_cached = cache_read
 
     # billable includes cache_creation (charged at reduced rate) + fresh input + output
     # Claude reports total_cost_usd which accounts for cache pricing, so use that
@@ -887,19 +911,57 @@ def raw_usage_input_billable_tokens(raw_usage: dict) -> int:
         return 0
     if isinstance(raw_usage.get("turns"), list):
         return sum(raw_usage_input_billable_tokens(turn) for turn in raw_usage["turns"])
-    if "cache_creation_input_tokens" in raw_usage or "cache_read_input_tokens" in raw_usage:
-        return (
-            int(raw_usage.get("input_tokens", 0))
-            + int(raw_usage.get("cache_creation_input_tokens", 0))
-            + int(raw_usage.get("cache_read_input_tokens", 0))
-        )
     if "cached_input_tokens" in raw_usage:
+        input_tokens, input_error = coerce_token_int(raw_usage.get("input_tokens", 0), "input_tokens")
+        cached_tokens, cached_error = coerce_token_int(
+            raw_usage.get("cached_input_tokens", 0),
+            "cached_input_tokens",
+        )
+        if input_error or cached_error:
+            return 0
+        assert input_tokens is not None
+        assert cached_tokens is not None
         return max(
-            int(raw_usage.get("input_tokens", 0)) - int(raw_usage.get("cached_input_tokens", 0)),
+            input_tokens - cached_tokens,
             0,
         )
+    if (
+        "cache_creation_input_tokens" in raw_usage
+        or "cache_read_input_tokens" in raw_usage
+    ):
+        input_tokens, input_error = coerce_token_int(raw_usage.get("input_tokens", 0), "input_tokens")
+        cache_creation, creation_error = coerce_token_int(
+            raw_usage.get("cache_creation_input_tokens", 0),
+            "cache_creation_input_tokens",
+        )
+        cache_read, read_error = coerce_token_int(
+            raw_usage.get("cache_read_input_tokens", 0),
+            "cache_read_input_tokens",
+        )
+        if input_error or creation_error or read_error:
+            return 0
+        assert input_tokens is not None
+        assert cache_creation is not None
+        assert cache_read is not None
+        return (
+            input_tokens
+            + cache_creation
+            + cache_read
+        )
+    if "input_tokens" in raw_usage:
+        input_tokens, input_error = coerce_token_int(raw_usage.get("input_tokens", 0), "input_tokens")
+        if input_error:
+            return 0
+        assert input_tokens is not None
+        return input_tokens
     if "prompt" in raw_usage:
-        return max(int(raw_usage.get("prompt", 0)) - int(raw_usage.get("cached", 0)), 0)
+        prompt_tokens, prompt_error = coerce_token_int(raw_usage.get("prompt", 0), "prompt")
+        cached_tokens, cached_error = coerce_token_int(raw_usage.get("cached", 0), "cached")
+        if prompt_error or cached_error:
+            return 0
+        assert prompt_tokens is not None
+        assert cached_tokens is not None
+        return max(prompt_tokens - cached_tokens, 0)
     return 0
 
 
