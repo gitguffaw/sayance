@@ -38,6 +38,7 @@
     "T07": {
       "fixture_dir": "T07",
       "exec_validation_type": "stdout",
+      "exec_stdout_unordered": true,
       "exec_setup_note": "app.log and access.log with 'error' lines; grep -i 'error' *.log returns 3 matching lines"
     },
     "T08": {

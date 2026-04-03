@@ -858,13 +858,16 @@ def extract_command(response: str, expected_commands: list[str]) -> str:
         if any(text.startswith(cmd) for cmd in expected_commands):
             return text
 
-    # 2. Fenced code block
+    # 2. Fenced code block — filter by expected_commands to avoid executing
+    #    arbitrary code (e.g., "pip install ..." in an earlier code block).
     fenced = re.findall(r"```(?:\w*)\n(.*?)```", text, re.DOTALL)
     if fenced:
-        block = fenced[0].strip()
-        lines = [l for l in block.splitlines() if l.strip() and not l.strip().startswith("#")]
-        if lines:
-            return "\n".join(lines) if len(lines) > 1 else lines[0]
+        for block_raw in fenced:
+            block = block_raw.strip()
+            lines = [l for l in block.splitlines() if l.strip() and not l.strip().startswith("#")]
+            matched = [l for l in lines if any(l.strip().startswith(cmd) for cmd in expected_commands)]
+            if matched:
+                return "\n".join(matched) if len(matched) > 1 else matched[0]
 
     # Also check single backtick inline code
     inline = re.findall(r"`([^`]+)`", text)
@@ -873,10 +876,11 @@ def extract_command(response: str, expected_commands: list[str]) -> str:
         if any(candidate.startswith(cmd) for cmd in expected_commands):
             return candidate
 
-    # 3. Lines starting with $
+    # 3. Lines starting with $ (filtered to expected commands only)
     dollar_lines = [l.lstrip("$ ").strip() for l in text.splitlines() if l.strip().startswith("$")]
-    if dollar_lines:
-        return dollar_lines[0]
+    for dl in dollar_lines:
+        if any(dl.startswith(cmd) for cmd in expected_commands):
+            return dl
 
     # 4. Lines starting with an expected utility
     for line in text.splitlines():
@@ -998,6 +1002,8 @@ def validate_command_result(
             return False
         expected = expected_file.read_text().strip()
         actual = result.stdout.strip()
+        if fixture_spec.get("exec_stdout_unordered", False):
+            return sorted(actual.splitlines()) == sorted(expected.splitlines())
         return actual == expected
 
     elif validation_type == "exit_zero":
