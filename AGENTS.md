@@ -19,6 +19,8 @@ Use Python directly; there is no virtualenv or build step.
 - `python3 run_benchmark.py --dry-run` checks question selection and CLI wiring without making API calls.
 - `python3 run_benchmark.py --validate-bridge` verifies `posix-core.md` + `posix-tldr.json` cover all 155 utilities and exits.
 - `python3 run_benchmark.py --llms gemini claude` runs selected providers only.
+- `python3 run_benchmark.py --llms claude --claude-model claude-opus-4-6` runs Claude with the pinned baseline model (also the default).
+- `python3 run_benchmark.py --llms codex --codex-model gpt-5.4` runs Codex with the pinned baseline model (also the default).
 - `python3 run_benchmark.py --questions T01 T02 --k 3` repeats specific questions for comparison.
 - `python3 run_benchmark.py --judge claude` enables grading when you want token and accuracy data.
 - `python3 run_benchmark.py --no-grade` skips LLM-as-judge grading (token-only mode).

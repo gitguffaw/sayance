@@ -8,9 +8,9 @@ A regression is any change to the codebase, prompt, question set, or tool that m
 |---|---|
 | `total_billable_tokens` goes up for either LLM | A prompt got longer, or a question was made more ambiguous |
 | `posix_compliance_rate` drops | A question was changed in a way that now leads the LLM away from the right tool |
-| `valid_results` drops below `total_results` | A parser broke — JSON output from a CLI changed format |
+| `usage_valid_results` drops below `report_visible_results` | A parser broke, telemetry drifted, or usage was marked invalid |
 | `mean_step_count` for Codex spikes above its Track 1 baseline | The Step-Up prompt is causing detours, not reducing them |
-| Gemini shows `valid_results: 0` | The MCP prefix stripping broke, or the model API is down |
+| Gemini shows `usage_valid_results: 0` | The MCP prefix stripping broke, or the model API is down |
 | A question contains the utility name, "POSIX", or standards language | The Taboo rule was violated — that question's data is worthless |
 
 ---
@@ -46,6 +46,17 @@ make test-product-negative
    python3 run_benchmark.py --dry-run
    ```
    Verify the questions shown in the output do not contain any of the expected command names. This is how you catch a Taboo rule violation before wasting money on API calls.
+
+Model-selection note:
+- By default, Claude/Codex runs are pinned to:
+  - `claude-opus-4-6`
+  - `gpt-5.4`
+- To change pins, pass:
+  - `--claude-model <model-id>`
+  - `--codex-model <model-id>`
+- Unpinned runs require explicit bypass:
+  - `--claude-model auto` and/or `--codex-model auto`
+  - plus `--allow-unpinned-models`
 
 3. **Single-question smoke test** (optional but cheap):
    ```bash
@@ -102,8 +113,9 @@ Until repo plan/visibility changes, use this enforcement model:
 ## After Every Run
 
 1. Check that a `summary-<timestamp>.json` was written to `results/`.
-2. Open it and verify `valid_results` equals `total_results` for each LLM you ran.
-3. If `valid_results < total_results`, open the individual result files in `results/<llm>/` to find which questions failed and why.
+2. Open it and verify `usage_valid_results` equals `report_visible_results` for healthy token accounting.
+3. If `usage_valid_results < report_visible_results`, inspect `usage_invalid_results` and `invalid_usage_reasons`.
+4. If `report_visible_results < total_results`, inspect provider errors in `errors` and per-question files under `results/<llm>/`.
 
 ---
 

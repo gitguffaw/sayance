@@ -48,6 +48,10 @@ make test-product-negative
 python3 run_benchmark.py --llms gemini
 python3 run_benchmark.py --llms gemini claude codex
 
+# Model pins for baseline runs
+python3 run_benchmark.py --llms claude --claude-model claude-opus-4-6
+python3 run_benchmark.py --llms codex --codex-model gpt-5.4
+
 # Safe Gemini baseline under tight quota
 python3 run_benchmark.py --llms gemini --max-workers 1 --delay 30
 
@@ -100,6 +104,7 @@ Single-file CLI tool (`run_benchmark.py`) that:
 
 - The primary metric is **token cost**, not accuracy. Accuracy is secondary.
 - Token counts differ across providers (different tokenizers). Use native tokens for cost, tiktoken o200k_base for cross-model comparison.
+- Token validity is explicit: prefer `usage_valid_results`, `report_visible_results`, `usage_invalid_results`, and `invalid_usage_reasons`. `valid_results` remains a compatibility alias of `usage_valid_results`.
 - Cache state (cold vs warm) creates 10x cost difference on Anthropic. Track per result.
 - LLM-as-judge is susceptible to prompt injection. Grading uses base64-encoded responses to mitigate. Never use the same model as both test subject and judge.
 - `benchmark_data.json` (questions and expected answers), `posix-tldr.json`, and `fixtures/` are frozen datasets for cross-model comparison. Do not modify them to fix benchmark results unless we are creating new base data because.

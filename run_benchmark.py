@@ -260,8 +260,9 @@ NOISE_PREFIXES = (
 
 DEFAULT_CLI_TIMEOUT_SECONDS = 120
 DEFAULT_SHUFFLE_SEED = 20260329
-DEFAULT_CLAUDE_MODEL = "claude-opus-4-6"
-DEFAULT_CODEX_MODEL = "gpt-5.4"
+MODEL_OVERRIDE_AUTO_VALUES = {"", "auto", "default", "cli-default"}
+PINNED_CLAUDE_MODEL = "claude-opus-4-6"
+PINNED_CODEX_MODEL = "gpt-5.4"
 TOOL_CALL_PATTERN = re.compile(r"TOOL_CALL:\s*get_posix_syntax\((.*?)\)")
 UTILITY_NAME_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9]*$")
 
@@ -339,6 +340,19 @@ def normalize_utility_name(raw_command: str) -> str | None:
     if not candidate or not UTILITY_NAME_PATTERN.fullmatch(candidate):
         return None
     return candidate
+
+
+def normalize_model_override(raw_model: str | None) -> str | None:
+    """Normalize optional model override flags.
+
+    Returning None means "use CLI/account default model."
+    """
+    if raw_model is None:
+        return None
+    normalized = raw_model.strip()
+    if normalized.lower() in MODEL_OVERRIDE_AUTO_VALUES:
+        return None
+    return normalized
 
 
 def strip_cli_noise(output: str) -> str:
@@ -2466,7 +2480,11 @@ def generate_report(all_results: dict[str, list[QuestionResult]], questions: lis
     print()
 
 
-def save_summary(all_results: dict[str, list[QuestionResult]]) -> Path:
+def save_summary(
+    all_results: dict[str, list[QuestionResult]],
+    *,
+    requested_models: dict[str, str | None] | None = None,
+) -> Path:
     """Save a combined summary JSON file."""
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -2477,6 +2495,7 @@ def save_summary(all_results: dict[str, list[QuestionResult]]) -> Path:
         "timestamp": ts,
         "spec": "POSIX.1-2024 (Issue 8)",
         "utilities_count": 155,
+        "requested_models": requested_models or {},
         "llms": {},
     }
 
@@ -2500,6 +2519,7 @@ def save_summary(all_results: dict[str, list[QuestionResult]]) -> Path:
         ]
         summary["llms"][llm] = {
             "model": model,
+            "requested_model": (requested_models or {}).get(llm),
             "total_results": len(results),
             "valid_results": len(token_results),
             "usage_valid_results": len(token_results),
@@ -3881,13 +3901,17 @@ def main():
     )
     parser.add_argument(
         "--claude-model",
-        default=DEFAULT_CLAUDE_MODEL,
-        help=f"Claude model override for benchmark runs (default: {DEFAULT_CLAUDE_MODEL})",
+        default=PINNED_CLAUDE_MODEL,
+        help=f"Claude model override for benchmark runs (default: {PINNED_CLAUDE_MODEL})",
     )
     parser.add_argument(
         "--codex-model",
-        default=DEFAULT_CODEX_MODEL,
-        help=f"Codex model override for benchmark runs (default: {DEFAULT_CODEX_MODEL})",
+        default=PINNED_CODEX_MODEL,
+        help=f"Codex model override for benchmark runs (default: {PINNED_CODEX_MODEL})",
+    )
+    parser.add_argument(
+        "--allow-unpinned-models", action="store_true",
+        help="Allow Claude/Codex runs without pinned models (must pass --*-model auto/default)",
     )
     parser.add_argument(
         "--max-workers", type=int, default=None,
@@ -3982,6 +4006,37 @@ def main():
         if args.validate_bridge:
             return
 
+    claude_model_override = normalize_model_override(args.claude_model)
+    codex_model_override = normalize_model_override(args.codex_model)
+
+    if (
+        "claude" in args.llms
+        and claude_model_override is None
+        and not args.allow_unpinned_models
+    ):
+        parser.error(
+            "Claude model is unpinned. Use --claude-model <model-id> or pass --allow-unpinned-models."
+        )
+    if (
+        "codex" in args.llms
+        and codex_model_override is None
+        and not args.allow_unpinned_models
+    ):
+        parser.error(
+            "Codex model is unpinned. Use --codex-model <model-id> or pass --allow-unpinned-models."
+        )
+
+    requested_models: dict[str, str | None] = {
+        "claude": claude_model_override if "claude" in args.llms else None,
+        "codex": codex_model_override if "codex" in args.llms else None,
+        "gemini": None,
+    }
+    requested_labels = [
+        f"{llm}:{model}" for llm, model in requested_models.items() if llm in args.llms and model
+    ]
+    if requested_labels:
+        print(f"  Requested pinned models: {', '.join(requested_labels)}")
+
     all_results = run_benchmark(
         llms=args.llms,
         questions=questions,
@@ -3994,13 +4049,13 @@ def main():
         seed=args.seed,
         inject_posix=args.inject_posix,
         execute=args.execute,
-        claude_model=args.claude_model,
-        codex_model=args.codex_model,
+        claude_model=claude_model_override,
+        codex_model=codex_model_override,
     )
 
     if all_results:
         generate_report(all_results, questions)
-        save_summary(all_results)
+        save_summary(all_results, requested_models=requested_models)
         save_visual_report(all_results, questions)
 
 

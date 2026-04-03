@@ -98,6 +98,11 @@ python3 run_benchmark.py --llms claude codex
 python3 run_benchmark.py --llms claude codex --inject-posix
 ```
 
+Model version selection:
+- By default, Claude runs are pinned to `claude-opus-4-6` and Codex runs are pinned to `gpt-5.4`.
+- To change pins, pass `--claude-model <model-id>` and/or `--codex-model <model-id>`.
+- Unpinned runs are blocked by default. To bypass intentionally, use `--claude-model auto` and/or `--codex-model auto` plus `--allow-unpinned-models`.
+
 The key numbers to compare across the two runs:
 - `total_billable_tokens` per LLM
 - `mean_output_tokens` per LLM
@@ -132,7 +137,7 @@ python3 run_benchmark.py --llms gemini --max-workers 1 --delay 30
 
 If a Gemini run stops early, rerun the same command on the next day. The benchmark will resume from the cached files already written under `results/gemini/`.
 
-Note: The Gemini CLI prepends `MCP issues detected...` noise to its output. The benchmark strips this before JSON parsing. If Gemini results still show `valid_results: 0`, run a manual check:
+Note: The Gemini CLI prepends `MCP issues detected...` noise to its output. The benchmark strips this before JSON parsing. If Gemini results still show `usage_valid_results: 0`, run a manual check:
 
 ```bash
 gemini -p "echo test" -o json
@@ -149,7 +154,13 @@ And verify the output is parseable JSON after stripping the MCP prefix.
 | `total_billable_tokens` | Full cost of the run for this LLM |
 | `mean_output_tokens` | Average verbosity per answer |
 | `total_estimated_excess_output_tokens` | Tokens above the minimal correct answer |
+| `usage_valid_results` | Number of non-error results with valid token telemetry |
+| `report_visible_results` | Number of non-error results shown in reports (includes usage-invalid) |
+| `usage_invalid_results` | Number of non-error results excluded from token metrics |
+| `invalid_usage_reasons` | Breakdown of why usage was marked invalid |
 | `posix_compliance_rate` | Fraction of answers that used only POSIX tools and flags |
 | `issue8_refusal_count` | Times the LLM incorrectly said a valid Issue 8 tool "isn't POSIX" |
 | `failure_modes` | Categorized breakdown of how answers went wrong |
 | `mean_step_count` | How many agentic steps Codex took (1 = direct answer, higher = detour) |
+
+Compatibility note: `valid_results` is still emitted as a backward-compatible alias of `usage_valid_results`.

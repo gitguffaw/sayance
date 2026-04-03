@@ -121,16 +121,39 @@ python3 run_benchmark.py --dry-run
 # Validate bridge completeness (required before trusted Step-Up runs)
 python3 run_benchmark.py --validate-bridge
 
-# Run baseline (no injection)
-python3 run_benchmark.py --llms claude codex gemini
+# Run baseline (no injection) for Claude + Codex
+python3 run_benchmark.py --llms claude codex
 
-# Run with Step-Up injection
-python3 run_benchmark.py --llms claude codex gemini --inject-posix
+# Run with Step-Up injection for Claude + Codex
+python3 run_benchmark.py --llms claude codex --inject-posix
 ```
 
 `--inject-posix` now fails fast if `posix-core.md` or `posix-tldr.json` do not fully cover the 155 POSIX Issue 8 utilities.
 
-For Gemini, add `--max-workers 1 --delay 30` if you're on a tight API quota.
+Model selection defaults:
+- Claude is pinned by default to `claude-opus-4-6`.
+- Codex is pinned by default to `gpt-5.4`.
+- To change pinned models, pass `--claude-model <model-id>` and/or `--codex-model <model-id>`.
+- Unpinned runs are blocked by default. To bypass intentionally, use `--claude-model auto` and/or `--codex-model auto` together with `--allow-unpinned-models`.
+
+Fresh baseline commands (provider-isolated):
+
+```bash
+# Claude baseline (pinned default: claude-opus-4-6)
+python3 run_benchmark.py --llms claude --claude-model claude-opus-4-6 --results-dir results/baseline-claude-2026-04-03
+
+# Codex baseline (pinned default: gpt-5.4)
+python3 run_benchmark.py --llms codex --codex-model gpt-5.4 --results-dir results/baseline-codex-2026-04-03
+
+# Gemini baseline (quota-safe profile)
+python3 run_benchmark.py --llms gemini --max-workers 1 --delay 30 --results-dir results/baseline-gemini-2026-04-03
+```
+
+Summary validity semantics:
+- Token metrics use `usage_valid_results`.
+- Visibility metrics use `report_visible_results`.
+- `usage_invalid_results` and `invalid_usage_reasons` explain parser/telemetry issues.
+- `valid_results` remains as a backward-compatible alias of `usage_valid_results`.
 
 ## Dual-Lane Validation
 
