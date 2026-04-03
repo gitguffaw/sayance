@@ -150,6 +150,26 @@ DEFAULT_CLI_TIMEOUT_SECONDS = 120
 DEFAULT_SHUFFLE_SEED = 20260329
 TOOL_CALL_PATTERN = re.compile(r"TOOL_CALL:\s*get_posix_syntax\((.*?)\)")
 UTILITY_NAME_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9]*$")
+RATE_LIMIT_MAX_RETRIES = 6
+RATE_LIMIT_JITTER_MAX_SECONDS = 1.0
+RATE_LIMIT_MIN_WAIT_SECONDS = {
+    "gemini": 30.0,
+    "claude": 5.0,
+    "codex": 5.0,
+}
+PROVIDER_MIN_CALL_SPACING_SECONDS = {
+    "gemini": 30.0,
+    "claude": 5.0,
+    "codex": 5.0,
+}
+RATE_LIMIT_PATTERNS = (
+    "rate limit",
+    "rate-limit",
+    "too many requests",
+    "429",
+    "quota exceeded",
+    "resource exhausted",
+)
 
 
 _TRAP_PATTERNS_RAW: dict[str, list[str]] = {
@@ -186,6 +206,16 @@ ISSUE8_COMMANDS = {"readlink", "realpath", "timeout"}
 
 _posix_core_cache: str | None = None
 _posix_tldr_cache: dict | None = None
+_provider_request_locks: dict[str, threading.Lock] = {
+    "claude": threading.Lock(),
+    "gemini": threading.Lock(),
+    "codex": threading.Lock(),
+}
+_provider_next_allowed_start: dict[str, float] = {
+    "claude": 0.0,
+    "gemini": 0.0,
+    "codex": 0.0,
+}
 
 
 def _load_posix_core() -> str | None:
@@ -314,6 +344,63 @@ def invoke_cli(llm: str, prompt: str, *, timeout_seconds: int = DEFAULT_CLI_TIME
             stdout=f'{{"error": "{llm} CLI not found"}}',
             latency_ms=latency_ms,
         )
+
+
+def is_rate_limit_response(stdout: str) -> bool:
+    """Best-effort detection of provider/client rate-limit signals."""
+    lowered = stdout.lower()
+    return any(pattern in lowered for pattern in RATE_LIMIT_PATTERNS)
+
+
+def wait_for_provider_slot(llm: str) -> None:
+    """Apply per-provider pacing before invoking any CLI call."""
+    spacing_seconds = PROVIDER_MIN_CALL_SPACING_SECONDS.get(llm, 0.0)
+    if spacing_seconds <= 0:
+        return
+
+    lock = _provider_request_locks.setdefault(llm, threading.Lock())
+    with lock:
+        now = time.monotonic()
+        ready_at = _provider_next_allowed_start.get(llm, 0.0)
+        wait_seconds = max(0.0, ready_at - now)
+        if wait_seconds > 0:
+            time.sleep(wait_seconds)
+            now = time.monotonic()
+        _provider_next_allowed_start[llm] = now + spacing_seconds
+
+
+def invoke_cli_with_backoff(
+    llm: str,
+    prompt: str,
+    *,
+    timeout_seconds: int = DEFAULT_CLI_TIMEOUT_SECONDS,
+) -> CLIInvocation:
+    """Invoke CLI with exponential backoff + jitter on rate-limit responses."""
+    wait_for_provider_slot(llm)
+    invocation = invoke_cli(llm, prompt, timeout_seconds=timeout_seconds)
+    if not is_rate_limit_response(invocation.stdout):
+        return invocation
+
+    total_latency_ms = invocation.latency_ms
+    last_invocation = invocation
+
+    for attempt in range(1, RATE_LIMIT_MAX_RETRIES + 1):
+        exp_wait = 2 ** attempt
+        min_wait = RATE_LIMIT_MIN_WAIT_SECONDS.get(llm, 1.0)
+        wait_seconds = max(float(exp_wait), min_wait) + random.uniform(0, RATE_LIMIT_JITTER_MAX_SECONDS)
+        print(
+            f"  [{llm}] rate-limit detected, retry {attempt}/{RATE_LIMIT_MAX_RETRIES} "
+            f"after {wait_seconds:.2f}s"
+        )
+        time.sleep(wait_seconds)
+        wait_for_provider_slot(llm)
+        retried = invoke_cli(llm, prompt, timeout_seconds=timeout_seconds)
+        total_latency_ms += retried.latency_ms
+        last_invocation = retried
+        if not is_rate_limit_response(retried.stdout):
+            return CLIInvocation(stdout=retried.stdout, latency_ms=total_latency_ms)
+
+    return CLIInvocation(stdout=last_invocation.stdout, latency_ms=total_latency_ms)
 
 
 # ---------------------------------------------------------------------------
@@ -826,7 +913,7 @@ def grade_response(
         response_b64=response_b64,
     )
 
-    raw = invoke_cli(judge, prompt, timeout_seconds=timeout_seconds)
+    raw = invoke_cli_with_backoff(judge, prompt, timeout_seconds=timeout_seconds)
     raw_cleaned = strip_cli_noise(raw.stdout)
 
     # Extract JSON with score field.
@@ -913,7 +1000,7 @@ def run_single(
     # Detect cache state (first call to this provider = cold)
     cache_state = "warm" if already_completed(llm, q_id, 0) else "unknown"
 
-    invocation = invoke_cli(llm, prompt, timeout_seconds=timeout_seconds)
+    invocation = invoke_cli_with_backoff(llm, prompt, timeout_seconds=timeout_seconds)
     response_text, tokens, model, execution = parse_response(
         llm,
         invocation.stdout,
@@ -953,7 +1040,7 @@ def run_single(
                 f"{prompt}\n\nAssistant: {tool_call}\n\n"
                 f"TOOL_RESULT:\n{json.dumps(syntax)}\nNow complete the task."
             )
-            inv2 = invoke_cli(llm, follow_up, timeout_seconds=timeout_seconds)
+            inv2 = invoke_cli_with_backoff(llm, follow_up, timeout_seconds=timeout_seconds)
             resp2, tok2, _, exec2 = parse_response(llm, inv2.stdout, inv2.latency_ms)
 
             response_text = f"{tool_call}\n\n[TOOL RESULT]: {syntax}\n\n{resp2}"
@@ -1015,7 +1102,7 @@ def run_single(
 
 PROVIDER_CONCURRENCY = {
     "claude": 3,
-    "gemini": 5,
+    "gemini": 1,
     "codex": 2,
 }
 
@@ -1039,6 +1126,9 @@ def run_provider_batch(
 ) -> list[QuestionResult]:
     """Run all questions for a single provider with concurrency."""
     workers = max_workers or PROVIDER_CONCURRENCY.get(llm, 2)
+    if llm == "gemini" and workers > 1:
+        print("  [gemini] forcing max_workers=1 due strict quota/rate limit")
+        workers = 1
     results: list[QuestionResult] = []
     tasks_to_run = []
 
