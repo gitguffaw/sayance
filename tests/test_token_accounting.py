@@ -1,17 +1,71 @@
+import contextlib
 import json
+import io
+import tempfile
 import unittest
+from pathlib import Path
 
+import run_benchmark as benchmark
 from run_benchmark import (
+    ExecutionMetrics,
+    QuestionResult,
+    ResponseAnalysis,
+    TokenUsage,
     parse_claude_tokens,
     parse_codex_tokens,
     parse_gemini_execution,
     parse_gemini_tokens,
     raw_usage_input_billable_tokens,
+    save_summary,
+    save_visual_report,
 )
 
 
 def jsonl(*events: dict) -> str:
     return "\n".join(json.dumps(event) for event in events)
+
+
+def make_result(
+    q_id: str,
+    *,
+    response: str,
+    tokens: TokenUsage,
+    latency_ms: int,
+    posix_compliant: bool = False,
+    issue8_refusal: bool = False,
+    inefficiency_mode: str = "minimal_or_near_minimal",
+) -> QuestionResult:
+    return QuestionResult(
+        id=q_id,
+        llm="claude",
+        model="claude-opus-4-6",
+        run_k=0,
+        question=f"Question {q_id}",
+        response=response,
+        tokens=tokens,
+        execution=ExecutionMetrics(
+            latency_ms=latency_ms,
+            step_count=1,
+            tool_call_count=0,
+            tool_calls_by_type={},
+        ),
+        analysis=ResponseAnalysis(
+            minimal_answer="od file",
+            minimal_word_count=2,
+            minimal_shell_token_count=2,
+            response_word_count=max(len(response.split()), 1),
+            minimal_answer_gap_words=0,
+            verbosity_ratio=1.0,
+            posix_compliant=posix_compliant,
+            issue8_refusal=issue8_refusal,
+            inefficiency_mode=inefficiency_mode,
+            estimated_excess_output_tokens=1,
+        ),
+        accuracy=None,
+        execution_record=None,
+        cache_state="cold",
+        timestamp="20260403-000000",
+    )
 
 
 class CodexTokenParsingTests(unittest.TestCase):
@@ -426,6 +480,216 @@ class ClaudeTokenParsingTests(unittest.TestCase):
             ),
             6,
         )
+
+
+class ValidityReportingTests(unittest.TestCase):
+    def test_save_summary_uses_usage_valid_for_tokens_and_visible_for_latency(self) -> None:
+        valid = make_result(
+            "T01",
+            response="od file",
+            tokens=TokenUsage(
+                input=10,
+                input_cached=0,
+                output=4,
+                thoughts=0,
+                billable=14,
+                cost_usd=None,
+                cost_source="calculated",
+                raw={},
+            ),
+            latency_ms=100,
+            posix_compliant=True,
+        )
+        usage_invalid = make_result(
+            "T02",
+            response="fallback explanation",
+            tokens=TokenUsage(
+                input=0,
+                input_cached=0,
+                output=0,
+                thoughts=0,
+                billable=0,
+                cost_usd=None,
+                cost_source="usage_invalid",
+                raw={},
+                usage_valid=False,
+                usage_invalid_reason="missing usage telemetry",
+            ),
+            latency_ms=300,
+        )
+        provider_error = make_result(
+            "T03",
+            response="[ERROR] timeout",
+            tokens=TokenUsage(
+                input=0,
+                input_cached=0,
+                output=0,
+                thoughts=0,
+                billable=0,
+                cost_usd=None,
+                cost_source="error",
+                raw={},
+            ),
+            latency_ms=500,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            original_results_dir = benchmark.RESULTS_DIR
+            benchmark.RESULTS_DIR = Path(tmpdir)
+            try:
+                summary_path = save_summary({"claude": [valid, usage_invalid, provider_error]})
+                payload = json.loads(summary_path.read_text())["llms"]["claude"]
+            finally:
+                benchmark.RESULTS_DIR = original_results_dir
+
+        self.assertEqual(payload["total_results"], 3)
+        self.assertEqual(payload["valid_results"], 1)
+        self.assertEqual(payload["usage_valid_results"], 1)
+        self.assertEqual(payload["report_visible_results"], 2)
+        self.assertEqual(payload["usage_invalid_results"], 1)
+        self.assertEqual(payload["invalid_usage_reasons"], {"missing usage telemetry": 1})
+        self.assertEqual(payload["total_billable_tokens"], 14)
+        self.assertEqual(payload["total_output_tokens"], 4)
+        self.assertEqual(payload["mean_output_tokens"], 4)
+        self.assertEqual(payload["mean_latency_ms"], 200)
+        self.assertEqual(
+            {(entry["question_id"], entry["kind"]) for entry in payload["errors"]},
+            {("T02", "usage_invalid"), ("T03", "provider_error")},
+        )
+
+    def test_save_visual_report_keeps_usage_invalid_non_error_results_visible(self) -> None:
+        valid = make_result(
+            "T01",
+            response="od file",
+            tokens=TokenUsage(
+                input=10,
+                input_cached=0,
+                output=4,
+                thoughts=0,
+                billable=14,
+                cost_usd=None,
+                cost_source="calculated",
+                raw={},
+            ),
+            latency_ms=100,
+            posix_compliant=True,
+        )
+        usage_invalid = make_result(
+            "T02",
+            response="fallback explanation",
+            tokens=TokenUsage(
+                input=0,
+                input_cached=0,
+                output=0,
+                thoughts=0,
+                billable=0,
+                cost_usd=None,
+                cost_source="usage_invalid",
+                raw={},
+                usage_valid=False,
+                usage_invalid_reason="missing usage telemetry",
+            ),
+            latency_ms=300,
+        )
+
+        questions = [
+            {"id": "T01", "tier": 1, "question": "Question T01", "expected_answer": "od file"},
+            {"id": "T02", "tier": 2, "question": "Question T02", "expected_answer": "cksum file"},
+        ]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            original_results_dir = benchmark.RESULTS_DIR
+            benchmark.RESULTS_DIR = Path(tmpdir)
+            try:
+                report_path = save_visual_report({"claude": [valid, usage_invalid]}, questions)
+                report_html = report_path.read_text()
+            finally:
+                benchmark.RESULTS_DIR = original_results_dir
+
+        self.assertIn("2/2 tasks visible", report_html)
+        self.assertIn("1 usage-valid", report_html)
+        self.assertIn("Usage Invalid (1)", report_html)
+        self.assertIn("missing usage telemetry", report_html)
+
+    def test_save_summary_records_parse_error_entries(self) -> None:
+        parse_invalid = make_result(
+            "T09",
+            response="non-json output",
+            tokens=TokenUsage(
+                input=0,
+                input_cached=0,
+                output=0,
+                thoughts=0,
+                billable=0,
+                cost_usd=None,
+                cost_source="parse_error",
+                raw={},
+                usage_valid=False,
+                usage_invalid_reason="response JSON parse failed",
+            ),
+            latency_ms=220,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            original_results_dir = benchmark.RESULTS_DIR
+            benchmark.RESULTS_DIR = Path(tmpdir)
+            try:
+                summary_path = save_summary({"claude": [parse_invalid]})
+                payload = json.loads(summary_path.read_text())["llms"]["claude"]
+            finally:
+                benchmark.RESULTS_DIR = original_results_dir
+
+        self.assertEqual(payload["usage_invalid_results"], 1)
+        self.assertEqual(payload["errors"][0]["kind"], "parse_error")
+        self.assertEqual(payload["errors"][0]["error"], "response JSON parse failed")
+
+    def test_generate_report_mentions_usage_invalid_results(self) -> None:
+        valid = make_result(
+            "T01",
+            response="od file",
+            tokens=TokenUsage(
+                input=10,
+                input_cached=0,
+                output=4,
+                thoughts=0,
+                billable=14,
+                cost_usd=None,
+                cost_source="calculated",
+                raw={},
+            ),
+            latency_ms=100,
+            posix_compliant=True,
+        )
+        usage_invalid = make_result(
+            "T02",
+            response="fallback explanation",
+            tokens=TokenUsage(
+                input=0,
+                input_cached=0,
+                output=0,
+                thoughts=0,
+                billable=0,
+                cost_usd=None,
+                cost_source="usage_invalid",
+                raw={},
+                usage_valid=False,
+                usage_invalid_reason="missing usage telemetry",
+            ),
+            latency_ms=300,
+        )
+
+        questions = [
+            {"id": "T01", "tier": 1, "question": "Question T01"},
+            {"id": "T02", "tier": 2, "question": "Question T02"},
+        ]
+
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            benchmark.generate_report({"claude": [valid, usage_invalid]}, questions)
+        rendered = output.getvalue()
+
+        self.assertIn("Usage invalid: 1/2", rendered)
+        self.assertIn("Latency ms:     mean=200", rendered)
 
 
 if __name__ == "__main__":

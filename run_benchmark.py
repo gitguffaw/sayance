@@ -154,6 +154,75 @@ class CLIInvocation:
     latency_ms: int
 
 
+def result_is_error(result: QuestionResult) -> bool:
+    return result.response.startswith("[ERROR]")
+
+
+def result_is_usage_valid(result: QuestionResult) -> bool:
+    return result.tokens.usage_valid and not result_is_error(result)
+
+
+def result_is_report_visible(result: QuestionResult) -> bool:
+    return not result_is_error(result)
+
+
+def result_is_usage_invalid(result: QuestionResult) -> bool:
+    return result_is_report_visible(result) and not result.tokens.usage_valid
+
+
+def usage_valid_results(results: list[QuestionResult]) -> list[QuestionResult]:
+    return [result for result in results if result_is_usage_valid(result)]
+
+
+def report_visible_results(results: list[QuestionResult]) -> list[QuestionResult]:
+    return [result for result in results if result_is_report_visible(result)]
+
+
+def error_results(results: list[QuestionResult]) -> list[QuestionResult]:
+    return [result for result in results if result_is_error(result)]
+
+
+def usage_invalid_results(results: list[QuestionResult]) -> list[QuestionResult]:
+    return [result for result in results if result_is_usage_invalid(result)]
+
+
+def invalid_usage_reason_counts(results: list[QuestionResult]) -> Counter:
+    return Counter(
+        result.tokens.usage_invalid_reason or result.tokens.cost_source or "unknown"
+        for result in usage_invalid_results(results)
+    )
+
+
+def first_result_model(results: list[QuestionResult]) -> str:
+    if results:
+        return results[0].model
+    return "unknown"
+
+
+def summary_error_entries(results: list[QuestionResult]) -> list[dict]:
+    entries: list[dict] = []
+    for result in results:
+        if result_is_error(result):
+            entries.append(
+                {
+                    "question_id": result.id,
+                    "error": result.response.removeprefix("[ERROR] "),
+                    "latency_ms": result.execution.latency_ms,
+                    "kind": "provider_error",
+                }
+            )
+        elif result_is_usage_invalid(result):
+            entries.append(
+                {
+                    "question_id": result.id,
+                    "error": result.tokens.usage_invalid_reason or "usage telemetry invalid",
+                    "latency_ms": result.execution.latency_ms,
+                    "kind": result.tokens.cost_source if result.tokens.cost_source == "parse_error" else "usage_invalid",
+                }
+            )
+    return entries
+
+
 # ---------------------------------------------------------------------------
 # CLI invocation
 # ---------------------------------------------------------------------------
@@ -483,7 +552,12 @@ def parse_gemini_tokens(raw_json: dict) -> TokenUsage:
     )
 
 
-def invalid_token_usage(reason: str, raw: dict | None = None) -> TokenUsage:
+def invalid_token_usage(
+    reason: str,
+    raw: dict | None = None,
+    *,
+    cost_source: str = "usage_invalid",
+) -> TokenUsage:
     """Return a token payload that preserves explicit usage-invalid state."""
     return TokenUsage(
         input=0,
@@ -492,7 +566,7 @@ def invalid_token_usage(reason: str, raw: dict | None = None) -> TokenUsage:
         thoughts=0,
         billable=0,
         cost_usd=None,
-        cost_source="usage_invalid",
+        cost_source=cost_source,
         raw=raw or {},
         usage_valid=False,
         usage_invalid_reason=reason,
@@ -856,9 +930,10 @@ def parse_response(
     try:
         data = json.loads(raw_stdout)
     except json.JSONDecodeError:
-        return raw_stdout, TokenUsage(
-            input=0, input_cached=0, output=0, thoughts=0,
-            billable=0, cost_usd=None, cost_source="parse_error", raw={},
+        return raw_stdout, invalid_token_usage(
+            "response JSON parse failed",
+            raw={"raw_stdout": raw_stdout[:200]},
+            cost_source="parse_error",
         ), "unknown", ExecutionMetrics(
             latency_ms=latency_ms,
             step_count=1,
@@ -894,9 +969,9 @@ def parse_response(
         model = next(iter(models), "unknown")
         return text, tokens, model, parse_gemini_execution(data, latency_ms)
 
-    return raw_stdout, TokenUsage(
-        input=0, input_cached=0, output=0, thoughts=0,
-        billable=0, cost_usd=None, cost_source="unknown_llm", raw={},
+    return raw_stdout, invalid_token_usage(
+        "unknown llm parser",
+        cost_source="unknown_llm",
     ), "unknown", ExecutionMetrics(
         latency_ms=latency_ms,
         step_count=1,
@@ -1867,15 +1942,18 @@ def run_provider_batch(
                 write_incremental(result)
 
                 # Status indicator
-                if result.tokens.billable > 0:
+                if result_is_report_visible(result):
                     acc = ""
-                    if result.accuracy and result.accuracy.score >= 0:
+                    if result_is_usage_valid(result) and result.accuracy and result.accuracy.score >= 0:
                         sym = "✓" if result.accuracy.score == 2 else "△" if result.accuracy.score == 1 else "✗"
                         acc = f" {sym}{result.accuracy.score}/2"
                     exec_info = ""
                     if result.execution_record and not result.execution_record.exec_skipped:
                         sym = "✓" if result.execution_record.exec_success else "✗"
                         exec_info = f" exec:{sym}"
+                    usage_info = ""
+                    if not result.tokens.usage_valid:
+                        usage_info = f" usage:INVALID({result.tokens.usage_invalid_reason})"
                     print(
                         f"  [{q_id}] run {run_idx} — "
                         f"in:{result.tokens.input} out:{result.tokens.output} "
@@ -1884,7 +1962,7 @@ def run_provider_batch(
                         f"billable:{result.tokens.billable} "
                         f"lat:{result.execution.latency_ms}ms "
                         f"mode:{result.analysis.inefficiency_mode}"
-                        f"{acc}{exec_info}"
+                        f"{acc}{exec_info}{usage_info}"
                     )
                 else:
                     print(f"  [{q_id}] run {run_idx} — {result.response[:60]}")
@@ -2003,27 +2081,30 @@ def generate_report(all_results: dict[str, list[QuestionResult]], questions: lis
         if not results:
             continue
 
-        valid = [r for r in results if r.tokens.billable > 0]
-        if not valid:
-            print(f"  {llm.upper()}: No valid results\n")
+        token_results = usage_valid_results(results)
+        visible_results = report_visible_results(results)
+        provider_errors = error_results(results)
+        invalid_usage = usage_invalid_results(results)
+        if not token_results and not visible_results and not provider_errors:
+            print(f"  {llm.upper()}: No reportable results\n")
             continue
 
         # Detect model from first result
-        model = valid[0].model if valid else "unknown"
+        model = first_result_model(token_results or visible_results or provider_errors)
 
-        inputs = [r.tokens.input for r in valid]
-        outputs = [r.tokens.output for r in valid]
-        cached = [r.tokens.input_cached for r in valid]
-        thoughts = [r.tokens.thoughts for r in valid]
-        billable = [r.tokens.billable for r in valid]
-        latency = [r.execution.latency_ms for r in valid]
-        steps = [r.execution.step_count for r in valid]
-        excess = [r.analysis.estimated_excess_output_tokens for r in valid]
-        costs = [r.tokens.cost_usd for r in valid if r.tokens.cost_usd is not None]
-        compliant = [r for r in valid if r.analysis.posix_compliant]
-        issue8_refusals = [r for r in valid if r.analysis.issue8_refusal]
-        inefficiency_modes = Counter(r.analysis.inefficiency_mode for r in valid)
-        adjustments = [tool_simulation_adjustment(r.tokens) for r in valid]
+        inputs = [r.tokens.input for r in token_results]
+        outputs = [r.tokens.output for r in token_results]
+        cached = [r.tokens.input_cached for r in token_results]
+        thoughts = [r.tokens.thoughts for r in token_results]
+        billable = [r.tokens.billable for r in token_results]
+        latency = [r.execution.latency_ms for r in visible_results]
+        steps = [r.execution.step_count for r in visible_results]
+        excess = [r.analysis.estimated_excess_output_tokens for r in token_results]
+        costs = [r.tokens.cost_usd for r in token_results if r.tokens.cost_usd is not None]
+        compliant = [r for r in visible_results if r.analysis.posix_compliant]
+        issue8_refusals = [r for r in visible_results if r.analysis.issue8_refusal]
+        inefficiency_modes = Counter(r.analysis.inefficiency_mode for r in visible_results)
+        adjustments = [tool_simulation_adjustment(r.tokens) for r in token_results]
 
         def stats(values: list[int | float]) -> str:
             if not values:
@@ -2056,30 +2137,42 @@ def generate_report(all_results: dict[str, list[QuestionResult]], questions: lis
             print(f"    Billable (sim-adjusted): {stats(adjusted_billable)}")
         print()
 
-        errors = [r for r in results if r.response.startswith("[ERROR]")]
-        if errors:
-            print(f"    Errors: {len(errors)}/{len(results)} questions failed")
-            for r in errors:
+        if provider_errors:
+            print(f"    Errors: {len(provider_errors)}/{len(results)} questions failed")
+            for r in provider_errors:
                 error_type = r.response.removeprefix("[ERROR] ")
                 print(f"      {r.id}: {error_type} (after {r.execution.latency_ms}ms)")
             print()
 
-        cold = [r for r in valid if r.cache_state == "cold"]
-        warm = [r for r in valid if r.cache_state == "warm"]
-        print(f"    Cache: {len(cold)} cold, {len(warm)} warm, {len(valid) - len(cold) - len(warm)} unknown")
+        if invalid_usage:
+            reasons = ", ".join(
+                f"{reason}={count}"
+                for reason, count in invalid_usage_reason_counts(results).most_common()
+            )
+            print(f"    Usage invalid: {len(invalid_usage)}/{len(results)} ({reasons})")
+
+        cold = [r for r in token_results if r.cache_state == "cold"]
+        warm = [r for r in token_results if r.cache_state == "warm"]
         print(
-            f"    POSIX compliance: {len(compliant)}/{len(valid)} "
-            f"({len(compliant) / len(valid) * 100:.0f}%)"
+            f"    Cache: {len(cold)} cold, {len(warm)} warm, "
+            f"{len(token_results) - len(cold) - len(warm)} unknown"
+        )
+        compliance_denominator = len(visible_results)
+        print(
+            f"    POSIX compliance: {len(compliant)}/{compliance_denominator} "
+            f"({len(compliant) / compliance_denominator * 100:.0f}%)"
+            if compliance_denominator
+            else "    POSIX compliance: n/a"
         )
         print(f"    Issue 8 refusals: {len(issue8_refusals)}")
-        print(f"    Tool calls: {sum(r.execution.tool_call_count for r in valid)} total")
+        print(f"    Tool calls: {sum(r.execution.tool_call_count for r in visible_results)} total")
         if inefficiency_modes:
             print(
                 "    Inefficiency modes: "
                 + ", ".join(f"{mode}={count}" for mode, count in inefficiency_modes.most_common())
             )
 
-        graded = [r for r in valid if r.accuracy and r.accuracy.score >= 0]
+        graded = [r for r in visible_results if r.accuracy and r.accuracy.score >= 0]
         if graded:
             scores = [r.accuracy.score for r in graded]
             total = sum(scores)
@@ -2088,7 +2181,7 @@ def generate_report(all_results: dict[str, list[QuestionResult]], questions: lis
             print(f"    Accuracy:  {total}/{max_score} ({pct:.0f}%)")
 
         # Track 3: execution validation summary
-        executed = [r for r in valid if r.execution_record and not r.execution_record.exec_skipped]
+        executed = [r for r in visible_results if r.execution_record and not r.execution_record.exec_skipped]
         if executed:
             successes = sum(1 for r in executed if r.execution_record.exec_success)
             rate = successes / len(executed) * 100
@@ -2103,27 +2196,33 @@ def generate_report(all_results: dict[str, list[QuestionResult]], questions: lis
     tier_names = {1: "Tier 1 (Common)", 2: "Tier 2 (Less common)", 3: "Tier 3 (POSIX-blind spot)"}
 
     for llm, results in all_results.items():
-        valid = [r for r in results if r.tokens.billable > 0]
-        if not valid:
+        visible_results = report_visible_results(results)
+        if not visible_results:
             continue
 
-        model = valid[0].model if valid else "unknown"
+        model = first_result_model(visible_results)
         print(f"  {llm.upper()} ({model})")
 
         for tier_num, tier_name in tier_names.items():
-            tier_results = [r for r in valid if q_lookup.get(r.id, {}).get("tier") == tier_num]
+            tier_results = [r for r in visible_results if q_lookup.get(r.id, {}).get("tier") == tier_num]
             if not tier_results:
                 continue
-            out_tokens = [r.tokens.output for r in tier_results]
-            excess_tokens = [r.analysis.estimated_excess_output_tokens for r in tier_results]
+            tier_usage_valid = [r for r in tier_results if r.tokens.usage_valid]
+            out_tokens = [r.tokens.output for r in tier_usage_valid]
+            excess_tokens = [r.analysis.estimated_excess_output_tokens for r in tier_usage_valid]
             latency_ms = [r.execution.latency_ms for r in tier_results]
             compliant_count = sum(1 for r in tier_results if r.analysis.posix_compliant)
-            mean_out = sum(out_tokens) / len(out_tokens)
-            mean_excess = sum(excess_tokens) / len(excess_tokens)
             mean_latency = sum(latency_ms) / len(latency_ms)
+            if out_tokens:
+                output_summary = (
+                    f"output mean={sum(out_tokens) / len(out_tokens):.0f} "
+                    f"excess mean={sum(excess_tokens) / len(excess_tokens):.0f}"
+                )
+            else:
+                output_summary = "output mean=n/a excess mean=n/a"
             print(
                 f"    {tier_name}: {len(tier_results)} questions, "
-                f"output mean={mean_out:.0f} excess mean={mean_excess:.0f} "
+                f"{output_summary} "
                 f"latency mean={mean_latency:.0f}ms compliant={compliant_count}/{len(tier_results)}"
             )
 
@@ -2133,11 +2232,11 @@ def generate_report(all_results: dict[str, list[QuestionResult]], questions: lis
     print(f"  TASK SCORECARDS (sorted by estimated excess output)")
     print(f"  {'─' * 70}\n")
 
-    all_valid = []
+    all_visible = []
     for results in all_results.values():
-        all_valid.extend(r for r in results if r.tokens.billable > 0)
+        all_visible.extend(report_visible_results(results))
 
-    by_excess = sorted(all_valid, key=lambda r: r.analysis.estimated_excess_output_tokens, reverse=True)
+    by_excess = sorted(all_visible, key=lambda r: r.analysis.estimated_excess_output_tokens, reverse=True)
     for r in by_excess:
         tier = q_lookup.get(r.id, {}).get("tier", "?")
         compliance = "posix" if r.analysis.posix_compliant else "miss"
@@ -2168,15 +2267,21 @@ def save_summary(all_results: dict[str, list[QuestionResult]]) -> Path:
     }
 
     for llm, results in all_results.items():
-        valid = [r for r in results if r.tokens.billable > 0]
-        model = valid[0].model if valid else "unknown"
-        inefficiency_modes = Counter(r.analysis.inefficiency_mode for r in valid)
-        adjustments = [tool_simulation_adjustment(r.tokens) for r in valid]
+        token_results = usage_valid_results(results)
+        visible_results = report_visible_results(results)
+        invalid_usage = usage_invalid_results(results)
+        model = first_result_model(token_results or visible_results or error_results(results))
+        inefficiency_modes = Counter(r.analysis.inefficiency_mode for r in visible_results)
+        adjustments = [tool_simulation_adjustment(r.tokens) for r in token_results]
         summary["llms"][llm] = {
             "model": model,
             "total_results": len(results),
-            "valid_results": len(valid),
-            "total_billable_tokens": sum(r.tokens.billable for r in valid),
+            "valid_results": len(token_results),
+            "usage_valid_results": len(token_results),
+            "report_visible_results": len(visible_results),
+            "usage_invalid_results": len(invalid_usage),
+            "invalid_usage_reasons": dict(invalid_usage_reason_counts(results)),
+            "total_billable_tokens": sum(r.tokens.billable for r in token_results),
             "total_simulation_adjusted_billable_tokens": sum(
                 adjustment.adjusted_billable for adjustment in adjustments
             ),
@@ -2186,43 +2291,35 @@ def save_summary(all_results: dict[str, list[QuestionResult]]) -> Path:
             "total_tool_call_stub_output_tokens": sum(
                 adjustment.tool_call_output for adjustment in adjustments
             ),
-            "total_output_tokens": sum(r.tokens.output for r in valid),
+            "total_output_tokens": sum(r.tokens.output for r in token_results),
             "total_estimated_excess_output_tokens": sum(
-                r.analysis.estimated_excess_output_tokens for r in valid
+                r.analysis.estimated_excess_output_tokens for r in token_results
             ),
             "total_cost_usd": sum(
-                r.tokens.cost_usd for r in valid if r.tokens.cost_usd is not None
+                r.tokens.cost_usd for r in token_results if r.tokens.cost_usd is not None
             ),
             "mean_output_tokens": (
-                sum(r.tokens.output for r in valid) / len(valid) if valid else 0
+                sum(r.tokens.output for r in token_results) / len(token_results) if token_results else 0
             ),
             "mean_latency_ms": (
-                sum(r.execution.latency_ms for r in valid) / len(valid) if valid else 0
+                sum(r.execution.latency_ms for r in visible_results) / len(visible_results) if visible_results else 0
             ),
             "mean_step_count": (
-                sum(r.execution.step_count for r in valid) / len(valid) if valid else 0
+                sum(r.execution.step_count for r in visible_results) / len(visible_results) if visible_results else 0
             ),
             "posix_compliance_rate": (
-                sum(1 for r in valid if r.analysis.posix_compliant) / len(valid)
-                if valid else 0
+                sum(1 for r in visible_results if r.analysis.posix_compliant) / len(visible_results)
+                if visible_results else 0
             ),
-            "issue8_refusal_count": sum(1 for r in valid if r.analysis.issue8_refusal),
+            "issue8_refusal_count": sum(1 for r in visible_results if r.analysis.issue8_refusal),
             "inefficiency_modes": dict(inefficiency_modes),
             # Back-compat for older compare/report tooling.
             "failure_modes": dict(inefficiency_modes),
-            "errors": [
-                {
-                    "question_id": r.id,
-                    "error": r.response.removeprefix("[ERROR] "),
-                    "latency_ms": r.execution.latency_ms,
-                }
-                for r in results
-                if r.response.startswith("[ERROR]")
-            ],
+            "errors": summary_error_entries(results),
         }
 
         # Track 3: execution validation metrics
-        executed = [r for r in valid if r.execution_record and not r.execution_record.exec_skipped]
+        executed = [r for r in visible_results if r.execution_record and not r.execution_record.exec_skipped]
         if executed:
             successes = sum(1 for r in executed if r.execution_record.exec_success)
             summary["llms"][llm]["exec_success_rate"] = successes / len(executed)
@@ -2244,17 +2341,23 @@ def save_visual_report(
     report_path = RESULTS_DIR / f"report-{ts}.html"
 
     q_lookup = {q["id"]: q for q in questions}
-    all_valid = [
+    all_usage_valid = [
         result
         for results in all_results.values()
         for result in results
-        if result.tokens.billable > 0
+        if result_is_usage_valid(result)
+    ]
+    all_visible = [
+        result
+        for results in all_results.values()
+        for result in results
+        if result_is_report_visible(result)
     ]
     all_errors = [
         result
         for results in all_results.values()
         for result in results
-        if result.response.startswith("[ERROR]")
+        if result_is_error(result)
     ]
     all_flat = [
         result
@@ -2268,43 +2371,51 @@ def save_visual_report(
     def pct(value: float) -> str:
         return f"{value * 100:.0f}%"
 
-    max_output = max((r.tokens.output for r in all_valid), default=1)
-    max_excess = max((r.analysis.estimated_excess_output_tokens for r in all_valid), default=1)
-    max_latency = max((r.execution.latency_ms for r in all_valid), default=1)
+    max_output = max((r.tokens.output for r in all_visible), default=1)
+    max_excess = max((r.analysis.estimated_excess_output_tokens for r in all_visible), default=1)
+    max_latency = max((r.execution.latency_ms for r in all_visible), default=1)
 
     # --- Model cards ---
     model_cards = []
     for llm, results in all_results.items():
-        valid = [r for r in results if r.tokens.billable > 0]
-        errors = [r for r in results if r.response.startswith("[ERROR]")]
-        if not valid:
+        token_results = usage_valid_results(results)
+        visible_results = report_visible_results(results)
+        errors = error_results(results)
+        invalid_usage = usage_invalid_results(results)
+        if not visible_results and not errors:
             continue
-        inefficiency_modes = Counter(r.analysis.inefficiency_mode for r in valid)
+        inefficiency_modes = Counter(r.analysis.inefficiency_mode for r in visible_results)
         model_cards.append({
             "llm": llm,
-            "model": valid[0].model,
-            "count": len(valid),
+            "model": first_result_model(token_results or visible_results or errors),
+            "count": len(visible_results),
+            "usage_valid_count": len(token_results),
+            "invalid_usage_count": len(invalid_usage),
             "total": len(results),
             "error_count": len(errors),
-            "compliance_rate": sum(1 for r in valid if r.analysis.posix_compliant) / len(valid),
-            "issue8_refusal_count": sum(1 for r in valid if r.analysis.issue8_refusal),
-            "mean_output": mean([r.tokens.output for r in valid]),
-            "mean_excess": mean([r.analysis.estimated_excess_output_tokens for r in valid]),
-            "mean_latency": mean([r.execution.latency_ms for r in valid]),
-            "mean_steps": mean([r.execution.step_count for r in valid]),
-            "tool_calls": sum(r.execution.tool_call_count for r in valid),
-            "total_cost": sum(r.tokens.cost_usd for r in valid if r.tokens.cost_usd is not None),
+            "compliance_rate": (
+                sum(1 for r in visible_results if r.analysis.posix_compliant) / len(visible_results)
+                if visible_results else 0
+            ),
+            "issue8_refusal_count": sum(1 for r in visible_results if r.analysis.issue8_refusal),
+            "mean_output": mean([r.tokens.output for r in token_results]),
+            "mean_excess": mean([r.analysis.estimated_excess_output_tokens for r in token_results]),
+            "mean_latency": mean([r.execution.latency_ms for r in visible_results]),
+            "mean_steps": mean([r.execution.step_count for r in visible_results]),
+            "tool_calls": sum(r.execution.tool_call_count for r in visible_results),
+            "total_cost": sum(r.tokens.cost_usd for r in token_results if r.tokens.cost_usd is not None),
             "inefficiency_modes": inefficiency_modes,
             "errors": errors,
+            "invalid_usage": invalid_usage,
         })
 
     # --- Tier breakdown per model ---
     tier_breakdown_rows = []
     for card in model_cards:
         llm = card["llm"]
-        valid = [r for r in all_results[llm] if r.tokens.billable > 0]
+        visible_results = report_visible_results(all_results[llm])
         for tier_num, tier_label in [(1, "Tier 1 — Common"), (2, "Tier 2 — Less common"), (3, "Tier 3 — Blind spot")]:
-            tier_results = [r for r in valid if q_lookup.get(r.id, {}).get("tier") == tier_num]
+            tier_results = [r for r in visible_results if q_lookup.get(r.id, {}).get("tier") == tier_num]
             if not tier_results:
                 continue
             compliant = sum(1 for r in tier_results if r.analysis.posix_compliant)
@@ -2320,11 +2431,11 @@ def save_visual_report(
             })
 
     top_gap_results = sorted(
-        all_valid,
+        all_visible,
         key=lambda r: r.analysis.estimated_excess_output_tokens,
         reverse=True,
     )[:12]
-    issue8_results = [r for r in all_valid if r.analysis.issue8_refusal][:8]
+    issue8_results = [r for r in all_visible if r.analysis.issue8_refusal][:8]
 
     # --- All results for full scorecard ---
     all_sorted = sorted(
@@ -2346,9 +2457,14 @@ def save_visual_report(
 
     def result_card(result: QuestionResult) -> str:
         tier = q_lookup.get(result.id, {}).get("tier", "?")
-        is_error = result.response.startswith("[ERROR]")
-        status = "ERROR" if is_error else ("POSIX" if result.analysis.posix_compliant else "MISS")
-        status_class = "error" if is_error else ("good" if result.analysis.posix_compliant else "bad")
+        is_error = result_is_error(result)
+        is_usage_invalid = result_is_usage_invalid(result)
+        status = (
+            "ERROR"
+            if is_error else
+            ("USAGE INVALID" if is_usage_invalid else ("POSIX" if result.analysis.posix_compliant else "MISS"))
+        )
+        status_class = "error" if is_error else ("bad" if is_usage_invalid else ("good" if result.analysis.posix_compliant else "bad"))
         excerpt = result.response.strip()[:480]
         return f"""
         <article class="task-card">
@@ -2356,7 +2472,7 @@ def save_visual_report(
             <span class="pill model-pill">{escape(result.llm.upper())}</span>
             <span class="pill tier-pill">T{tier}</span>
             <span class="pill mode-pill {escape(status_class)}">{escape(status)}</span>
-            <span class="pill failure-pill">{escape(result.analysis.inefficiency_mode.replace('_', ' ') if not is_error else result.response.removeprefix('[ERROR] '))}</span>
+            <span class="pill failure-pill">{escape(result.tokens.usage_invalid_reason if is_usage_invalid else (result.analysis.inefficiency_mode.replace('_', ' ') if not is_error else result.response.removeprefix('[ERROR] ')))}</span>
           </div>
           <h3>{escape(result.id)} · {escape(result.question)}</h3>
           <div class="task-stats">
@@ -2420,6 +2536,19 @@ def save_visual_report(
               <ul>{error_items}</ul>
             </div>
             """
+        invalid_usage_html = ""
+        if card["invalid_usage"]:
+            invalid_items = "".join(
+                f"<li><strong>{escape(r.id)}</strong>: {escape(r.tokens.usage_invalid_reason)} "
+                f"(after {r.execution.latency_ms:,}ms)</li>"
+                for r in card["invalid_usage"]
+            )
+            invalid_usage_html = f"""
+            <div class="error-list">
+              <span class="error-label">Usage Invalid ({card['invalid_usage_count']})</span>
+              <ul>{invalid_items}</ul>
+            </div>
+            """
         cost_line = ""
         if card["total_cost"] > 0:
             cost_line = f"<div><span>Total cost</span><strong>${card['total_cost']:.4f}</strong></div>"
@@ -2433,7 +2562,7 @@ def save_visual_report(
             </div>
             <div class="compliance-badge">{pct(card["compliance_rate"])}</div>
           </div>
-          <p class="caption">{card["count"]}/{card["total"]} tasks valid · {card["issue8_refusal_count"]} Issue 8 refusals · {card["tool_calls"]} tool calls</p>
+          <p class="caption">{card["count"]}/{card["total"]} tasks visible · {card["usage_valid_count"]} usage-valid · {card["issue8_refusal_count"]} Issue 8 refusals · {card["tool_calls"]} tool calls</p>
           {metric_bar(card["mean_output"], max(max_output, 1), "Mean output tokens")}
           {metric_bar(card["mean_excess"], max(max_excess, 1), "Mean excess output")}
           {metric_bar(card["mean_latency"], max(max_latency, 1), "Mean latency", " ms")}
@@ -2443,6 +2572,7 @@ def save_visual_report(
             <div><span>Inefficiency modes</span><strong>{escape(inefficiency_summary or 'none')}</strong></div>
           </div>
           {error_html}
+          {invalid_usage_html}
         </section>
         """)
 
@@ -2882,7 +3012,7 @@ def save_visual_report(
         <div class="hero-stat"><span>Spec</span><strong>Issue 8</strong></div>
         <div class="hero-stat"><span>Utilities</span><strong>155</strong></div>
         <div class="hero-stat"><span>Tasks</span><strong>{len(questions)}</strong></div>
-        <div class="hero-stat"><span>Valid</span><strong>{len(all_valid)}/{len(all_flat)}</strong></div>
+        <div class="hero-stat"><span>Visible</span><strong>{len(all_visible)}/{len(all_flat)}</strong></div>
         <div class="hero-stat"><span>Errors</span><strong style="color: {'var(--bad)' if all_errors else 'var(--good)'}">{len(all_errors)}</strong></div>
       </div>
     </section>
