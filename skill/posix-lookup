@@ -1,0 +1,54 @@
+#!/usr/bin/env python3
+"""posix-lookup: POSIX Issue 8 utility syntax reference.
+
+Usage:
+    posix-lookup <utility>       Show syntax and examples
+    posix-lookup --list          List all available utilities
+    posix-lookup --json <util>   Output as JSON
+"""
+import json
+import sys
+from pathlib import Path
+
+_HERE = Path(__file__).resolve().parent
+# Installed: posix-tldr.json is next to this script
+# Dev repo: posix-tldr.json is one level up (repo root)
+DATA = _HERE / "posix-tldr.json"
+if not DATA.exists():
+    DATA = _HERE.parent / "posix-tldr.json"
+
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: posix-lookup <utility>", file=sys.stderr)
+        print("       posix-lookup --list", file=sys.stderr)
+        sys.exit(1)
+
+    tldr = json.loads(DATA.read_text())
+    arg = sys.argv[1].lower()
+
+    if arg == "--list":
+        for name in sorted(tldr):
+            print(name)
+        return
+
+    if arg == "--json" and len(sys.argv) > 2:
+        util = sys.argv[2].lower()
+        entry = tldr.get(util)
+        if not entry:
+            print(json.dumps({"error": f"No entry for '{util}'"}))
+            sys.exit(1)
+        print(json.dumps({util: entry}))
+        return
+
+    entry = tldr.get(arg)
+    if not entry:
+        print(f"No entry for '{arg}'. Run posix-lookup --list for available utilities.", file=sys.stderr)
+        sys.exit(1)
+
+    for line in entry:
+        print(f"  {line}")
+
+
+if __name__ == "__main__":
+    main()
