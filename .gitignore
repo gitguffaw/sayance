@@ -1,8 +1,5 @@
 .DS_Store
-results/
-results-stepup/
-results-execute/
-results-stepup-execute/
+results/**
 state/
 docs/archive/
 docs/solutions/workflow/

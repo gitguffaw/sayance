@@ -43,9 +43,9 @@ POSIX_TLDR_FILE = SCRIPT_DIR / "posix-tldr.json"
 POSIX_UTILITIES_FILE = SCRIPT_DIR / "posix-utilities.txt"
 FIXTURES_DIR = SCRIPT_DIR / "fixtures"
 RESULTS_DIR = SCRIPT_DIR / "results"
-RESULTS_DIR_STEPUP = SCRIPT_DIR / "results-stepup"
-RESULTS_DIR_EXECUTE = SCRIPT_DIR / "results-execute"
-RESULTS_DIR_STEPUP_EXECUTE = SCRIPT_DIR / "results-stepup-execute"
+RESULTS_DIR_STEPUP = RESULTS_DIR / "stepup"
+RESULTS_DIR_EXECUTE = RESULTS_DIR / "execute"
+RESULTS_DIR_STEPUP_EXECUTE = RESULTS_DIR / "stepup-execute"
 
 # ---------------------------------------------------------------------------
 # Data model (frozen — measurement data must not be mutated after capture)
@@ -3175,7 +3175,7 @@ def main():
     )
     parser.add_argument(
         "--results-dir",
-        help="Override results directory for this run (relative to repo root or absolute path)",
+        help="Override results directory for this run (absolute path, or relative path under results/)",
     )
     parser.add_argument(
         "--compare", nargs="+", metavar="NAME=PATH",
@@ -3214,7 +3214,12 @@ def main():
     if args.results_dir:
         custom_results_dir = Path(args.results_dir)
         if not custom_results_dir.is_absolute():
-            custom_results_dir = SCRIPT_DIR / custom_results_dir
+            relative_parts = [part for part in custom_results_dir.parts if part not in ("", ".")]
+            if not relative_parts or relative_parts[0] != "results":
+                parser.error("--results-dir relative paths must start with 'results/'")
+            if ".." in relative_parts:
+                parser.error("--results-dir relative paths must not contain '..'")
+            custom_results_dir = SCRIPT_DIR.joinpath(*relative_parts)
         RESULTS_DIR = custom_results_dir
 
     judge = None if args.no_grade else args.judge

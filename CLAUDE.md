@@ -52,7 +52,7 @@ python3 run_benchmark.py --llms gemini claude codex
 python3 run_benchmark.py --llms gemini --max-workers 1 --delay 30
 
 # Run specific questions
-python3 run_benchmark.py --questions Q1 Q2 Q16
+python3 run_benchmark.py --questions T01 T02 T16
 
 # Change the grading judge
 python3 run_benchmark.py --judge claude
@@ -66,7 +66,7 @@ Single-file CLI tool (`run_benchmark.py`) that:
 1. Calls LLM CLIs via `subprocess.run()` (list form, no shell injection)
 2. Parses JSON output from each CLI for token usage data
 3. Uses LLM-as-judge for accuracy grading (secondary metric)
-4. Saves results to `results/` as JSON
+4. Saves results under `results/` as JSON (`results/` for Track 1, `results/stepup/` for Track 2, `results/execute/` for Track 3, and `results/stepup-execute/` for Track 3b)
 
 **CLI invocation patterns:**
 - Claude: `claude -p "prompt" --output-format json`

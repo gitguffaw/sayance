@@ -10,7 +10,7 @@
 
 ## Project Structure & Module Organization
 
-This repository is a small, stdlib-only Python benchmark. `run_benchmark.py` is the main entrypoint and contains the CLI, provider adapters, grading flow, and JSON parsing. Benchmark inputs live in `benchmark_data.json`, and the POSIX utility source of truth lives in `posix-utilities.txt`. Research notes and planning docs are under `docs/brainstorms/`, `docs/plans/`, and `docs/solutions/`. Generated output is written to `results/`, which is ignored by Git.
+This repository is a small, stdlib-only Python benchmark. `run_benchmark.py` is the main entrypoint and contains the CLI, provider adapters, grading flow, and JSON parsing. Benchmark inputs live in `benchmark_data.json`, and the POSIX utility source of truth lives in `posix-utilities.txt`. Research notes and planning docs are under `docs/brainstorms/`, `docs/plans/`, and `docs/solutions/`. Generated output is written under `results/` (including mode-specific subdirectories like `results/stepup/`, `results/execute/`, and `results/stepup-execute/`) and is ignored by Git.
 
 ## Build, Test, and Development Commands
 
@@ -19,7 +19,7 @@ Use Python directly; there is no virtualenv or build step.
 - `python3 run_benchmark.py --dry-run` checks question selection and CLI wiring without making API calls.
 - `python3 run_benchmark.py --validate-bridge` verifies `posix-core.md` + `posix-tldr.json` cover all 155 utilities and exits.
 - `python3 run_benchmark.py --llms gemini claude` runs selected providers only.
-- `python3 run_benchmark.py --questions Q1 Q2 --k 3` repeats specific questions for comparison.
+- `python3 run_benchmark.py --questions T01 T02 --k 3` repeats specific questions for comparison.
 - `python3 run_benchmark.py --judge claude` enables grading when you want token and accuracy data.
 - `python3 run_benchmark.py --no-grade` skips LLM-as-judge grading (token-only mode).
 - `python3 run_benchmark.py --inject-posix` runs the Step-Up simulation (Track 2): injects `posix-core.md` into the prompt and simulates Tier 2 tool calls. It now fails fast if bridge coverage is incomplete.
@@ -38,7 +38,7 @@ Follow the existing Python style in `run_benchmark.py`: 4-space indentation, exp
 There is no dedicated `tests/` directory yet. Use a dual-lane validation approach:
 - Lane A (legacy): dry runs and focused benchmark runs.
 - Lane B (additive): installed product-path checks via `make test-product`.
-For logic changes, run `python3 -m py_compile run_benchmark.py`, at least one targeted Lane A command such as `python3 run_benchmark.py --dry-run --questions Q1`, and Lane B product conformance when packaging/skill behavior is touched. If you change parsing, grading, or result serialization, note a sample JSON path from `results/`, but do not commit generated output.
+For logic changes, run `python3 -m py_compile run_benchmark.py`, at least one targeted Lane A command such as `python3 run_benchmark.py --dry-run --questions T01`, and Lane B product conformance when packaging/skill behavior is touched. If you change parsing, grading, or result serialization, note a sample JSON path from `results/`, but do not commit generated output.
 If GitHub required status checks are unavailable for this repository plan, enforce Lane B as a local gate before merge/release by running `make test-product` and `make test-product-negative`.
 
 ## Commit & Pull Request Guidelines
