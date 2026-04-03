@@ -39,6 +39,7 @@ There is no dedicated `tests/` directory yet. Use a dual-lane validation approac
 - Lane A (legacy): dry runs and focused benchmark runs.
 - Lane B (additive): installed product-path checks via `make test-product`.
 For logic changes, run `python3 -m py_compile run_benchmark.py`, at least one targeted Lane A command such as `python3 run_benchmark.py --dry-run --questions Q1`, and Lane B product conformance when packaging/skill behavior is touched. If you change parsing, grading, or result serialization, note a sample JSON path from `results/`, but do not commit generated output.
+If GitHub required status checks are unavailable for this repository plan, enforce Lane B as a local gate before merge/release by running `make test-product` and `make test-product-negative`.
 
 ## Commit & Pull Request Guidelines
 

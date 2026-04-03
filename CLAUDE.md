@@ -94,6 +94,7 @@ Single-file CLI tool (`run_benchmark.py`) that:
 - [OBSERVED 2026-04-02] **Codex git-check behavior**: Use `--skip-git-repo-check` when running outside a git repository. In this repo, use it only if you need to bypass local checks.
 - [OBSERVED 2026-04-02] **POSIX Issue 8 vs 7**: `readlink`, `realpath`, and `timeout` are now POSIX (Issue 8, 2024). LLMs trained on older data will incorrectly call these "not POSIX." `c99` is now `c17`. The batch `q*` utilities and `fort77` were removed.
 - [OBSERVED 2026-04-03] **Bridge completeness gate**: Incomplete semantic bridge coverage can corrupt Step-Up benchmark runs. `run_benchmark.py --inject-posix` now performs strict preflight validation and exits if `posix-core.md` or `posix-tldr.json` drift from 155-utility coverage.
+- [OBSERVED 2026-04-03] **GitHub merge-gate plan limit (this repo)**: `gitguffaw/posix` has Actions enabled, but branch protection required status checks for this private repository return HTTP 403 ("Upgrade to GitHub Pro or make this repository public"). Lane B CI can run for visibility; enforce Lane B locally until plan/visibility changes.
 
 ## Important Context
 
