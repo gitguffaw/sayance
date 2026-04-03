@@ -1,27 +1,50 @@
-SKILL_DIR := $(HOME)/.claude/skills/posix
-BIN_DIR   := $(HOME)/.local/bin
-REPO_DIR  := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+CLAUDE_SKILL_DIR := $(HOME)/.claude/skills/posix
+CODEX_SKILL_DIR  := $(HOME)/.codex/skills/posix
+BIN_DIR          := $(HOME)/.local/bin
+REPO_DIR         := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
-.PHONY: install uninstall test
+.PHONY: install install-all install-claude install-codex uninstall uninstall-claude uninstall-codex test
 
-install:
-	@mkdir -p $(SKILL_DIR) $(BIN_DIR)
-	cp skill/SKILL.md $(SKILL_DIR)/SKILL.md
-	cp skill/posix-lookup $(SKILL_DIR)/posix-lookup
-	cp posix-tldr.json $(SKILL_DIR)/posix-tldr.json
-	chmod +x $(SKILL_DIR)/posix-lookup
-	ln -sf $(SKILL_DIR)/posix-lookup $(BIN_DIR)/posix-lookup
+install: install-all
+
+install-all: install-claude install-codex
 	@echo ""
 	@echo "Installed:"
-	@echo "  Skill  -> $(SKILL_DIR)/"
+	@echo "  Claude -> $(CLAUDE_SKILL_DIR)/"
+	@echo "  Codex  -> $(CODEX_SKILL_DIR)/"
 	@echo "  CLI    -> $(BIN_DIR)/posix-lookup"
 	@echo ""
-	@echo "Restart Claude Code to load the skill."
+	@echo "Restart Claude Code / Codex to load the skill."
+
+install-claude:
+	@mkdir -p $(CLAUDE_SKILL_DIR) $(BIN_DIR)
+	cp skill/SKILL.md $(CLAUDE_SKILL_DIR)/SKILL.md
+	cp skill/posix-lookup $(CLAUDE_SKILL_DIR)/posix-lookup
+	cp posix-tldr.json $(CLAUDE_SKILL_DIR)/posix-tldr.json
+	chmod +x $(CLAUDE_SKILL_DIR)/posix-lookup
+	ln -sf $(CLAUDE_SKILL_DIR)/posix-lookup $(BIN_DIR)/posix-lookup
+
+install-codex:
+	@mkdir -p $(CODEX_SKILL_DIR) $(BIN_DIR)
+	cp skill/SKILL.md $(CODEX_SKILL_DIR)/SKILL.md
+	cp skill/posix-lookup $(CODEX_SKILL_DIR)/posix-lookup
+	cp posix-tldr.json $(CODEX_SKILL_DIR)/posix-tldr.json
+	chmod +x $(CODEX_SKILL_DIR)/posix-lookup
+	ln -sf $(CODEX_SKILL_DIR)/posix-lookup $(BIN_DIR)/posix-lookup
 
 uninstall:
-	rm -rf $(SKILL_DIR)
+	rm -rf $(CLAUDE_SKILL_DIR)
+	rm -rf $(CODEX_SKILL_DIR)
 	rm -f $(BIN_DIR)/posix-lookup
-	@echo "Removed skill and CLI."
+	@echo "Removed Claude+Codex skill installs and CLI."
+
+uninstall-claude:
+	rm -rf $(CLAUDE_SKILL_DIR)
+	@echo "Removed Claude skill install."
+
+uninstall-codex:
+	rm -rf $(CODEX_SKILL_DIR)
+	@echo "Removed Codex skill install."
 
 test:
 	@echo "=== posix-lookup pax ==="

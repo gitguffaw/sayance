@@ -11,11 +11,23 @@ import sys
 from pathlib import Path
 
 _HERE = Path(__file__).resolve().parent
-# Installed: posix-tldr.json is next to this script
-# Dev repo: posix-tldr.json is one level up (repo root)
-DATA = _HERE / "posix-tldr.json"
-if not DATA.exists():
-    DATA = _HERE.parent / "posix-tldr.json"
+
+
+def resolve_data_path() -> Path | None:
+    """Locate posix-tldr.json across installed and development layouts."""
+    candidates = [
+        # Installed skill layouts
+        _HERE / "posix-tldr.json",
+        # Dev repo layout
+        _HERE.parent / "posix-tldr.json",
+        # Explicit home fallbacks for cross-agent installs
+        Path.home() / ".claude" / "skills" / "posix" / "posix-tldr.json",
+        Path.home() / ".codex" / "skills" / "posix" / "posix-tldr.json",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return None
 
 
 def main():
@@ -24,7 +36,21 @@ def main():
         print("       posix-lookup --list", file=sys.stderr)
         sys.exit(1)
 
-    tldr = json.loads(DATA.read_text())
+    data_path = resolve_data_path()
+    if data_path is None:
+        print(
+            "Could not locate posix-tldr.json. Install with 'make install' "
+            "or place the file next to this script.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    try:
+        tldr = json.loads(data_path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"Failed to read {data_path}: {exc}", file=sys.stderr)
+        sys.exit(1)
+
     arg = sys.argv[1].lower()
 
     if arg == "--list":

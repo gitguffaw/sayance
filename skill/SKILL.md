@@ -122,5 +122,6 @@ posix-lookup <utility>
 
 This returns POSIX-correct syntax, canonical examples, and critical anti-patterns (e.g., "DO NOT USE -i"). Do not guess flags — look them up.
 
-If `posix-lookup` is not available on this machine, the data file is at:
-`~/.claude/skills/posix/posix-tldr.json`
+If `posix-lookup` is not available on this machine, the data file is usually at one of:
+- `~/.claude/skills/posix/posix-tldr.json`
+- `~/.codex/skills/posix/posix-tldr.json`

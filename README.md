@@ -93,7 +93,7 @@ Tracks 1 and 2 measure compliance in a controlled text-analysis environment. No 
 No virtualenv needed. Pure stdlib Python 3.
 
 ```bash
-# Install the Claude Code skill + CLI
+# Install the skill + CLI (Claude + Codex)
 make install
 
 # Verify it works
@@ -101,12 +101,12 @@ posix-lookup pax
 posix-lookup --list
 ```
 
-After install, restart Claude Code. The skill auto-loads the semantic map into every session. The LLM calls `posix-lookup <utility>` via bash whenever it needs exact syntax.
+After install, restart Claude Code or Codex. The skill auto-loads the semantic map into each session. The LLM calls `posix-lookup <utility>` via bash whenever it needs exact syntax.
 
 ```bash
 # Dev workflow — edit and iterate
 make test       # test from repo without installing
-make install    # deploy to ~/.claude/skills/posix/
+make install    # deploy to ~/.claude/skills/posix/ and ~/.codex/skills/posix/
 make uninstall  # remove skill and CLI
 ```
 
