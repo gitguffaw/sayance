@@ -411,27 +411,51 @@ def parse_gemini_tokens(raw_json: dict) -> TokenUsage:
     """Parse token usage from Gemini CLI JSON output."""
     stats = raw_json.get("stats", {})
     models = stats.get("models", {})
-    # Get first model's tokens (model name varies)
-    tokens = {}
-    for model_data in models.values():
-        tokens = model_data.get("tokens", {})
-        break
+    if not isinstance(models, dict) or not models:
+        return invalid_token_usage("missing Gemini stats.models telemetry", raw={"stats": stats})
 
-    input_tokens = tokens.get("input", 0)
-    prompt_tokens = tokens.get("prompt", 0)
-    output_tokens = tokens.get("candidates", 0)
-    cached = tokens.get("cached", 0)
-    thoughts = tokens.get("thoughts", 0)
+    aggregate = {
+        "input": 0,
+        "prompt": 0,
+        "candidates": 0,
+        "cached": 0,
+        "thoughts": 0,
+    }
+    normalized_models: dict[str, dict[str, int]] = {}
+    for model_name, model_data in models.items():
+        tokens = model_data.get("tokens", {}) if isinstance(model_data, dict) else {}
+        normalized_tokens, error = _normalize_gemini_tokens(tokens)
+        if error:
+            return invalid_token_usage(
+                f"{model_name}: {error}",
+                raw={"model": model_name, "tokens": tokens},
+            )
+        assert normalized_tokens is not None
+        normalized_models[str(model_name)] = normalized_tokens
+        for field_name, value in normalized_tokens.items():
+            aggregate[field_name] += value
+
+    input_tokens = aggregate["input"]
+    prompt_tokens = aggregate["prompt"]
+    output_tokens = aggregate["candidates"]
+    cached = aggregate["cached"]
+    thoughts = aggregate["thoughts"]
+    billable = prompt_tokens - cached + output_tokens
+    if billable < 0:
+        return invalid_token_usage(
+            "Gemini billable token estimate is negative",
+            raw={"models": normalized_models},
+        )
 
     return TokenUsage(
         input=input_tokens,
         input_cached=cached,
         output=output_tokens,
         thoughts=thoughts,
-        billable=prompt_tokens - cached + output_tokens,
+        billable=billable,
         cost_usd=None,
         cost_source="calculated",
-        raw=tokens,
+        raw={"models": normalized_models} if len(normalized_models) > 1 else next(iter(normalized_models.values())),
     )
 
 
@@ -479,6 +503,75 @@ def coerce_token_int(value: object, field_name: str) -> tuple[int | None, str | 
             return None, f"{field_name} must be non-negative, got {value!r}"
         return parsed, None
     return None, f"{field_name} must be an integer, got {type(value).__name__}"
+
+
+def _get_first_present(data: dict, keys: tuple[str, ...]) -> object:
+    for key in keys:
+        if key in data:
+            return data[key]
+    return None
+
+
+def _normalize_gemini_tokens(tokens: object) -> tuple[dict[str, int] | None, str | None]:
+    if not isinstance(tokens, dict):
+        return None, "Gemini tokens payload is missing or not an object"
+
+    field_aliases = {
+        "input": ("input", "input_tokens"),
+        "prompt": ("prompt", "prompt_tokens"),
+        "candidates": ("candidates", "output", "output_tokens", "candidate_tokens"),
+        "cached": ("cached", "cached_tokens", "cached_input_tokens"),
+        "thoughts": ("thoughts", "thought_tokens", "reasoning_tokens"),
+    }
+
+    normalized: dict[str, int] = {}
+    for normalized_name, aliases in field_aliases.items():
+        value, error = coerce_token_int(_get_first_present(tokens, aliases), f"Gemini {normalized_name}")
+        if error:
+            return None, error
+        assert value is not None
+        normalized[normalized_name] = value
+
+    if not any(alias in tokens for alias in field_aliases["prompt"]):
+        return None, "Gemini prompt token field is missing"
+
+    return normalized, None
+
+
+def _is_gemini_count_metric(metric_name: str) -> bool:
+    lowered = metric_name.lower()
+    terminal = lowered.split(".")[-1]
+    if terminal in {
+        "count",
+        "calls",
+        "call_count",
+        "tool_calls",
+        "tool_call_count",
+        "invocations",
+        "invocation_count",
+    }:
+        return True
+    return lowered.endswith(".call") or lowered.endswith(".calls")
+
+
+def _flatten_gemini_tool_counts(data: object, *, prefix: str = "") -> dict[str, int]:
+    flattened: dict[str, int] = {}
+    if isinstance(data, bool):
+        return flattened
+    if isinstance(data, int):
+        if prefix and _is_gemini_count_metric(prefix):
+            flattened[prefix] = data
+        return flattened
+    if isinstance(data, float):
+        if prefix and data.is_integer() and _is_gemini_count_metric(prefix):
+            flattened[prefix] = int(data)
+        return flattened
+    if isinstance(data, dict):
+        for key, value in data.items():
+            nested_prefix = f"{prefix}.{key}" if prefix else str(key)
+            for nested_key, nested_value in _flatten_gemini_tool_counts(value, prefix=nested_prefix).items():
+                flattened[nested_key] = flattened.get(nested_key, 0) + nested_value
+    return flattened
 
 
 def _find_usage_dicts(obj: object, *, depth: int = 0, max_depth: int = 4) -> list[dict]:
@@ -682,7 +775,7 @@ def parse_claude_execution(raw_json: dict, latency_ms: int) -> ExecutionMetrics:
 
 def parse_gemini_execution(raw_json: dict, latency_ms: int) -> ExecutionMetrics:
     tool_calls = raw_json.get("stats", {}).get("tools", {}) or {}
-    normalized = flatten_numeric_metrics(tool_calls)
+    normalized = _flatten_gemini_tool_counts(tool_calls)
     return ExecutionMetrics(
         latency_ms=latency_ms,
         step_count=1,

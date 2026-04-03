@@ -1,7 +1,7 @@
 import json
 import unittest
 
-from run_benchmark import parse_codex_tokens
+from run_benchmark import parse_codex_tokens, parse_gemini_execution, parse_gemini_tokens
 
 
 def jsonl(*events: dict) -> str:
@@ -189,6 +189,149 @@ class CodexTokenParsingTests(unittest.TestCase):
         self.assertEqual(tokens.billable, 69)
         self.assertIn("usage_snapshots", tokens.raw)
         self.assertEqual(len(tokens.raw["usage_snapshots"]), 2)
+
+
+class GeminiTokenParsingTests(unittest.TestCase):
+    def test_parse_gemini_tokens_aggregates_multiple_models(self) -> None:
+        tokens = parse_gemini_tokens(
+            {
+                "stats": {
+                    "models": {
+                        "gemini-a": {
+                            "tokens": {
+                                "input": 10,
+                                "prompt": 12,
+                                "candidates": 4,
+                                "cached": 2,
+                                "thoughts": 1,
+                            }
+                        },
+                        "gemini-b": {
+                            "tokens": {
+                                "input": 20,
+                                "prompt": 25,
+                                "candidates": 5,
+                                "cached": 3,
+                                "thoughts": 2,
+                            }
+                        },
+                    }
+                }
+            }
+        )
+
+        self.assertTrue(tokens.usage_valid)
+        self.assertEqual(tokens.input, 30)
+        self.assertEqual(tokens.input_cached, 5)
+        self.assertEqual(tokens.output, 9)
+        self.assertEqual(tokens.thoughts, 3)
+        self.assertEqual(tokens.billable, 41)
+        self.assertIn("models", tokens.raw)
+
+    def test_parse_gemini_tokens_supports_key_aliases(self) -> None:
+        tokens = parse_gemini_tokens(
+            {
+                "stats": {
+                    "models": {
+                        "gemini-a": {
+                            "tokens": {
+                                "input_tokens": "8",
+                                "prompt_tokens": "11",
+                                "output_tokens": "3",
+                                "cached_input_tokens": "2",
+                                "reasoning_tokens": "4",
+                            }
+                        }
+                    }
+                }
+            }
+        )
+
+        self.assertTrue(tokens.usage_valid)
+        self.assertEqual(tokens.input, 8)
+        self.assertEqual(tokens.input_cached, 2)
+        self.assertEqual(tokens.output, 3)
+        self.assertEqual(tokens.thoughts, 4)
+        self.assertEqual(tokens.billable, 12)
+
+    def test_parse_gemini_tokens_marks_missing_prompt_invalid(self) -> None:
+        tokens = parse_gemini_tokens(
+            {
+                "stats": {
+                    "models": {
+                        "gemini-a": {
+                            "tokens": {
+                                "input": 8,
+                                "candidates": 3,
+                                "cached": 2,
+                            }
+                        }
+                    }
+                }
+            }
+        )
+
+        self.assertFalse(tokens.usage_valid)
+        self.assertIn("prompt", tokens.usage_invalid_reason.lower())
+
+    def test_parse_gemini_tokens_marks_negative_billable_invalid(self) -> None:
+        tokens = parse_gemini_tokens(
+            {
+                "stats": {
+                    "models": {
+                        "gemini-a": {
+                            "tokens": {
+                                "input": 8,
+                                "prompt": 2,
+                                "candidates": 1,
+                                "cached": 5,
+                            }
+                        }
+                    }
+                }
+            }
+        )
+
+        self.assertFalse(tokens.usage_valid)
+        self.assertIn("negative", tokens.usage_invalid_reason.lower())
+
+    def test_parse_gemini_execution_counts_only_count_like_metrics(self) -> None:
+        execution = parse_gemini_execution(
+            {
+                "stats": {
+                    "tools": {
+                        "shell": {
+                            "call_count": 2,
+                            "latency_ms": 120,
+                            "token_estimate": 40,
+                            "result_count": 99,
+                        },
+                        "search": {
+                            "calls": 3.0,
+                            "duration_ms": 80,
+                            "token_count": 41,
+                        },
+                        "planner": {
+                            "count": 1,
+                            "avg_latency_ms": 15,
+                        },
+                    }
+                }
+            },
+            latency_ms=250,
+        )
+
+        self.assertEqual(execution.tool_call_count, 6)
+        self.assertEqual(
+            execution.tool_calls_by_type,
+            {
+                "shell.call_count": 2,
+                "search.calls": 3,
+                "planner.count": 1,
+            },
+        )
+        self.assertNotIn("shell.result_count", execution.tool_calls_by_type)
+        self.assertNotIn("search.token_count", execution.tool_calls_by_type)
 
 
 if __name__ == "__main__":
