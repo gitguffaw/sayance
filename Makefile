@@ -3,7 +3,7 @@ CODEX_SKILL_DIR  := $(HOME)/.codex/skills/posix
 BIN_DIR          := $(HOME)/.local/bin
 REPO_DIR         := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
-.PHONY: install install-all install-claude install-codex uninstall uninstall-claude uninstall-codex test
+.PHONY: install install-all install-claude install-codex uninstall uninstall-claude uninstall-codex test test-product test-product-negative
 
 install: install-all
 
@@ -60,3 +60,9 @@ test:
 	@python3 skill/posix-lookup bad-util 2>&1; true
 	@echo ""
 	@echo "All tests passed."
+
+test-product:
+	@./scripts/test_product.sh
+
+test-product-negative:
+	@./scripts/test_product_negative.sh

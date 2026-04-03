@@ -106,6 +106,8 @@ After install, restart Claude Code or Codex. The skill auto-loads the semantic m
 ```bash
 # Dev workflow — edit and iterate
 make test       # test from repo without installing
+make test-product          # Lane B: installed product-path conformance (isolated HOME)
+make test-product-negative # Lane B: failure-injection sensitivity checks
 make install    # deploy to ~/.claude/skills/posix/ and ~/.codex/skills/posix/
 make uninstall  # remove skill and CLI
 ```
@@ -129,6 +131,22 @@ python3 run_benchmark.py --llms claude codex gemini --inject-posix
 `--inject-posix` now fails fast if `posix-core.md` or `posix-tldr.json` do not fully cover the 155 POSIX Issue 8 utilities.
 
 For Gemini, add `--max-workers 1 --delay 30` if you're on a tight API quota.
+
+## Dual-Lane Validation
+
+This repo now uses two complementary validation lanes:
+
+- **Lane A (legacy, unchanged):** benchmark/simulation path (`run_benchmark.py` and Track 1/2/3 flows). This preserves historical comparability and benchmark metrics.
+- **Lane B (new, additive):** shipped-product conformance path for installed `SKILL.md` + `posix-lookup`.
+
+Run Lane B locally:
+
+```bash
+make test-product
+make test-product-negative
+```
+
+Lane B does not replace Lane A; it catches install/activation packaging regressions that the benchmark simulation cannot.
 
 ## Repository Map
 
