@@ -154,6 +154,8 @@ Summary validity semantics:
 - Visibility metrics use `report_visible_results`.
 - `usage_invalid_results` and `invalid_usage_reasons` explain parser/telemetry issues.
 - `valid_results` remains as a backward-compatible alias of `usage_valid_results`.
+- In custom `--results-dir` runs, benchmark artifacts are retained as a single latest pair (`summary-*.json` and `report-*.html`) to avoid ambiguous multi-summary directories.
+- In comparison HTML, latency is shown in seconds, `Total Cost (USD)` is intentionally omitted, and token context rows include input/cached/billable-minus-output values.
 
 ## Dual-Lane Validation
 
@@ -205,6 +207,8 @@ results/
   baseline-scheduled-5h/       scheduled baseline series (runNN + logs)
   stepup-scheduled-5h/         scheduled Step-Up series (runNN + logs)
 ```
+
+For custom `--results-dir` runs, only the latest `summary-*.json` and `report-*.html` are retained in that directory.
 
 Results are gitignored and not committed.
 

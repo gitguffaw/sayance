@@ -105,6 +105,8 @@ Single-file CLI tool (`run_benchmark.py`) that:
 - The primary metric is **token cost**, not accuracy. Accuracy is secondary.
 - Token counts differ across providers (different tokenizers). Use native tokens for cost, tiktoken o200k_base for cross-model comparison.
 - Token validity is explicit: prefer `usage_valid_results`, `report_visible_results`, `usage_invalid_results`, and `invalid_usage_reasons`. `valid_results` remains a compatibility alias of `usage_valid_results`.
+- Custom `--results-dir` runs retain only the latest `summary-*.json` and `report-*.html` to prevent ambiguous artifact sets.
+- Comparison HTML uses seconds-based latency display and intentionally omits `Total Cost (USD)`; use token-context rows (`Total Input Tokens`, `Total Cached Tokens`, `Billable - Output Tokens`) when interpreting billable totals.
 - Cache state (cold vs warm) creates 10x cost difference on Anthropic. Track per result.
 - LLM-as-judge is susceptible to prompt injection. Grading uses base64-encoded responses to mitigate. Never use the same model as both test subject and judge.
 - `benchmark_data.json` (questions and expected answers), `posix-tldr.json`, and `fixtures/` are frozen datasets for cross-model comparison. Do not modify them to fix benchmark results unless we are creating new base data because.

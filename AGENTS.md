@@ -27,6 +27,7 @@ Use Python directly; there is no virtualenv or build step.
 - `python3 run_benchmark.py --inject-posix` runs the Step-Up simulation (Track 2): injects `posix-core.md` into the prompt and simulates Tier 2 tool calls. It now fails fast if bridge coverage is incomplete.
 - `python3 run_benchmark.py --execute` runs extracted commands against fixtures for execution validation (Track 3).
 - `python3 run_benchmark.py --inject-posix --execute` combines Step-Up + execution validation (Track 3b).
+- In custom `--results-dir` runs, only the latest `summary-*.json` and `report-*.html` are retained in that directory.
 - `make test-product` runs Lane B installed product-path conformance checks in an isolated `HOME`.
 - `make test-product-negative` runs Lane B failure-injection checks (missing file, broken symlink, malformed JSON).
 - `python3 -m py_compile run_benchmark.py` is the fastest syntax sanity check before committing.

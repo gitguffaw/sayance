@@ -116,6 +116,14 @@ Until repo plan/visibility changes, use this enforcement model:
 2. Open it and verify `usage_valid_results` equals `report_visible_results` for healthy token accounting.
 3. If `usage_valid_results < report_visible_results`, inspect `usage_invalid_results` and `invalid_usage_reasons`.
 4. If `report_visible_results < total_results`, inspect provider errors in `errors` and per-question files under `results/<llm>/`.
+5. If you used `--results-dir <custom>`, verify that directory now contains exactly one latest `summary-*.json` and one latest `report-*.html` (older timestamped artifacts are pruned automatically).
+
+## Comparison Report Checks
+
+When reviewing `comparison-*.html`, confirm:
+- Latency metrics are shown in seconds (`Mean Latency (s)` and error latencies like `12.4s`).
+- `Total Cost (USD)` is not present in side-by-side metrics.
+- Token context rows are present (`Total Input Tokens`, `Total Cached Tokens`, `Billable - Output Tokens`).
 
 ---
 

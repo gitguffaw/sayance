@@ -105,10 +105,17 @@ Model version selection:
 
 The key numbers to compare across the two runs:
 - `total_billable_tokens` per LLM
+- `total_input_tokens` and `total_cached_tokens` per LLM
 - `mean_output_tokens` per LLM
+- `mean_latency_seconds` per LLM
 - `posix_compliance_rate` per LLM
 - `failure_modes` breakdown
 - `mean_step_count`
+
+Comparison report rendering notes:
+- Latency is shown in seconds (`Mean Latency (s)`).
+- `Total Cost (USD)` is intentionally omitted from side-by-side view.
+- `Billable - Output Tokens` is included to make billable/input-output relationships explicit.
 
 ---
 
@@ -158,6 +165,9 @@ And verify the output is parseable JSON after stripping the MCP prefix.
 | `report_visible_results` | Number of non-error results shown in reports (includes usage-invalid) |
 | `usage_invalid_results` | Number of non-error results excluded from token metrics |
 | `invalid_usage_reasons` | Breakdown of why usage was marked invalid |
+| `total_input_tokens` | Sum of provider-reported input tokens over usage-valid records |
+| `total_cached_tokens` | Sum of provider-reported cache-hit input tokens over usage-valid records |
+| `mean_latency_seconds` | Mean visible-record latency in seconds |
 | `posix_compliance_rate` | Fraction of answers that used only POSIX tools and flags |
 | `issue8_refusal_count` | Times the LLM incorrectly said a valid Issue 8 tool "isn't POSIX" |
 | `failure_modes` | Categorized breakdown of how answers went wrong |
