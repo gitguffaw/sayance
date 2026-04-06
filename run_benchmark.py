@@ -741,78 +741,57 @@ def _normalize_usage_snapshot(usage: dict) -> tuple[dict | None, str | None]:
     return normalized, None
 
 
-def _merge_codex_usage_snapshots(usage_snapshots: list[dict[str, int]]) -> tuple[dict[str, int], list[dict[str, int]]]:
-    """Merge Codex usage snapshots while avoiding duplicate cumulative double counts."""
-    if len(usage_snapshots) == 1:
-        return usage_snapshots[0], usage_snapshots
-
-    def _dominates(a: dict[str, int], b: dict[str, int]) -> bool:
-        return (
-            a["input_tokens"] >= b["input_tokens"]
-            and a["cached_input_tokens"] >= b["cached_input_tokens"]
-            and a["output_tokens"] >= b["output_tokens"]
-        )
-
-    unique_snapshots = {
-        (
-            snapshot["input_tokens"],
-            snapshot["cached_input_tokens"],
-            snapshot["output_tokens"],
-        ): snapshot
-        for snapshot in usage_snapshots
-    }
-    selected_usage = max(unique_snapshots.values(), key=lambda usage: (
-        usage["input_tokens"],
-        usage["cached_input_tokens"],
-        usage["output_tokens"],
-    ))
-    snapshots_used = sorted(
-        unique_snapshots.values(),
-        key=lambda usage: (
-            usage["input_tokens"],
-            usage["cached_input_tokens"],
-            usage["output_tokens"],
-        ),
+def _usage_snapshot_key(snapshot: dict[str, int]) -> tuple[int, int, int]:
+    return (
+        snapshot["input_tokens"],
+        snapshot["cached_input_tokens"],
+        snapshot["output_tokens"],
     )
 
-    cumulative_in_order = all(
-        _dominates(usage_snapshots[i + 1], usage_snapshots[i])
-        for i in range(len(usage_snapshots) - 1)
-    )
-    selected_key = (
-        selected_usage["input_tokens"],
-        selected_usage["cached_input_tokens"],
-        selected_usage["output_tokens"],
-    )
-    selected_occurrences = sum(
-        1
-        for snapshot in usage_snapshots
-        if (
-            snapshot["input_tokens"],
-            snapshot["cached_input_tokens"],
-            snapshot["output_tokens"],
-        ) == selected_key
-    )
-    cumulative_with_duplicates = selected_occurrences > 1 and all(
-        _dominates(selected_usage, snapshot)
-        for snapshot in usage_snapshots
+
+def _dominates_usage_snapshot(a: dict[str, int], b: dict[str, int]) -> bool:
+    return (
+        a["input_tokens"] >= b["input_tokens"]
+        and a["cached_input_tokens"] >= b["cached_input_tokens"]
+        and a["output_tokens"] >= b["output_tokens"]
     )
 
-    if cumulative_in_order or cumulative_with_duplicates:
+
+def _merge_codex_usage_snapshots(
+    usage_snapshots: list[tuple[str, dict[str, int]]],
+) -> tuple[dict[str, int], list[dict[str, int]]]:
+    """Merge Codex usage snapshots without collapsing independent turn totals."""
+    normalized_snapshots = [snapshot for _, snapshot in usage_snapshots]
+    if len(normalized_snapshots) == 1:
+        return normalized_snapshots[0], normalized_snapshots
+
+    selected_usage = max(normalized_snapshots, key=_usage_snapshot_key)
+    all_dominated = all(
+        _dominates_usage_snapshot(selected_usage, snapshot)
+        for snapshot in normalized_snapshots
+    )
+    has_non_turn_snapshot = any(
+        event_type != "turn.completed"
+        for event_type, _ in usage_snapshots
+    )
+    if has_non_turn_snapshot and all_dominated:
+        unique_snapshots: dict[tuple[int, int, int], dict[str, int]] = {}
+        for snapshot in normalized_snapshots:
+            unique_snapshots[_usage_snapshot_key(snapshot)] = snapshot
+        snapshots_used = sorted(unique_snapshots.values(), key=_usage_snapshot_key)
         return selected_usage, snapshots_used
 
-    # Treat as independent snapshots and sum exact-unique entries.
     merged = {"input_tokens": 0, "cached_input_tokens": 0, "output_tokens": 0}
-    for snapshot in snapshots_used:
+    for snapshot in normalized_snapshots:
         merged["input_tokens"] += snapshot["input_tokens"]
         merged["cached_input_tokens"] += snapshot["cached_input_tokens"]
         merged["output_tokens"] += snapshot["output_tokens"]
-    return merged, snapshots_used
+    return merged, normalized_snapshots
 
 
 def parse_codex_tokens(raw_stdout: str) -> TokenUsage:
     """Parse token usage from Codex JSONL output."""
-    usage_snapshots: list[dict] = []
+    usage_snapshots: list[tuple[str, dict[str, int]]] = []
     malformed_usages: list[str] = []
     for line in raw_stdout.strip().splitlines():
         line = line.strip()
@@ -822,13 +801,14 @@ def parse_codex_tokens(raw_stdout: str) -> TokenUsage:
             event = json.loads(line)
         except json.JSONDecodeError:
             continue
+        event_type = str(event.get("type", ""))
         for usage in _find_usage_dicts(event):
             normalized, error = _normalize_usage_snapshot(usage)
             if error:
                 malformed_usages.append(error)
                 continue
             assert normalized is not None
-            usage_snapshots.append(normalized)
+            usage_snapshots.append((event_type, normalized))
 
     if not usage_snapshots:
         reason = malformed_usages[0] if malformed_usages else "missing Codex usage telemetry"

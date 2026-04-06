@@ -223,6 +223,38 @@ class CodexTokenParsingTests(unittest.TestCase):
         self.assertIn("usage_snapshots", tokens.raw)
         self.assertEqual(len(tokens.raw["usage_snapshots"]), 2)
 
+    def test_parse_codex_tokens_uses_largest_snapshot_for_mixed_event_cumulative_usage(self) -> None:
+        tokens = parse_codex_tokens(
+            jsonl(
+                {
+                    "type": "usage.reported",
+                    "result": {
+                        "usage": {
+                            "input_tokens": 120,
+                            "cached_input_tokens": 15,
+                            "output_tokens": 25,
+                        }
+                    },
+                },
+                {
+                    "type": "turn.completed",
+                    "usage": {
+                        "input_tokens": 100,
+                        "cached_input_tokens": 10,
+                        "output_tokens": 20,
+                    },
+                },
+            )
+        )
+
+        self.assertTrue(tokens.usage_valid)
+        self.assertEqual(tokens.input, 120)
+        self.assertEqual(tokens.input_cached, 15)
+        self.assertEqual(tokens.output, 25)
+        self.assertEqual(tokens.billable, 130)
+        self.assertIn("usage_snapshots", tokens.raw)
+        self.assertEqual(len(tokens.raw["usage_snapshots"]), 2)
+
     def test_parse_codex_tokens_sums_independent_snapshots(self) -> None:
         tokens = parse_codex_tokens(
             jsonl(
@@ -250,6 +282,36 @@ class CodexTokenParsingTests(unittest.TestCase):
         self.assertEqual(tokens.input_cached, 5)
         self.assertEqual(tokens.output, 14)
         self.assertEqual(tokens.billable, 69)
+        self.assertIn("usage_snapshots", tokens.raw)
+        self.assertEqual(len(tokens.raw["usage_snapshots"]), 2)
+
+    def test_parse_codex_tokens_sums_duplicate_independent_turn_completed_snapshots(self) -> None:
+        tokens = parse_codex_tokens(
+            jsonl(
+                {
+                    "type": "turn.completed",
+                    "usage": {
+                        "input_tokens": 10,
+                        "cached_input_tokens": 1,
+                        "output_tokens": 2,
+                    },
+                },
+                {
+                    "type": "turn.completed",
+                    "usage": {
+                        "input_tokens": 10,
+                        "cached_input_tokens": 1,
+                        "output_tokens": 2,
+                    },
+                },
+            )
+        )
+
+        self.assertTrue(tokens.usage_valid)
+        self.assertEqual(tokens.input, 20)
+        self.assertEqual(tokens.input_cached, 2)
+        self.assertEqual(tokens.output, 4)
+        self.assertEqual(tokens.billable, 22)
         self.assertIn("usage_snapshots", tokens.raw)
         self.assertEqual(len(tokens.raw["usage_snapshots"]), 2)
 
