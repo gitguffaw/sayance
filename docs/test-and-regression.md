@@ -37,7 +37,7 @@ make test-product-negative
 
 1. **Syntax check:**
    ```bash
-   python3 -m py_compile run_benchmark.py
+   python3 -m py_compile run_benchmark.py benchmark_core/*.py
    ```
    If this fails, do not run anything. Fix the syntax error first.
 
@@ -184,9 +184,9 @@ Review every question shown in the output against the rules in `benchmark_data.j
 
 ## Committing Changes
 
-Before committing any change to `benchmark_data.json` or `run_benchmark.py`:
+Before committing any change to `benchmark_data.json`, `run_benchmark.py`, or `benchmark_core/`:
 
-1. Run `python3 -m py_compile run_benchmark.py` — must pass.
+1. Run `python3 -m py_compile run_benchmark.py benchmark_core/*.py` — must pass.
 2. Run `python3 run_benchmark.py --dry-run` — verify questions look correct.
 3. Do not commit result files. The `results/` directory is gitignored.
 4. Do not commit API keys, credentials, or cost data.

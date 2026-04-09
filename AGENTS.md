@@ -10,7 +10,7 @@
 
 ## Project Structure & Module Organization
 
-This repository is a small, stdlib-only Python benchmark. `run_benchmark.py` is the main entrypoint and contains the CLI, provider adapters, grading flow, and JSON parsing. Benchmark inputs live in `benchmark_data.json`, and the POSIX utility source of truth lives in `posix-utilities.txt`. Research notes and planning docs are under `docs/brainstorms/`, `docs/plans/`, and `docs/solutions/`. Generated output is written under `results/` (including mode-specific subdirectories like `results/stepup/`, `results/execute/`, and `results/stepup-execute/`) and is ignored by Git.
+This repository is a small, stdlib-only Python benchmark. `run_benchmark.py` is the stable CLI entrypoint and compatibility facade. Internal implementation lives under `benchmark_core/` (`cli`, `runner`, `providers`, `execution`, `reporting`, `models`, `config`). Benchmark inputs live in `benchmark_data.json`, and the POSIX utility source of truth lives in `posix-utilities.txt`. Research notes and planning docs are under `docs/brainstorms/`, `docs/plans/`, and `docs/solutions/`. Generated output is written under `results/` (including mode-specific subdirectories like `results/stepup/`, `results/execute/`, and `results/stepup-execute/`) and is ignored by Git.
 
 ## Build, Test, and Development Commands
 
@@ -30,18 +30,18 @@ Use Python directly; there is no virtualenv or build step.
 - In custom `--results-dir` runs, only the latest `summary-*.json` and `report-*.html` are retained in that directory.
 - `make test-product` runs Lane B installed product-path conformance checks in an isolated `HOME`.
 - `make test-product-negative` runs Lane B failure-injection checks (missing file, broken symlink, malformed JSON).
-- `python3 -m py_compile run_benchmark.py` is the fastest syntax sanity check before committing.
+- `python3 -m py_compile run_benchmark.py benchmark_core/*.py` is the fastest syntax sanity check before committing.
 
 ## Coding Style & Naming Conventions
 
-Follow the existing Python style in `run_benchmark.py`: 4-space indentation, explicit type hints, dataclasses for captured results, and small helper functions for provider-specific parsing. Keep dependencies in the standard library unless there is a strong reason not to. When invoking external CLIs, pass argument lists to `subprocess.run()` instead of shell strings. Use snake_case for functions and variables, and uppercase names for constants and enum members.
+Follow the existing Python style across `benchmark_core/` and `run_benchmark.py`: 4-space indentation, explicit type hints, dataclasses for captured results, and small helper functions for provider-specific parsing. Keep dependencies in the standard library unless there is a strong reason not to. When invoking external CLIs, pass argument lists to `subprocess.run()` instead of shell strings. Use snake_case for functions and variables, and uppercase names for constants and enum members.
 
 ## Testing Guidelines
 
 There is no dedicated `tests/` directory yet. Use a dual-lane validation approach:
 - Lane A (legacy): dry runs and focused benchmark runs.
 - Lane B (additive): installed product-path checks via `make test-product`.
-For logic changes, run `python3 -m py_compile run_benchmark.py`, at least one targeted Lane A command such as `python3 run_benchmark.py --dry-run --questions T01`, and Lane B product conformance when packaging/skill behavior is touched. If you change parsing, grading, or result serialization, note a sample JSON path from `results/`, but do not commit generated output.
+For logic changes, run `python3 -m py_compile run_benchmark.py benchmark_core/*.py`, at least one targeted Lane A command such as `python3 run_benchmark.py --dry-run --questions T01`, and Lane B product conformance when packaging/skill behavior is touched. If you change parsing, grading, or result serialization, note a sample JSON path from `results/`, but do not commit generated output.
 If GitHub required status checks are unavailable for this repository plan, enforce Lane B as a local gate before merge/release by running `make test-product` and `make test-product-negative`.
 
 ## Commit & Pull Request Guidelines

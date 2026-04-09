@@ -66,11 +66,15 @@ No virtual environment or dependencies needed — pure stdlib Python 3.
 
 ## Architecture
 
-Single-file CLI tool (`run_benchmark.py`) that:
-1. Calls LLM CLIs via `subprocess.run()` (list form, no shell injection)
-2. Parses JSON output from each CLI for token usage data
-3. Uses LLM-as-judge for accuracy grading (secondary metric)
-4. Saves results under `results/` as JSON (`results/` for Track 1, `results/stepup/` for Track 2, `results/execute/` for Track 3, and `results/stepup-execute/` for Track 3b)
+`run_benchmark.py` is the stable CLI entrypoint and compatibility facade. Internal implementation is split into `benchmark_core/` modules:
+1. `benchmark_core/cli.py` parses CLI args and routes modes.
+2. `benchmark_core/runner.py` orchestrates question/provider execution and grading.
+3. `benchmark_core/providers.py` handles CLI invocation, token parsing, and response analysis.
+4. `benchmark_core/execution.py` handles Track 3 fixture setup and command execution validation.
+5. `benchmark_core/reporting.py` writes terminal, summary JSON, and HTML reports.
+6. `benchmark_core/models.py` defines dataclasses/result filters; `benchmark_core/config.py` holds path/runtime config.
+
+Results are saved under `results/` as JSON/HTML (`results/` for Track 1, `results/stepup/` for Track 2, `results/execute/` for Track 3, and `results/stepup-execute/` for Track 3b).
 
 **CLI invocation patterns:**
 - Claude: `claude -p "prompt" --output-format json`
@@ -86,7 +90,8 @@ Single-file CLI tool (`run_benchmark.py`) that:
 - `Makefile` — `make test`, `make test-product`, `make test-product-negative`, `make install`, `make uninstall`
 - `posix-utilities.txt` — All 155 POSIX Issue 8 utilities (source of truth)
 - `benchmark_data.json` — Structured questions with expected answers and required concepts
-- `run_benchmark.py` — Benchmark runner
+- `run_benchmark.py` — Stable facade + CLI entrypoint
+- `benchmark_core/` — Internal benchmark implementation modules
 - `fixtures/` — Per-question test fixtures for Track 3 execution validation
 - `fixtures/manifest.json` — Maps question IDs to fixture specs and validation types
 - `docs/plans/` — Implementation plans (the deepened plan is the current roadmap)
