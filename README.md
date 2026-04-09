@@ -56,7 +56,7 @@ Tier 1 tells the agent what exists. Tier 2 tells it how to use it correctly. Tog
 
 ## The Proof
 
-We tested this across three providers, 30 real shell tasks, with and without the Step-Up injection.
+The repository now ships a 40-question benchmark corpus. The published numbers below are the original 30-question baseline comparison, kept as a historical before/after reference.
 
 ### POSIX Compliance: Before and After
 
@@ -66,7 +66,7 @@ We tested this across three providers, 30 real shell tasks, with and without the
 | **Codex** | `██████░░░░` 58.6% | `█████████░` 86.7% | **+28.1 pts** |
 | **Gemini** | `███████░░░` 65.4% | `█████████░` 86.7% | **+21.3 pts** |
 
-### Full Results (30 questions, k=1)
+### Historical Results (30 questions, k=1)
 
 | | Claude | Codex | Gemini |
 |:---|:---:|:---:|:---:|
@@ -191,7 +191,7 @@ GitHub enforcement note (current repo state, observed 2026-04-03):
 | `Makefile` | Build, test, and install pipeline |
 | `run_benchmark.py` | Stable benchmark CLI entrypoint + compatibility facade |
 | `benchmark_core/` | Internal benchmark implementation (`cli`, `runner`, `providers`, `execution`, `reporting`, `models`, `config`) |
-| `benchmark_data.json` | 30 intent-based questions with expected POSIX answers |
+| `benchmark_data.json` | 40 intent-based questions with expected POSIX answers |
 | `posix-utilities.txt` | All 155 POSIX Issue 8 utilities (canonical list) |
 
 ## Output Files

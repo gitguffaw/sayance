@@ -62,6 +62,8 @@ _TRAP_PATTERNS_RAW: dict[str, list[str]] = {
     "T25": [r"\bmd5sum\b", r"\bsha256sum\b"],
     "T29": [r"\blet\b"],
     "T30": [r"\bbase64\b"],
+    "T39": [r"xargs\s+--show-limits\b"],
+    "T40": [r"\bionice\b", r"\bcpulimit\b"],
 }
 
 TRAP_PATTERNS_BY_ID: dict[str, list[re.Pattern]] = {
@@ -1115,4 +1117,3 @@ def analyze_response(
         inefficiency_mode=inefficiency_mode,
         estimated_excess_output_tokens=estimated_excess_output_tokens,
     )
-

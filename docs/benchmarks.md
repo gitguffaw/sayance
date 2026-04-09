@@ -10,7 +10,7 @@ We are not measuring raw knowledge recall. We are measuring efficiency. A correc
 
 ## The Question Set (`benchmark_data.json`)
 
-30 task-based questions across three tiers of POSIX obscurity. Each question describes a real-world user intent and asks the LLM to provide a POSIX-compliant shell solution.
+40 task-based questions across three tiers of POSIX obscurity. Each question describes a real-world user intent and asks the LLM to provide a POSIX-compliant shell solution.
 
 ### Rules for Questions (The Taboo Rule)
 
@@ -22,7 +22,7 @@ Every question in the set must follow these rules. If a question violates any of
 
 - **Tier 1 (T01–T10):** Common utilities that any shell user has seen — `sort`, `find`, `sed`, `grep`, `cp`. An LLM that knows POSIX well should handle all of these.
 - **Tier 2 (T11–T23):** Less common utilities that are POSIX-specified but often substituted with non-POSIX tools — `od` instead of `xxd`, `nl` instead of `cat -n`, `readlink`/`realpath` which are new in Issue 8.
-- **Tier 3 (T24–T30):** Obscure or forgotten utilities that almost no LLM will reach for without help — `tsort`, `cksum`, `uuencode`, `mkfifo`, `pr`.
+- **Tier 3 (T24–T40):** Obscure, task-specific, or often-overlooked utilities that frontier models still commonly miss without help — `tsort`, `cksum`, `uuencode`, `csplit`, `getconf`, `logger`, `nice`.
 
 ---
 
@@ -45,7 +45,7 @@ python3 run_benchmark.py --llms claude codex
 - Does it use GNU-only flags (`sed -i`, `grep -r`, `find -mmin`)?
 - Token cost per question — this is the baseline we will compare against.
 
-**Observed results (Track 1 baseline):**
+**Observed results (Track 1 baseline, original 30-question corpus):**
 
 | Provider | POSIX Compliance | Mean Output Tokens | Mean Steps |
 |----------|------------------|--------------------|------------|
@@ -74,7 +74,7 @@ python3 run_benchmark.py --llms claude codex --inject-posix
 - Did `trap_hits` drop to zero or near zero?
 - Did `posix_compliance_rate` improve?
 
-**Observed results (Track 2 Step-Up):**
+**Observed results (Track 2 Step-Up, original 30-question corpus):**
 
 | Provider | POSIX Compliance | Mean Output Tokens | Mean Steps |
 |----------|------------------|--------------------|------------|
@@ -132,8 +132,8 @@ Use a conservative Gemini run profile unless your active account limits clearly 
 - Assume `1` benchmark call every `30` seconds.
 - Assume no more than `50` model calls per day.
 - Run Gemini alone, with `--max-workers 1`, so the benchmark never fans out concurrent Gemini calls.
-- Track 1 baseline fits in one day: `30` questions = `30` Gemini calls.
-- Track 2 does **not** reliably fit in one day: the Step-Up simulation can trigger a second Gemini call when the model emits `TOOL_CALL: get_posix_syntax(...)`, so a 30-question run can exceed `50` calls.
+- Track 1 baseline fits in one day: `40` questions = `40` Gemini calls.
+- Track 2 does **not** reliably fit in one day: the Step-Up simulation can trigger a second Gemini call when the model emits `TOOL_CALL: get_posix_syntax(...)`, so a 40-question run can exceed `50` calls.
 - Do not use Gemini as the judge if you are trying to stay within the daily quota.
 
 Safe Track 1 baseline command:

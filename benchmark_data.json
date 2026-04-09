@@ -1,7 +1,7 @@
 {
   "meta": {
-    "version": "0.5",
-    "date": "2026-03-27",
+    "version": "0.6",
+    "date": "2026-04-09",
     "source": "https://pubs.opengroup.org/onlinepubs/9799919799/idx/utilities.html",
     "spec": "POSIX.1-2024 (Issue 8)",
     "question_type": "task-based — measures minimal-answer gap, token burn, and failure modes for real-world POSIX usage",
@@ -312,6 +312,106 @@
       "expected_answer": "uuencode file file | mail user@example.com",
       "posix_traps": ["base64 is NOT POSIX", "uuencode/uudecode are the POSIX encoding utilities"],
       "required_concepts": ["uuencode", "not base64"]
+    },
+    {
+      "id": "T31",
+      "tier": 3,
+      "category": "text_processing",
+      "question": "I have a text file where tabs are being used for alignment. I need a copy where those tabs become spaces without changing how the columns line up.",
+      "expected_commands": ["expand"],
+      "expected_answer": "expand file > file.spaces",
+      "posix_traps": ["replacing each tab with a fixed number of spaces can break alignment"],
+      "required_concepts": ["expand"]
+    },
+    {
+      "id": "T32",
+      "tier": 3,
+      "category": "text_processing",
+      "question": "I have a text file that's indented with spaces at the start of each line. I want to compress that indentation into tab characters while keeping the same layout.",
+      "expected_commands": ["unexpand"],
+      "expected_answer": "unexpand file > file.tabs",
+      "posix_traps": ["blind replacement of multiple spaces can change alignment"],
+      "required_concepts": ["unexpand"]
+    },
+    {
+      "id": "T33",
+      "tier": 3,
+      "category": "text_processing",
+      "question": "I have a text file with some extremely long lines. I need to wrap it so nothing exceeds 72 columns, and I'd like it to break at spaces when possible instead of splitting words in half.",
+      "expected_commands": ["fold"],
+      "expected_answer": "fold -s -w 72 file",
+      "posix_traps": ["reflowing paragraphs changes the original line structure", "plain fold without -s can split words"],
+      "required_concepts": ["fold", "-s", "-w 72"]
+    },
+    {
+      "id": "T34",
+      "tier": 3,
+      "category": "text_processing",
+      "question": "I have one large text file made of repeated sections. Every time a line begins with `SECTION:`, I want a new output file to start.",
+      "expected_commands": ["csplit"],
+      "expected_answer": "csplit file '/^SECTION:/' '{*}'",
+      "posix_traps": ["split only cuts by size or line count, not matching text patterns"],
+      "required_concepts": ["csplit", "/^SECTION:/", "{*}"]
+    },
+    {
+      "id": "T35",
+      "tier": 3,
+      "category": "scripting",
+      "question": "From the shell, I need to calculate 10 divided by 3 and print 50 digits after the decimal point.",
+      "expected_commands": ["bc"],
+      "expected_answer": "echo 'scale=50; 10 / 3' | bc",
+      "posix_traps": ["shell arithmetic is integer-only", "expr is not for arbitrary-precision decimal math"],
+      "required_concepts": ["bc", "scale=50"]
+    },
+    {
+      "id": "T36",
+      "tier": 3,
+      "category": "process",
+      "question": "I need to watch a command's output live in my terminal, but I also want an exact copy of that same output written to a log file at the same time.",
+      "expected_commands": ["tee"],
+      "expected_answer": "command | tee out.log",
+      "posix_traps": ["simple redirection writes the file but does not keep live terminal output"],
+      "required_concepts": ["tee"]
+    },
+    {
+      "id": "T37",
+      "tier": 3,
+      "category": "text_processing",
+      "question": "I have a binary file and I only want the human-readable text fragments embedded inside it.",
+      "expected_commands": ["strings"],
+      "expected_answer": "strings binaryfile",
+      "posix_traps": ["hex dump tools show every byte instead of only printable text"],
+      "required_concepts": ["strings"]
+    },
+    {
+      "id": "T38",
+      "tier": 3,
+      "category": "process",
+      "question": "From a shell script, I need to send a short message into the machine's system log instead of printing it to the terminal.",
+      "expected_commands": ["logger"],
+      "expected_answer": "logger 'backup finished'",
+      "posix_traps": ["writing directly to a log file is not the same as sending a syslog message"],
+      "required_concepts": ["logger"]
+    },
+    {
+      "id": "T39",
+      "tier": 3,
+      "category": "system_info",
+      "question": "From a shell script, I need to know the maximum total size of command-line arguments this system allows for a new process.",
+      "expected_commands": ["getconf"],
+      "expected_answer": "getconf ARG_MAX",
+      "posix_traps": ["xargs --show-limits is GNU-specific and not the standard interface"],
+      "required_concepts": ["getconf", "ARG_MAX"]
+    },
+    {
+      "id": "T40",
+      "tier": 3,
+      "category": "process",
+      "question": "I need to start a CPU-heavy command, but with lower scheduling priority so it interferes less with the rest of the system.",
+      "expected_commands": ["nice"],
+      "expected_answer": "nice -n 10 command",
+      "posix_traps": ["ionice and cpulimit are NOT POSIX", "changing priority after start is a different task"],
+      "required_concepts": ["nice", "-n 10"]
     }
   ]
 }

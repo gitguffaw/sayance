@@ -45,7 +45,7 @@ make test-product-negative
    ```bash
    python3 run_benchmark.py --dry-run
    ```
-   Verify the questions shown in the output do not contain any of the expected command names. This is how you catch a Taboo rule violation before wasting money on API calls.
+   Verify the questions shown in the output do not contain any of the expected command names. This is how you catch a Taboo rule violation before wasting money on API calls. The current corpus should report 40 questions.
 
 Model-selection note:
 - By default, Claude/Codex runs are pinned to:
@@ -195,11 +195,11 @@ Before committing any change to `benchmark_data.json`, `run_benchmark.py`, or `b
 
 ## Known Issues to Watch
 
-- **Gemini timeouts:** In Track 1, Gemini (`gemini-3.1-pro-preview`) timed out on 4/30 questions (T04, T21, T26, T30). This appears to be latency variance rather than quota exhaustion — Track 2 completed all 30 questions with no timeouts. If you see timeouts, rerun the same command; the benchmark resumes from cached files.
+- **Gemini timeouts:** In the original 30-question Track 1 baseline, Gemini (`gemini-3.1-pro-preview`) timed out on 4/30 questions (T04, T21, T26, T30). This appears to be latency variance rather than quota exhaustion — the corresponding 30-question Track 2 run completed with no timeouts. If you see timeouts, rerun the same command; the benchmark resumes from cached files.
 
 - **Gemini daily quota planning:** In this repo, assume Gemini is only safe for one benchmark call every 30 seconds and no more than 50 model calls per day unless your active account limits show otherwise. That means:
-  - Track 1 baseline with Gemini alone is safe: `python3 run_benchmark.py --llms gemini --max-workers 1 --delay 30`
-  - Track 2 Step-Up may exceed the daily quota because `TOOL_CALL: get_posix_syntax(...)` causes a second Gemini invocation for that question
+  - Track 1 baseline with the current 40-question corpus still fits: `python3 run_benchmark.py --llms gemini --max-workers 1 --delay 30`
+  - Track 2 Step-Up may exceed the daily quota because `TOOL_CALL: get_posix_syntax(...)` causes a second Gemini invocation for a question
   - If a run stops partway through, reuse the same results directory and resume on the next day
 
 - **Codex step count:** Codex (GPT-5.4) runs 8.1 mean steps in Track 1 and 9.5 in Track 2. This is normal behavior — Codex is agentic by default. `mean_step_count` above 12 is a red flag; check for ambiguous question wording or injected context causing extra tool loops.
