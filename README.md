@@ -189,7 +189,8 @@ GitHub enforcement note (current repo state, observed 2026-04-03):
 | `posix-tldr.json` | Syntax lookup database (shared by CLI and benchmark) |
 | `posix-core.md` | **Tier 1** — semantic map of all 155 POSIX utilities (~925 tokens) |
 | `Makefile` | Build, test, and install pipeline |
-| `run_benchmark.py` | Benchmark runner — provider adapters, grading, reporting |
+| `run_benchmark.py` | Stable benchmark CLI entrypoint + compatibility facade |
+| `benchmark_core/` | Internal benchmark implementation (`cli`, `runner`, `providers`, `execution`, `reporting`, `models`, `config`) |
 | `benchmark_data.json` | 30 intent-based questions with expected POSIX answers |
 | `posix-utilities.txt` | All 155 POSIX Issue 8 utilities (canonical list) |
 
