@@ -82,7 +82,11 @@ def main():
     )
     parser.add_argument(
         "--results-dir",
-        help="Override results directory for this run (absolute path, or relative path under results/)",
+        help="Override the run directory for this invocation (absolute path, or relative path under results/)",
+    )
+    parser.add_argument(
+        "--label",
+        help="Optional human-readable run label used in the default run directory name",
     )
     parser.add_argument(
         "--compare", nargs="+", metavar="NAME=PATH",
@@ -109,27 +113,6 @@ def main():
 
     if args.timeout <= 0:
         parser.error("--timeout must be greater than 0")
-
-    # Switch results directory based on flag combinations
-    if args.inject_posix and args.execute:
-        config.set_results_dir(config.RESULTS_DIR_STEPUP_EXECUTE)
-    elif args.execute:
-        config.set_results_dir(config.RESULTS_DIR_EXECUTE)
-    elif args.inject_posix:
-        config.set_results_dir(config.RESULTS_DIR_STEPUP)
-    else:
-        config.set_results_dir(config.RESULTS_DIR_BASE)
-    if args.results_dir:
-        custom_results_dir = Path(args.results_dir)
-        if not custom_results_dir.is_absolute():
-            relative_parts = [part for part in custom_results_dir.parts if part not in ("", ".")]
-            if not relative_parts or relative_parts[0] != "results":
-                parser.error("--results-dir relative paths must start with 'results/'")
-            if ".." in relative_parts:
-                parser.error("--results-dir relative paths must not contain '..'")
-            custom_results_dir = config.SCRIPT_DIR.joinpath(*relative_parts)
-        config.set_results_dir(custom_results_dir)
-    retain_latest_artifacts = bool(args.results_dir)
 
     judge = None if args.no_grade else args.judge
 
@@ -179,8 +162,32 @@ def main():
     requested_labels = [
         f"{llm}:{model}" for llm, model in requested_models.items() if llm in args.llms and model
     ]
+    default_results_root = config.mode_results_dir(
+        inject_posix=args.inject_posix,
+        execute=args.execute,
+    )
+    run_label = args.label or config.derive_run_label(
+        llms=args.llms,
+        requested_models=requested_models,
+        timeout_seconds=args.timeout,
+        default_timeout_seconds=providers.DEFAULT_CLI_TIMEOUT_SECONDS,
+    )
+    config.set_results_dir(config.make_run_results_dir(default_results_root, label=run_label))
+    if args.results_dir:
+        custom_results_dir = Path(args.results_dir)
+        if not custom_results_dir.is_absolute():
+            relative_parts = [part for part in custom_results_dir.parts if part not in ("", ".")]
+            if not relative_parts or relative_parts[0] != "results":
+                parser.error("--results-dir relative paths must start with 'results/'")
+            if ".." in relative_parts:
+                parser.error("--results-dir relative paths must not contain '..'")
+            custom_results_dir = config.SCRIPT_DIR.joinpath(*relative_parts)
+        config.set_results_dir(custom_results_dir)
+    retain_latest_artifacts = bool(args.results_dir)
+
     if requested_labels:
         print(f"  Requested pinned models: {', '.join(requested_labels)}")
+    print(f"  Results directory: {config.RESULTS_DIR}")
 
     all_results = runner.run_benchmark(
         llms=args.llms,
@@ -203,6 +210,22 @@ def main():
         reporting.save_summary(
             all_results,
             requested_models=requested_models,
+            run_metadata={
+                "mode": (
+                    "stepup-execute" if args.inject_posix and args.execute
+                    else "execute" if args.execute
+                    else "stepup" if args.inject_posix
+                    else "baseline"
+                ),
+                "label": config.current_run_label(),
+                "slug": config.current_run_slug(),
+                "llms": args.llms,
+                "requested_models": requested_models,
+                "timeout_seconds": args.timeout,
+                "seed": args.seed,
+                "k": args.k,
+                "judge": judge,
+            },
             retain_latest_only=retain_latest_artifacts,
         )
         reporting.save_visual_report(
@@ -210,4 +233,3 @@ def main():
             questions,
             retain_latest_only=retain_latest_artifacts,
         )
-

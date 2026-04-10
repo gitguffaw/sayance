@@ -172,11 +172,12 @@ def save_summary(
     all_results: dict[str, list[QuestionResult]],
     *,
     requested_models: dict[str, str | None] | None = None,
+    run_metadata: dict | None = None,
     retain_latest_only: bool = False,
 ) -> Path:
     """Save a combined summary JSON file."""
     config.RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+    ts = config.current_run_slug()
     summary_path = config.RESULTS_DIR / f"summary-{ts}.json"
 
     summary = {
@@ -187,6 +188,8 @@ def save_summary(
         "requested_models": requested_models or {},
         "llms": {},
     }
+    if run_metadata:
+        summary["run_metadata"] = run_metadata
 
     for llm, results in all_results.items():
         token_results = usage_valid_results(results)
@@ -282,6 +285,9 @@ def save_summary(
             summary["llms"][llm]["exec_passed"] = successes
 
     summary_path.write_text(json.dumps(summary, indent=2))
+    if run_metadata:
+        manifest_path = config.RESULTS_DIR / "run.json"
+        manifest_path.write_text(json.dumps(run_metadata, indent=2) + "\n")
     if retain_latest_only:
         prune_timestamped_artifacts(config.RESULTS_DIR, "summary-*.json", summary_path)
     print(f"  Summary saved: {summary_path}")
@@ -296,7 +302,7 @@ def save_visual_report(
 ) -> Path:
     """Save a self-contained HTML report with charts and task scorecards."""
     config.RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+    ts = config.current_run_slug()
     report_path = config.RESULTS_DIR / f"report-{ts}.html"
 
     q_lookup = {q["id"]: q for q in questions}
@@ -1149,7 +1155,7 @@ def save_visual_report(
 def save_comparison_report(named_summaries: list[tuple[str, dict]]) -> Path:
     """Generate a standalone HTML report comparing multiple benchmark runs."""
     config.RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+    ts = config.timestamp_slug()
     report_path = config.RESULTS_DIR / f"comparison-{ts}.html"
 
     # Collect all LLM names across all runs

@@ -74,7 +74,7 @@ No virtual environment or dependencies needed — pure stdlib Python 3.
 5. `benchmark_core/reporting.py` writes terminal, summary JSON, and HTML reports.
 6. `benchmark_core/models.py` defines dataclasses/result filters; `benchmark_core/config.py` holds path/runtime config.
 
-Results are saved under `results/` as JSON/HTML (`results/` for Track 1, `results/stepup/` for Track 2, `results/execute/` for Track 3, and `results/stepup-execute/` for Track 3b).
+Results are saved under `results/` as JSON/HTML, with mode roots at `results/baseline/` for Track 1, `results/stepup/` for Track 2, `results/execute/` for Track 3, and `results/stepup-execute/` for Track 3b. Each invocation writes to its own run directory using `label-DYYYY-MM-DD-THH-MM-SS`, for example `claude-codex-D2026-04-10-T08-55-15`. Each run directory also includes a `run.json` manifest so experiment context is not stored only in the folder name.
 
 **CLI invocation patterns:**
 - Claude: `claude -p "prompt" --output-format json`

@@ -10,7 +10,7 @@
 
 ## Project Structure & Module Organization
 
-This repository is a small, stdlib-only Python benchmark. `run_benchmark.py` is the stable CLI entrypoint and compatibility facade. Internal implementation lives under `benchmark_core/` (`cli`, `runner`, `providers`, `execution`, `reporting`, `models`, `config`). Benchmark inputs live in `benchmark_data.json`, and the POSIX utility source of truth lives in `posix-utilities.txt`. Research notes and planning docs are under `docs/brainstorms/`, `docs/plans/`, and `docs/solutions/`. Generated output is written under `results/` (including mode-specific subdirectories like `results/stepup/`, `results/execute/`, and `results/stepup-execute/`) and is ignored by Git.
+This repository is a small, stdlib-only Python benchmark. `run_benchmark.py` is the stable CLI entrypoint and compatibility facade. Internal implementation lives under `benchmark_core/` (`cli`, `runner`, `providers`, `execution`, `reporting`, `models`, `config`). Benchmark inputs live in `benchmark_data.json`, and the POSIX utility source of truth lives in `posix-utilities.txt`. Research notes and planning docs are under `docs/brainstorms/`, `docs/plans/`, and `docs/solutions/`. Generated output is written under `results/`, with mode roots at `results/baseline/`, `results/stepup/`, `results/execute/`, and `results/stepup-execute/`. Each benchmark invocation writes to its own run directory using `label-DYYYY-MM-DD-THH-MM-SS`, for example `claude-codex-D2026-04-10-T08-55-15`. Each run directory also includes a `run.json` manifest so context is not encoded only in the folder name. Generated output is ignored by Git.
 
 ## Build, Test, and Development Commands
 
@@ -41,7 +41,7 @@ Follow the existing Python style across `benchmark_core/` and `run_benchmark.py`
 There is no dedicated `tests/` directory yet. Use a dual-lane validation approach:
 - Lane A (legacy): dry runs and focused benchmark runs.
 - Lane B (additive): installed product-path checks via `make test-product`.
-For logic changes, run `python3 -m py_compile run_benchmark.py benchmark_core/*.py`, at least one targeted Lane A command such as `python3 run_benchmark.py --dry-run --questions T01`, and Lane B product conformance when packaging/skill behavior is touched. If you change parsing, grading, or result serialization, note a sample JSON path from `results/`, but do not commit generated output.
+For logic changes, run `python3 -m py_compile run_benchmark.py benchmark_core/*.py`, at least one targeted Lane A command such as `python3 run_benchmark.py --dry-run --questions T01`, and Lane B product conformance when packaging/skill behavior is touched. If you change parsing, grading, or result serialization, note a sample JSON path from the relevant timestamped run directory under `results/`, but do not commit generated output.
 If GitHub required status checks are unavailable for this repository plan, enforce Lane B as a local gate before merge/release by running `make test-product` and `make test-product-negative`.
 
 ## Commit & Pull Request Guidelines
