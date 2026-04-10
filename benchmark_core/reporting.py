@@ -864,6 +864,7 @@ def save_visual_report(
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
       gap: 14px;
+      align-items: start;
     }}
     .task-card {{
       border: 1px solid var(--line);
@@ -872,6 +873,11 @@ def save_visual_report(
       background: rgba(255,255,255,0.84);
       display: grid;
       gap: 10px;
+      min-width: 0;
+      overflow: hidden;
+    }}
+    .task-card > * {{
+      min-width: 0;
     }}
     .task-meta {{
       display: flex;
@@ -895,6 +901,7 @@ def save_visual_report(
       padding: 8px;
       display: grid;
       gap: 3px;
+      min-width: 0;
     }}
     .task-stats strong {{
       font-size: 0.66rem;
@@ -911,6 +918,10 @@ def save_visual_report(
       display: grid;
       grid-template-columns: 1fr;
       gap: 8px;
+      min-width: 0;
+    }}
+    .code-pair > div {{
+      min-width: 0;
     }}
     .code-pair label {{
       display: block;
@@ -926,10 +937,14 @@ def save_visual_report(
       color: #f0f2f5;
       border-radius: 10px;
       padding: 10px 11px;
-      overflow-x: auto;
+      max-width: 100%;
+      overflow: auto;
       font-size: 0.79rem;
       line-height: 1.45;
       font-family: "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }}
     .empty-state {{
       margin: 0;
