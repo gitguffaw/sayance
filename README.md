@@ -185,7 +185,7 @@ GitHub enforcement note (current repo state, observed 2026-04-03):
 | File | Purpose |
 |------|---------|
 | `skill/SKILL.md` | **The Product** — Claude Code skill combining Tier 1 map + Tier 2 CLI instruction |
-| `skill/posix-lookup` | **Tier 2 CLI** — Python 3 binary, zero deps, called via bash |
+| `skill/posix-lookup` | **Tier 2 CLI** — executable Python 3 CLI, zero deps, called via bash |
 | `posix-tldr.json` | Syntax lookup database (shared by CLI and benchmark) |
 | `posix-core.md` | **Tier 1** — semantic map of all 155 POSIX utilities (~925 tokens) |
 | `Makefile` | Build, test, and install pipeline |

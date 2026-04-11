@@ -23,6 +23,10 @@ run_case() {
     missing_data)
       rm -f "${tmp_home}/.codex/skills/posix/posix-tldr.json" "${tmp_home}/.claude/skills/posix/posix-tldr.json"
       ;;
+    drift_skill)
+      # Remove one utility (pax) from the installed SKILL.md to simulate drift
+      sed -i '' '/pax/d' "${tmp_home}/.claude/skills/posix/SKILL.md"
+      ;;
     *)
       echo "Unknown mode: ${mode}"
       HOME="${tmp_home}" make -C "${repo_dir}" uninstall >/dev/null || true
@@ -31,11 +35,52 @@ run_case() {
       ;;
   esac
 
-  if HOME="${tmp_home}" PATH="${lane_path}" posix-lookup pax >/dev/null 2>&1; then
-    echo "FAIL: ${case_name} did not fail as expected."
-    HOME="${tmp_home}" make -C "${repo_dir}" uninstall >/dev/null || true
-    rm -rf "${tmp_home}"
-    exit 1
+  local expected_fail=true
+
+  if [ "${mode}" = "drift_skill" ]; then
+    # For drift detection, we check that the installed SKILL.md utility count
+    # no longer matches posix-lookup --list count (155 vs 154).
+    local skill_count list_count
+    skill_count="$(python3 - "${tmp_home}/.claude/skills/posix/SKILL.md" <<'PY'
+import re, sys
+text = open(sys.argv[1]).read()
+names = set()
+for line in text.splitlines():
+    line = line.strip()
+    if not line or line.startswith('#') or line.startswith('```'):
+        continue
+    m = re.match(r'^\*\s+(\w+)\s*:', line)
+    if m:
+        names.add(m.group(1).lower())
+        continue
+    if ',' in line and not line.startswith('posix') and not line.startswith('If'):
+        parts = re.split(r':', line)[0]
+        for part in re.split(r'[,\s]+', parts):
+            word = part.strip().lower()
+            if word and re.fullmatch(r'[a-z][a-z0-9_]*', word):
+                names.add(word)
+print(len(names))
+PY
+    )"
+    list_count="$(PATH="${lane_path}" posix-lookup --list | wc -l | tr -d ' ')"
+
+    if [ "${skill_count}" -ne "${list_count}" ]; then
+      # Drift detected — counts differ, which is what we want
+      expected_fail=true
+    else
+      echo "FAIL: ${case_name} — SKILL.md count (${skill_count}) still matches --list (${list_count}) after removing pax"
+      HOME="${tmp_home}" make -C "${repo_dir}" uninstall >/dev/null || true
+      rm -rf "${tmp_home}"
+      exit 1
+    fi
+  else
+    # Standard negative test: posix-lookup pax should fail
+    if HOME="${tmp_home}" PATH="${lane_path}" posix-lookup pax >/dev/null 2>&1; then
+      echo "FAIL: ${case_name} did not fail as expected."
+      HOME="${tmp_home}" make -C "${repo_dir}" uninstall >/dev/null || true
+      rm -rf "${tmp_home}"
+      exit 1
+    fi
   fi
 
   HOME="${tmp_home}" make -C "${repo_dir}" uninstall >/dev/null || true
@@ -46,5 +91,6 @@ run_case() {
 run_case "broken symlink target is detected" "broken_symlink"
 run_case "malformed installed JSON is detected" "malformed_json"
 run_case "missing installed JSON data is detected" "missing_data"
+run_case "installed SKILL.md drift is detected" "drift_skill"
 
 echo "Lane B failure-injection sensitivity checks passed."
