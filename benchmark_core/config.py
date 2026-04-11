@@ -5,7 +5,7 @@ import re
 SCRIPT_DIR = Path(__file__).resolve().parents[1]
 DATA_FILE = SCRIPT_DIR / "benchmark_data.json"
 POSIX_CORE_FILE = SCRIPT_DIR / "posix-core.md"
-POSIX_TLDR_FILE = SCRIPT_DIR / "posix-tldr.json"
+POSIX_TLDR_FILE = SCRIPT_DIR / "skill" / "posix-tldr.json"
 POSIX_UTILITIES_FILE = SCRIPT_DIR / "posix-utilities.txt"
 POSIX_SKILL_FILE = SCRIPT_DIR / "skill" / "SKILL.md"
 FIXTURES_DIR = SCRIPT_DIR / "fixtures"

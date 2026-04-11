@@ -89,7 +89,7 @@ Results are saved under `results/` as JSON/HTML, with mode roots at `results/bas
 
 - `skill/SKILL.md` — **The product** — Claude Code skill (Tier 1 map + Tier 2 CLI instruction)
 - `skill/posix-lookup` — **Tier 2 CLI** — executable Python 3 CLI, zero deps, called via bash
-- `posix-tldr.json` — Syntax lookup database (shared by CLI and benchmark)
+- `skill/posix-tldr.json` — Syntax lookup database (shared by CLI and benchmark)
 - `posix-core.md` — Tier 1 semantic map (also embedded in SKILL.md)
 - `Makefile` — `make test`, `make test-product`, `make test-product-negative`, `make test-product-live-claude`, `make test-product-live-codex`, `make install`, `make uninstall`
 - `posix-utilities.txt` — All 155 POSIX Issue 8 utilities (source of truth)
