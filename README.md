@@ -92,11 +92,40 @@ Tracks 1 and 2 measure compliance in a controlled text-analysis environment. No 
 
 No virtualenv needed. Pure stdlib Python 3.
 
-```bash
-# Install the skill + CLI (Claude + Codex)
-make install
+### One-line install (no clone required)
 
-# Verify it works
+```bash
+# Claude Code + Codex
+curl -fsSL https://raw.githubusercontent.com/gitguffaw/posix/main/install.sh | bash
+
+# Claude Code only
+curl -fsSL https://raw.githubusercontent.com/gitguffaw/posix/main/install.sh | bash -s claude
+
+# Codex only
+curl -fsSL https://raw.githubusercontent.com/gitguffaw/posix/main/install.sh | bash -s codex
+```
+
+### Codex native installer
+
+From inside a Codex session:
+
+```
+$skill-installer install https://github.com/gitguffaw/posix/tree/main/skill
+```
+
+### From source
+
+```bash
+git clone https://github.com/gitguffaw/posix.git
+cd posix
+make install         # both Claude + Codex
+make install-claude  # Claude Code only
+make install-codex   # Codex only
+```
+
+### Verify
+
+```bash
 posix-lookup pax
 posix-lookup --list
 ```
@@ -105,11 +134,10 @@ After install, restart Claude Code or Codex. The skill auto-loads the semantic m
 
 ```bash
 # Dev workflow — edit and iterate
-make test       # test from repo without installing
+make test                  # test from repo without installing
 make test-product          # Lane B: installed product-path conformance (isolated HOME)
 make test-product-negative # Lane B: failure-injection sensitivity checks
-make install    # deploy to ~/.claude/skills/posix/ and ~/.codex/skills/posix/
-make uninstall  # remove skill and CLI
+make uninstall             # remove skill and CLI
 ```
 
 ## Run the Benchmark
@@ -186,7 +214,7 @@ GitHub enforcement note (current repo state, observed 2026-04-03):
 |------|---------|
 | `skill/SKILL.md` | **The Product** — Claude Code skill combining Tier 1 map + Tier 2 CLI instruction |
 | `skill/posix-lookup` | **Tier 2 CLI** — executable Python 3 CLI, zero deps, called via bash |
-| `posix-tldr.json` | Syntax lookup database (shared by CLI and benchmark) |
+| `skill/posix-tldr.json` | Syntax lookup database (shared by CLI and benchmark) |
 | `posix-core.md` | **Tier 1** — semantic map of all 155 POSIX utilities (~925 tokens) |
 | `Makefile` | Build, test, and install pipeline |
 | `run_benchmark.py` | Stable benchmark CLI entrypoint + compatibility facade |

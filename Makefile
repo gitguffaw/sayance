@@ -20,7 +20,7 @@ install-claude:
 	@mkdir -p $(CLAUDE_SKILL_DIR) $(BIN_DIR)
 	cp skill/SKILL.md $(CLAUDE_SKILL_DIR)/SKILL.md
 	cp skill/posix-lookup $(CLAUDE_SKILL_DIR)/posix-lookup
-	cp posix-tldr.json $(CLAUDE_SKILL_DIR)/posix-tldr.json
+	cp skill/posix-tldr.json $(CLAUDE_SKILL_DIR)/posix-tldr.json
 	chmod +x $(CLAUDE_SKILL_DIR)/posix-lookup
 	ln -sf $(CLAUDE_SKILL_DIR)/posix-lookup $(BIN_DIR)/posix-lookup
 
@@ -28,7 +28,7 @@ install-codex:
 	@mkdir -p $(CODEX_SKILL_DIR) $(BIN_DIR)
 	cp skill/SKILL.md $(CODEX_SKILL_DIR)/SKILL.md
 	cp skill/posix-lookup $(CODEX_SKILL_DIR)/posix-lookup
-	cp posix-tldr.json $(CODEX_SKILL_DIR)/posix-tldr.json
+	cp skill/posix-tldr.json $(CODEX_SKILL_DIR)/posix-tldr.json
 	chmod +x $(CODEX_SKILL_DIR)/posix-lookup
 	ln -sf $(CODEX_SKILL_DIR)/posix-lookup $(BIN_DIR)/posix-lookup
 
