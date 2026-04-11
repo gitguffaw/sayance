@@ -61,7 +61,7 @@ The POSIX.1-2024 Issue 8 spec rationale confirms the addition of `readlink`, `re
 A progressive, low-token reference mechanism that mirrors human developer workflows.
 
 *   **Tier 1 (`posix-core.md`):** A heavily condensed semantic map of the 155 utilities injected into the agent's context as a Factory Skill. It provides a 2-4 word semantic hook (e.g., `pax: portable archive (NOT tar)`) so the agent knows the tool exists. Max size: ~1,200 tokens.
-*   **Tier 2 (Syntax Lookup CLI):** A CLI binary (`posix-lookup`) backed by a local database (`posix-tldr.json`). Agents are instructed to run `posix-lookup <utility>` via bash *before* executing a Tier 1 utility in the shell. Chosen over MCP to avoid schema token overhead and maximize cross-platform reach (any agent with bash access).
+*   **Tier 2 (Syntax Lookup CLI):** An executable Python 3 CLI (`posix-lookup`) backed by a local database (`posix-tldr.json`). Agents are instructed to run `posix-lookup <utility>` via bash *before* executing a Tier 1 utility in the shell. Chosen over MCP to avoid schema token overhead and maximize cross-platform reach (any agent with bash access).
 
 *Future consideration:* If Tier 2 coverage proves insufficient after Track 3 validation, a Tier 3 spec search tool can be added. This is deferred until data motivates it.
 
@@ -90,7 +90,7 @@ For pipeline lookups, the LLM calls `posix-lookup` once per utility. This is sim
 
 **Why not MCP?** MCP was evaluated in a structured 3-agent engineering debate. The conclusion: MCP adds ~79-120 tokens of schema overhead, requires a persistent server process, and limits reach to MCP-compatible clients. The CLI approach costs zero schema tokens and works anywhere with a terminal. MCP remains a future option for structured multi-client access.
 
-**Future MCP path:** The CLI lookup function is isolated and trivially wrappable in a FastMCP server (~50 lines) if multi-client structured tool access (Cursor, Cline, Zed) becomes a priority.
+**Future MCP path (future-state only — not implemented):** The CLI lookup function is isolated and trivially wrappable in a FastMCP server (~50 lines) if multi-client structured tool access (Cursor, Cline, Zed) becomes a priority.
 
 ## 3. Design Principles for Tier 1 Semantic Hooks
 
@@ -194,7 +194,7 @@ All three providers completed with 30/30 valid results.
 Built and deployed the production delivery mechanism for the POSIX Bridge:
 
 *   **Architecture decision (QNT-53):** CLI skill via bash chosen over MCP after structured multi-agent debate. Zero schema tokens, universal agent compatibility.
-*   **`posix-lookup` CLI (QNT-54):** Python 3 binary, zero deps, pure stdlib. Modes: lookup, --list, --json.
+*   **`posix-lookup` CLI (QNT-54):** Executable Python 3 CLI, zero deps, pure stdlib. Modes: lookup, --list, --json.
 *   **`skill/SKILL.md` (QNT-55):** Claude Code skill combining Tier 1 semantic map + Tier 2 CLI instruction. Auto-loads into sessions (~925 tokens, cached).
 *   **`Makefile` (QNT-56):** `make test`, `make install`, `make uninstall` pipeline.
 *   **`skill/` directory (QNT-57):** Source of truth for distributable artifacts in the repo.

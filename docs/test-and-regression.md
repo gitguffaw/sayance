@@ -20,16 +20,25 @@ A regression is any change to the codebase, prompt, question set, or tool that m
 Use both lanes together:
 
 - **Lane A (legacy, unchanged):** benchmark simulation checks in `run_benchmark.py` for comparability and metric tracking.
-- **Lane B (additive):** installed product-path conformance checks for `SKILL.md` + `posix-lookup`.
+- **Lane B (additive):** installed product-path conformance checks for `SKILL.md` + `posix-lookup`. Includes single-target install tests (`install-claude` / `install-codex` independently), installed-level drift validation (SKILL.md, posix-tldr.json, and `posix-lookup --list` agree on 155 utilities), and partial-uninstall symlink correctness.
 
 Lane A does not replace Lane B, and Lane B does not replace Lane A.
 
-Lane B commands:
+Lane B commands (required pre-merge gate):
 
 ```bash
-make test-product
-make test-product-negative
+make test-product            # single-target installs, drift check, partial uninstall
+make test-product-negative   # failure injection: broken symlink, bad JSON, missing data, SKILL.md drift
 ```
+
+Lane B optional extension (billable, opt-in — NOT a pre-merge gate):
+
+```bash
+POSIX_LIVE_CANARY=1 make test-product-live-claude
+POSIX_LIVE_CANARY=1 make test-product-live-codex
+```
+
+Live canaries install the bridge into an isolated HOME, run a prompt through the CLI, and assert the response uses the correct POSIX utility. Results are informational — nondeterministic LLM output makes hard gates unreliable.
 
 ---
 

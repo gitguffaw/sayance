@@ -266,6 +266,27 @@ def validate_posix_bridge(
                 f"{config.POSIX_CORE_FILE.name}: {preview(missing_core_utility)}"
             )
 
+        # SKILL.md coverage: every POSIX utility must appear in the skill file.
+        # Bidirectional note: core/skill checks are presence-only (\b word boundary);
+        # they can detect missing utilities but not extras. The unknown_tldr_entries
+        # check below handles bidirectional enforcement for the structured TLDR data.
+        try:
+            skill_text = config.POSIX_SKILL_FILE.read_text()
+        except (FileNotFoundError, OSError):
+            errors.append(f"Could not load {config.POSIX_SKILL_FILE.name}.")
+            skill_text = ""
+        skill_lower = skill_text.lower()
+
+        def in_skill(name: str) -> bool:
+            return bool(re.search(rf"\b{re.escape(name)}\b", skill_lower))
+
+        missing_skill_utility = [name for name in utilities if not in_skill(name)]
+        if missing_skill_utility:
+            errors.append(
+                "Missing POSIX utilities in "
+                f"{config.POSIX_SKILL_FILE.name}: {preview(missing_skill_utility)}"
+            )
+
         unknown_tldr_entries = sorted(tldr_keys - utility_set)
         if unknown_tldr_entries:
             errors.append(

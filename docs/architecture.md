@@ -30,7 +30,7 @@ This file is capped at ~800 tokens. Its only job is to make sure the agent knows
 
 ### Tier 2 — The Syntax Lookup CLI (`posix-lookup`)
 
-A CLI binary the LLM calls via bash before executing a Tier 1 utility. It accepts a utility name and returns the exact, pure-POSIX syntax strings — no GNU extensions, no BSD variants.
+An executable Python 3 CLI the LLM calls via bash before executing a Tier 1 utility. It accepts a utility name and returns the exact, pure-POSIX syntax strings — no GNU extensions, no BSD variants.
 
 ```bash
 $ posix-lookup pax
@@ -66,7 +66,7 @@ User prompt
 
 ## Key Design Decisions
 
-**Why a CLI binary instead of an MCP server?**  
+**Why an executable CLI instead of an MCP server?**  
 The LLM's bash tool is always registered in its schema — zero additional context tokens. An MCP tool would add ~79-120 tokens of permanent schema overhead. The CLI also works in any agent environment with shell access (Claude Code, Cursor, Codex, Gemini CLI), not just MCP-compatible clients. MCP remains a future option if multi-client structured tool access becomes a priority.
 
 **Why a CLI instead of a raw file?**  

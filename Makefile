@@ -3,7 +3,7 @@ CODEX_SKILL_DIR  := $(HOME)/.codex/skills/posix
 BIN_DIR          := $(HOME)/.local/bin
 REPO_DIR         := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
-.PHONY: install install-all install-claude install-codex uninstall uninstall-claude uninstall-codex test test-product test-product-negative
+.PHONY: install install-all install-claude install-codex uninstall uninstall-claude uninstall-codex test test-product test-product-negative test-product-live-claude test-product-live-codex
 
 install: install-all
 
@@ -40,10 +40,30 @@ uninstall:
 
 uninstall-claude:
 	rm -rf $(CLAUDE_SKILL_DIR)
+	@LINK=$$(readlink $(BIN_DIR)/posix-lookup 2>/dev/null); \
+	if [ "$$LINK" = "$(CLAUDE_SKILL_DIR)/posix-lookup" ]; then \
+		if [ -x $(CODEX_SKILL_DIR)/posix-lookup ]; then \
+			ln -sf $(CODEX_SKILL_DIR)/posix-lookup $(BIN_DIR)/posix-lookup; \
+			echo "Repointed symlink to Codex copy."; \
+		else \
+			rm -f $(BIN_DIR)/posix-lookup; \
+			echo "Removed dangling symlink."; \
+		fi; \
+	fi
 	@echo "Removed Claude skill install."
 
 uninstall-codex:
 	rm -rf $(CODEX_SKILL_DIR)
+	@LINK=$$(readlink $(BIN_DIR)/posix-lookup 2>/dev/null); \
+	if [ "$$LINK" = "$(CODEX_SKILL_DIR)/posix-lookup" ]; then \
+		if [ -x $(CLAUDE_SKILL_DIR)/posix-lookup ]; then \
+			ln -sf $(CLAUDE_SKILL_DIR)/posix-lookup $(BIN_DIR)/posix-lookup; \
+			echo "Repointed symlink to Claude copy."; \
+		else \
+			rm -f $(BIN_DIR)/posix-lookup; \
+			echo "Removed dangling symlink."; \
+		fi; \
+	fi
 	@echo "Removed Codex skill install."
 
 test:
@@ -66,3 +86,9 @@ test-product:
 
 test-product-negative:
 	@./scripts/test_product_negative.sh
+
+test-product-live-claude:
+	@POSIX_LIVE_CANARY=1 ./scripts/test_product_live.sh claude
+
+test-product-live-codex:
+	@POSIX_LIVE_CANARY=1 ./scripts/test_product_live.sh codex

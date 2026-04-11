@@ -28,8 +28,9 @@ Use Python directly; there is no virtualenv or build step.
 - `python3 run_benchmark.py --execute` runs extracted commands against fixtures for execution validation (Track 3).
 - `python3 run_benchmark.py --inject-posix --execute` combines Step-Up + execution validation (Track 3b).
 - In custom `--results-dir` runs, only the latest `summary-*.json` and `report-*.html` are retained in that directory.
-- `make test-product` runs Lane B installed product-path conformance checks in an isolated `HOME`.
-- `make test-product-negative` runs Lane B failure-injection checks (missing file, broken symlink, malformed JSON).
+- `make test-product` runs Lane B installed product-path conformance checks in an isolated `HOME` (includes single-target install tests, installed-level drift validation, and partial-uninstall symlink verification).
+- `make test-product-negative` runs Lane B failure-injection checks (missing file, broken symlink, malformed JSON, installed SKILL.md drift).
+- `make test-product-live-claude` / `make test-product-live-codex` run opt-in live canary tests (requires `POSIX_LIVE_CANARY=1`; billable API calls, NOT part of the pre-merge gate).
 - `python3 -m py_compile run_benchmark.py benchmark_core/*.py` is the fastest syntax sanity check before committing.
 
 ## Coding Style & Naming Conventions
@@ -40,7 +41,7 @@ Follow the existing Python style across `benchmark_core/` and `run_benchmark.py`
 
 There is no dedicated `tests/` directory yet. Use a dual-lane validation approach:
 - Lane A (legacy): dry runs and focused benchmark runs.
-- Lane B (additive): installed product-path checks via `make test-product`.
+- Lane B (additive): installed product-path checks via `make test-product` and `make test-product-negative`. Includes single-target install isolation, installed artifact drift validation, and partial-uninstall symlink correctness. Optional live canary extension (`make test-product-live-claude` / `make test-product-live-codex`) is billable and informational — not part of the pre-merge gate.
 For logic changes, run `python3 -m py_compile run_benchmark.py benchmark_core/*.py`, at least one targeted Lane A command such as `python3 run_benchmark.py --dry-run --questions T01`, and Lane B product conformance when packaging/skill behavior is touched. If you change parsing, grading, or result serialization, note a sample JSON path from the relevant timestamped run directory under `results/`, but do not commit generated output.
 If GitHub required status checks are unavailable for this repository plan, enforce Lane B as a local gate before merge/release by running `make test-product` and `make test-product-negative`.
 
