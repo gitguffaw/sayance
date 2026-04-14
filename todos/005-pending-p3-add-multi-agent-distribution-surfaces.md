@@ -103,7 +103,7 @@ For `posix`, multi-agent distribution should be treated as a third-order improve
 
 ## Resources
 
-- Comparative synthesis: `docs/archive/cavemanReview/synthesis.md`
+- Comparative synthesis: `docs/archive/comparisonReview/synthesis.md`
 - Comparable packaging examples:
   - `.claude-plugin/plugin.json`
   - `plugins/caveman/.codex-plugin/plugin.json`

@@ -114,7 +114,7 @@ This matters because:
 
 ## Resources
 
-- Comparative synthesis: `docs/archive/cavemanReview/synthesis.md`
+- Comparative synthesis: `docs/archive/comparisonReview/synthesis.md`
 - Existing product-path checks:
   - `scripts/test_product.sh`
   - `scripts/test_product_negative.sh`

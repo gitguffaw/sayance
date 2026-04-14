@@ -1,4 +1,4 @@
-# Caveman Comparison Synthesis
+# Comparison Review Synthesis
 
 This document merges the Codex and Claude reviews into one submission-ready assessment and action plan.
 
@@ -258,7 +258,7 @@ This helps adoption, but it does not make the project more rigorous. It should n
   - `001-pending-p2-add-github-actions-validation-workflow.md`
   - `002-pending-p3-add-contributing-and-issue-templates.md`
   - `003-pending-p3-publish-static-evidence-artifacts.md`
-  - `006-pending-p1-add-open-source-license.md`
+  - `006-complete-p1-add-open-source-license.md`
 
 - Existing but grouped into one launch workstream:
   - `001-pending-p2-add-github-actions-validation-workflow.md`
