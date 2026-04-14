@@ -253,3 +253,7 @@ Results are gitignored and not committed.
 - [Architecture](docs/architecture.md) — how the two-tier system works
 - [Benchmark Methodology](docs/benchmarks.md) — how we measure
 - [Test & Regression](docs/test-and-regression.md) — validation procedures
+
+## License
+
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE).

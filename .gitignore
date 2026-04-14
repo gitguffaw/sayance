@@ -4,5 +4,8 @@ __pycache__/
 .claude/worktrees/
 results/**
 state/
-docs/archive/
+docs/archive/*
+!docs/archive/comparisonReview/
+docs/archive/comparisonReview/*
+!docs/archive/comparisonReview/synthesis.md
 docs/solutions/workflow/
