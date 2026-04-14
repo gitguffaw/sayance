@@ -3,7 +3,7 @@ CODEX_SKILL_DIR  := $(HOME)/.codex/skills/posix
 BIN_DIR          := $(HOME)/.local/bin
 REPO_DIR         := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
-.PHONY: install install-all install-claude install-codex uninstall uninstall-claude uninstall-codex test test-product test-product-negative test-product-live-claude test-product-live-codex
+.PHONY: install install-all install-claude install-codex uninstall uninstall-claude uninstall-codex test test-product test-product-negative test-product-live-claude test-product-live-codex test-repo verify
 
 install: install-all
 
@@ -92,3 +92,13 @@ test-product-live-claude:
 
 test-product-live-codex:
 	@POSIX_LIVE_CANARY=1 ./scripts/test_product_live.sh codex
+
+test-repo:
+	@python3 scripts/verify_repo.py
+
+verify:
+	python3 -m py_compile run_benchmark.py benchmark_core/*.py
+	python3 -m unittest
+	$(MAKE) test-repo
+	$(MAKE) test-product
+	$(MAKE) test-product-negative
