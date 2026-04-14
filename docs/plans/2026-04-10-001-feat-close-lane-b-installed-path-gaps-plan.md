@@ -4,11 +4,11 @@ Outcome:
 
 ---
 
-# feat: Close Installed-Path Lane B Gaps
+# feat: Close Installed-Path Install Testing Gaps
 
 ## Overview
 
-Lane B (product-conformance testing) validates that the installed POSIX bridge — `skill/SKILL.md` + `posix-lookup` CLI — works correctly from a clean environment. Current Lane B tests cover file presence, CLI functionality, and 155-count in an isolated HOME. Three gaps remain:
+Install Testing (product-conformance testing) validates that the installed POSIX bridge — `skill/SKILL.md` + `posix-lookup` CLI — works correctly from a clean environment. Current Install Testing tests cover file presence, CLI functionality, and 155-count in an isolated HOME. Three gaps remain:
 
 1. **No drift enforcement** between the four canonical bridge sources (`posix-utilities.txt`, `posix-tldr.json`, `posix-core.md`, `skill/SKILL.md`)
 2. **No per-target install isolation** — `install-claude` and `install-codex` are tested only via `install-all`, plus a real symlink bug on partial uninstall
@@ -18,7 +18,7 @@ The product is the installed bridge, not a compiled binary. This plan closes the
 
 ## Problem Statement / Motivation
 
-The existing `--validate-bridge` (`benchmark_core/runner.py:188-276`) checks `posix-utilities.txt` against `posix-core.md` and `posix-tldr.json` but never touches `skill/SKILL.md`. The installed product could drift from the repo-level bridge assets silently. Meanwhile, `test_product.sh` checks file presence and counts but not content agreement across sources. And no automated test proves the bridge actually activates in a fresh CLI session — the core claim of the project is unverified at the product path.
+The existing `--validate-bridge` (`benchmark_core/runner.py:188-276`) checks `posix-utilities.txt` against `posix-core.md` and `posix-tldr.json` but never touches `skill/SKILL.md`. The installed product could drift from the repo-level bridge assets silently. Meanwhile, `test_product.sh` checks file presence and counts but not content agreement across sources. And no automated test proves the bridge actually activates in a fresh CLI session — the core claim of the project is unverified at the installed path.
 
 ## Proposed Solution
 
@@ -72,7 +72,7 @@ Extend `scripts/test_product.sh` to test each install target independently:
 
 Each sub-test gets its own temp HOME to avoid interaction.
 
-**Make target decision:** Fold single-target tests into `make test-product` rather than adding a separate target. Lane B is already the "run before merge" gate — splitting it creates a target nobody remembers to run. The added time (~15s for three extra temp HOMEs) is acceptable for a pre-merge gate.
+**Make target decision:** Fold single-target tests into `make test-product` rather than adding a separate target. Install Testing is already the "run before merge" gate — splitting it creates a target nobody remembers to run. The added time (~15s for three extra temp HOMEs) is acceptable for a pre-merge gate.
 
 **Files:** `scripts/test_product.sh`
 
@@ -104,7 +104,7 @@ Each sub-test gets its own temp HOME to avoid interaction.
 "I need to display a file's contents in hexadecimal using only standard Unix utilities. What single utility should I use? Answer with just the utility name and a one-line example."
 ```
 
-These prompts are intentionally vague enough that an LLM *without* the bridge will typically reach for `tar` or `xxd`. An LLM *with* the bridge should discover `pax` and `od` via the skill's Tier 1 map.
+These prompts are intentionally vague enough that an LLM *without* the bridge will typically reach for `tar` or `xxd`. An LLM *with* the bridge should discover `pax` and `od` via the skill's Discovery Map.
 
 **Assertion logic (per canary):**
 1. Parse stdout from CLI subprocess
@@ -134,26 +134,26 @@ Two sub-tasks:
 **5a. Binary language audit** — fix files that describe posix-lookup as a compiled binary:
 - `README.md` — describe shipped artifact as "executable Python 3 CLI," not "binary"
 - `CLAUDE.md` — same language fix in Key Files and Architecture sections
-- `skill/SKILL.md` — verify no "binary" language in Tier 2 instructions
+- `skill/SKILL.md` — verify no "binary" language in Syntax Lookup instructions
 - `docs/plans/prd-posix-step-up-deepened.md` — label any Go/Rust/MCP references as "future-state only"
 
-**5b. Lane B definition update** — this plan expands Lane B's required gate (drift validation, single-target tests) and adds an optional live extension (canary). The docs must distinguish these clearly to avoid implying that pre-merge Lane B now requires billable API calls.
+**5b. Install Testing definition update** — this plan expands Install Testing's required gate (drift validation, single-target tests) and adds an optional live extension (canary). The docs must distinguish these clearly to avoid implying that pre-merge Install Testing now requires billable API calls.
 
-The canonical Lane B definition lives in:
-- `AGENTS.md:31,43-45` — Lane B commands and validation guidance
+The canonical Install Testing definition lives in:
+- `AGENTS.md:31,43-45` — Install Testing commands and validation guidance
 - `docs/test-and-regression.md:19-30` — Dual-Lane Validation Model section
-- `CLAUDE.md` — Lane B references in "Running the Benchmark" and "Key Files"
+- `CLAUDE.md` — Install Testing references in "Running the Benchmark" and "Key Files"
 
 Updates must:
-1. Add the new non-billable checks (`--validate-bridge` with SKILL.md, single-target install tests) to the required pre-merge Lane B gate
-2. Document live canary targets as an **optional extension** of Lane B, explicitly billable and opt-in, NOT part of the pre-merge gate
+1. Add the new non-billable checks (`--validate-bridge` with SKILL.md, single-target install tests) to the required pre-merge Install Testing gate
+2. Document live canary targets as an **optional extension** of Install Testing, explicitly billable and opt-in, NOT part of the pre-merge gate
 3. Follow the repo's sync rule (`AGENTS.md:5`, `CLAUDE.md:7`): when semantics change in one, update both in the same change
 
 **Files:** `README.md`, `CLAUDE.md`, `AGENTS.md`, `docs/test-and-regression.md`, `skill/SKILL.md`, `docs/plans/prd-posix-step-up-deepened.md`
 
 ## Technical Considerations
 
-**SKILL.md utility extraction:** The Tier 1 content in SKILL.md uses mixed formatting — bullet lists, comma-separated inline lists (`uucp, uustat, uux`), and bare-line entries. The `\b{name}\b` regex approach matches all of these but also matches utility names appearing in prose descriptions (e.g., "file" in "file: guess data type"). This is acceptable because the check is bidirectional — a false positive in SKILL.md would only trigger if `posix-utilities.txt` was missing that utility, which is the ground truth file.
+**SKILL.md utility extraction:** The Discovery Map content in SKILL.md uses mixed formatting — bullet lists, comma-separated inline lists (`uucp, uustat, uux`), and bare-line entries. The `\b{name}\b` regex approach matches all of these but also matches utility names appearing in prose descriptions (e.g., "file" in "file: guess data type"). This is acceptable because the check is bidirectional — a false positive in SKILL.md would only trigger if `posix-utilities.txt` was missing that utility, which is the ground truth file.
 
 **Symlink semantics:** `readlink -f` is POSIX Issue 8 but may not be available on older macOS. Use `readlink` (without `-f`) to check symlink target in the Makefile.
 
@@ -161,7 +161,7 @@ Updates must:
 
 ## System-Wide Impact
 
-- **Interaction graph:** Drift validator enhancement touches `benchmark_core/runner.py` which is called by both `--validate-bridge` and `--inject-posix` preflight. Changes must preserve the existing `require_full_coverage` gating so benchmark-only validation (expected_commands check) still works independently.
+- **Interaction graph:** Drift validator enhancement touches `benchmark_core/runner.py` which is called by both `--validate-bridge` and `--inject-posix` preflight. Changes must preserve the existing `require_full_coverage` gating so Simulation Testing validation (expected_commands check) still works independently.
 - **Error propagation:** Canary subprocess failures should never propagate as test-harness crashes. Wrap all subprocess calls in timeout + try/except with explicit exit codes.
 - **State lifecycle risks:** Isolated HOME tmpdirs must be cleaned up on both success and failure paths. Phase 3 creates multiple temp HOMEs per run — use a parent temp dir with per-test subdirs and a single `trap 'rm -rf "$TEMP_ROOT"' EXIT` for cleanup.
 - **API surface parity:** Both providers (Claude, Codex) get identical test structure.
@@ -218,7 +218,7 @@ Updates must:
 
 ## Outstanding Items (Explicitly Out of Scope)
 
-- Track 3 execution validation (separate plan: `docs/plans/Plan_for_track3-execution-validation.md`)
+- Command Verification execution validation (separate plan: `docs/plans/Plan_for_track3-execution-validation.md`)
 - CLI backoff jitter, q_id sanitization, fixed-seed question shuffling (PRD hardening)
 - Compiled Go/Rust standalone binary (separate future project)
 - Gemini skill installation path (no skill mechanism exists for Gemini CLI)
@@ -255,11 +255,11 @@ POSIX_LIVE_CANARY=1 make test-product-live-codex
 - Positive conformance: `scripts/test_product.sh`
 - Negative conformance: `scripts/test_product_negative.sh`
 - Skill artifact: `skill/SKILL.md`, `skill/posix-lookup`
-- Lane B definition: `AGENTS.md:31,43-45`, `docs/test-and-regression.md:19-30`
+- Install Testing definition: `AGENTS.md:31,43-45`, `docs/test-and-regression.md:19-30`
 - Sync rule: `AGENTS.md:5`, `CLAUDE.md:7`
 
 ### Related Work
-- Active plan: `docs/plans/Plan_for_track3-execution-validation.md` (Track 3, independent)
+- Active plan: `docs/plans/Plan_for_track3-execution-validation.md` (Command Verification, independent)
 - Active plan: `docs/plans/prd-posix-step-up-deepened.md` (Step-Up PRD, independent)
 - Learning: `docs/solutions/workflow/ai-doc-lifecycle-drift.md` (doc drift prevention)
 - Learning: `docs/solutions/logic-errors/llms-blind-to-posix-utilities.md` (root cause context)

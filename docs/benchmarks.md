@@ -18,17 +18,17 @@ Every question in the set must follow these rules. If a question violates any of
 
 **The canonical rules live in `benchmark_data.json` under `meta.question_rules`.** That is the single source of truth. In summary: no utility names, no "POSIX" or standards language, no tool-leading, and questions must read like a real user asking for help.
 
-### Question Tiers
+### Question Difficulty
 
-- **Tier 1 (T01–T10):** Common utilities that any shell user has seen — `sort`, `find`, `sed`, `grep`, `cp`. An LLM that knows POSIX well should handle all of these.
-- **Tier 2 (T11–T23):** Less common utilities that are POSIX-specified but often substituted with non-POSIX tools — `od` instead of `xxd`, `nl` instead of `cat -n`, `readlink`/`realpath` which are new in Issue 8.
-- **Tier 3 (T24–T40):** Obscure, task-specific, or often-overlooked utilities that frontier models still commonly miss without help — `tsort`, `cksum`, `uuencode`, `csplit`, `getconf`, `logger`, `nice`.
+- **Common (T01–T10):** Common utilities that any shell user has seen — `sort`, `find`, `sed`, `grep`, `cp`. An LLM that knows POSIX well should handle all of these.
+- **Uncommon (T11–T23):** Less common utilities that are POSIX-specified but often substituted with non-POSIX tools — `od` instead of `xxd`, `nl` instead of `cat -n`, `readlink`/`realpath` which are new in Issue 8.
+- **Obscure (T24–T40):** Obscure, task-specific, or often-overlooked utilities that frontier models still commonly miss without help — `tsort`, `cksum`, `uuencode`, `csplit`, `getconf`, `logger`, `nice`.
 
 ---
 
-## The Two Benchmark Tracks
+## Benchmark Modes
 
-### Track 1: Raw Capability (No Help)
+### Unaided (No Help)
 
 **Purpose:** Establish the LLM's true, unassisted POSIX baseline.
 
@@ -45,7 +45,7 @@ python3 run_benchmark.py --llms claude codex
 - Does it use GNU-only flags (`sed -i`, `grep -r`, `find -mmin`)?
 - Token cost per question — this is the baseline we will compare against.
 
-**Observed results (Track 1 baseline, original 30-question corpus):**
+**Observed results (Unaided baseline, original 30-question corpus):**
 
 | Provider | POSIX Compliance | Mean Output Tokens | Mean Steps |
 |----------|------------------|--------------------|------------|
@@ -57,9 +57,9 @@ Codex burns 4× more output tokens than Claude or Gemini due to multi-step agent
 
 ---
 
-### Track 2: Step-Up (With Our Changes)
+### Bridge-Aided (With Our Changes)
 
-**Purpose:** Prove that the Step-Up architecture reduces token cost and improves POSIX compliance.
+**Purpose:** Prove that the bridge architecture reduces token cost and improves POSIX compliance.
 
 **What changes:** `posix-core.md` is prepended to every prompt. The `get_posix_syntax` tool is available to the LLM during the run.
 
@@ -69,12 +69,12 @@ python3 run_benchmark.py --llms claude codex --inject-posix
 ```
 
 **What to look for:**
-- Did token cost decrease compared to Track 1?
+- Did token cost decrease compared to Unaided?
 - Did the LLM call `get_posix_syntax` before answering? (Check `execution.tool_calls_by_type`)
 - Did `trap_hits` drop to zero or near zero?
 - Did `posix_compliance_rate` improve?
 
-**Observed results (Track 2 Step-Up, original 30-question corpus):**
+**Observed results (Bridge-Aided, original 30-question corpus):**
 
 | Provider | POSIX Compliance | Mean Output Tokens | Mean Steps |
 |----------|------------------|--------------------|------------|
@@ -88,13 +88,13 @@ Compliance improved across all three providers. Gemini's output tokens dropped b
 
 ## Running a Full Comparison
 
-Run Track 1 first, then Track 2. Compare the summary files side by side.
+Run Unaided first, then Bridge-Aided. Compare the summary files side by side.
 
 ```bash
-# Track 1 — baseline, no help
+# Unaided — baseline, no help
 python3 run_benchmark.py --llms claude codex
 
-# Track 2 — with Step-Up architecture
+# Bridge-Aided — with bridge architecture
 python3 run_benchmark.py --llms claude codex --inject-posix
 ```
 
@@ -132,11 +132,11 @@ Use a conservative Gemini run profile unless your active account limits clearly 
 - Assume `1` benchmark call every `30` seconds.
 - Assume no more than `50` model calls per day.
 - Run Gemini alone, with `--max-workers 1`, so the benchmark never fans out concurrent Gemini calls.
-- Track 1 baseline fits in one day: `40` questions = `40` Gemini calls.
-- Track 2 does **not** reliably fit in one day: the Step-Up simulation can trigger a second Gemini call when the model emits `TOOL_CALL: get_posix_syntax(...)`, so a 40-question run can exceed `50` calls.
+- Unaided baseline fits in one day: `40` questions = `40` Gemini calls.
+- Bridge-Aided does **not** reliably fit in one day: the bridge simulation can trigger a second Gemini call when the model emits `TOOL_CALL: get_posix_syntax(...)`, so a 40-question run can exceed `50` calls.
 - Do not use Gemini as the judge if you are trying to stay within the daily quota.
 
-Safe Track 1 baseline command:
+Safe Unaided baseline command:
 
 ```bash
 python3 run_benchmark.py --llms gemini --max-workers 1 --delay 30

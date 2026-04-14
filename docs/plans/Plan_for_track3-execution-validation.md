@@ -1,22 +1,22 @@
 Status: ACTIVE
-Expiry condition: when Track 3 benchmark run completes with valid results for all three providers
+Expiry condition: when Command Verification benchmark run completes with valid results for all three providers
 Outcome:
 
 ---
 
-# Track 3 — Execution Validation Environment
+# Command Verification — Execution Validation Environment
 
 ## Context
 
-The current benchmark (Tracks 1 and 2) measures token cost and POSIX compliance through **text analysis only** — pattern matching on the LLM's response. Compliance = "the response contains the expected command and doesn't mention non-POSIX tools." No command is ever actually run.
+The current benchmark (Unaided and Bridge-Aided) measures token cost and POSIX compliance through **text analysis only** — pattern matching on the LLM's response. Compliance = "the response contains the expected command and doesn't mention non-POSIX tools." No command is ever actually run.
 
 This creates a gap: a response can be marked POSIX-compliant because it uses `sort` while still being syntactically wrong or producing wrong output. More importantly, it fails to answer the real question:
 
 > **If the LLM gives a wrong command on the first attempt, what does the retry loop cost in tokens and time?**
 
-That retry cost — extra tokens + extra wall-clock time — is the true delta between Raw (Track 1) and Step-Up (Track 2).
+That retry cost — extra tokens + extra wall-clock time — is the true delta between Unaided and Bridge-Aided.
 
-Track 3 proves this delta by actually running the suggested commands and measuring what happens when they fail.
+Command Verification proves this delta by actually running the suggested commands and measuring what happens when they fail.
 
 ## Prerequisite Status (updated 2026-04-03)
 
@@ -29,7 +29,7 @@ Track 3 proves this delta by actually running the suggested commands and measuri
 
 ## Intended Outcome
 
-After running Track 3, you get three new metrics per track:
+After running Command Verification, you get three new metrics per mode:
 
 - `exec_success_rate` — what fraction of commands ran correctly on the first try
 - `total_retry_tokens` — additional tokens burned in retry loops when the first attempt was wrong
@@ -41,13 +41,13 @@ Side-by-side comparison: Raw vs Step-Up on all three metrics. Fewer retries = fe
 
 ## New Flag: `--execute`
 
-Works independently of `--inject-posix`. Combining both runs Track 3b (Step-Up with execution validation).
+Works independently of `--inject-posix`. Combining both runs Bridge-Aided Verification (Step-Up with execution validation).
 
 ```bash
-# Track 3a: Raw execution
+# Command Verification: Raw execution
 python3 run_benchmark.py --execute
 
-# Track 3b: Step-Up execution
+# Bridge-Aided Verification: Step-Up execution
 python3 run_benchmark.py --inject-posix --execute
 ```
 
@@ -65,7 +65,7 @@ Results land in new directories:
 ## Execution Flow Per Question
 
 ```
-1. Get LLM response (same as Track 1/2)
+1. Get LLM response (same as Unaided/Bridge-Aided)
 2. Extract command from response → extract_command(response, expected_commands)
 3. Copy fixture dir to temp dir (isolation per run)
 4. Run command in temp dir → run_command(cmd, cwd)
@@ -119,7 +119,7 @@ fixtures/
 }
 ```
 
-### Initial Fixture Set — Tier 1 (T01–T10)
+### Initial Fixture Set — Common (T01–T10)
 
 | ID  | Utility  | Fixture needed                         | Validation   |
 |-----|----------|----------------------------------------|--------------|
@@ -134,7 +134,7 @@ fixtures/
 | T09 | cp/pax   | files with specific permissions        | file_state   |
 | T10 | comm     | file_a.txt and file_b.txt, sorted      | stdout       |
 
-Tier 2 (T11–T23) and Tier 3 (T24–T30) fixtures are deferred to Phase 2. Tier 1 alone proves the concept.
+Uncommon (T11–T23) and Obscure (T24–T30) fixtures are deferred to Phase 2. Common alone proves the concept.
 
 ---
 
@@ -243,14 +243,14 @@ The existing `--compare` report gains an **Execution** section:
 | `run_benchmark.py` | Add `--execute` flag, 5 new functions, new metrics, results dir routing |
 | `benchmark_data.json` | Add `fixture_dir`, `exec_validation_type`, `exec_setup_note` to T01–T10 |
 | `fixtures/T01/` through `fixtures/T10/` | Create with minimal test data and expected outputs |
-| `docs/execution-validation.md` | Document Track 3, fixture format, retry loop design |
+| `docs/execution-validation.md` | Document Command Verification, fixture format, retry loop design |
 | `.gitignore` | Add `results-execute/`, `results-stepup-execute/` |
 
 ---
 
 ## Implementation Phases
 
-### Phase 1 — Core harness (Tier 1 questions)
+### Phase 1 — Core harness (Common questions)
 1. Create `fixtures/` with T01–T10 data and expected outputs
 2. Implement `extract_command()`, `run_command()`, `validate_command_result()`
 3. Wire `--execute` flag and results dir routing into `main()`
@@ -260,7 +260,7 @@ The existing `--compare` report gains an **Execution** section:
 ### Phase 2 — Retry loop + reporting
 1. Implement `execute_with_retry()` with token tracking
 2. Add retry columns to comparison report
-3. Run Track 3a and Track 3b; compare retry token delta
+3. Run Command Verification and Bridge-Aided Verification; compare retry token delta
 
 ### Phase 3 — Full coverage (deferred)
 1. Add fixtures for T11–T30
@@ -280,13 +280,13 @@ python3 run_benchmark.py --dry-run --execute
 # Single question smoke test
 python3 run_benchmark.py --llms claude --questions T01 --execute
 
-# Full Track 3a
+# Full Command Verification
 python3 run_benchmark.py --llms claude --execute
 
-# Full Track 3b
+# Full Bridge-Aided Verification
 python3 run_benchmark.py --llms claude --inject-posix --execute
 
-# Compare all four tracks
+# Compare all four modes
 python3 run_benchmark.py --compare \
   "Raw=results/summary-*.json" \
   "StepUp=results-stepup/summary-*.json" \
@@ -309,6 +309,6 @@ Those three deltas are the proof.
 
 **`shell=True` justification:** Commands may be pipelines (`find . | sort`). The security surface is LLM output for known questions — wrong syntax is the expected failure mode. This is documented in code comments.
 
-**Fixture scope:** Starting with Tier 1 only. 10 questions is enough to prove the concept and measure the retry delta. Tier 2/3 can be added without any changes to the harness.
+**Fixture scope:** Starting with Common only. 10 questions is enough to prove the concept and measure the retry delta. Uncommon/Obscure can be added without any changes to the harness.
 
 **Command extraction:** Best-effort with graceful failure. A 127 exit code is an honest failure; it doesn't crash the run or invalidate other questions.

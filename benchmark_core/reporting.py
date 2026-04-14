@@ -276,7 +276,7 @@ def save_summary(
             "errors": summary_error_entries(results),
         }
 
-        # Track 3: execution validation metrics
+        # Command Verification: execution validation metrics
         executed = [r for r in visible_results if r.execution_record and not r.execution_record.exec_skipped]
         if executed:
             successes = sum(1 for r in executed if r.execution_record.exec_success)
@@ -379,7 +379,7 @@ def save_visual_report(
     for card in model_cards:
         llm = card["llm"]
         visible_results = report_visible_results(all_results[llm])
-        for tier_num, tier_label in [(1, "Tier 1 — Common"), (2, "Tier 2 — Less common"), (3, "Tier 3 — Blind spot")]:
+        for tier_num, tier_label in [(1, "Common"), (2, "Uncommon"), (3, "Obscure")]:
             tier_results = [r for r in visible_results if q_lookup.get(r.id, {}).get("tier") == tier_num]
             if not tier_results:
                 continue

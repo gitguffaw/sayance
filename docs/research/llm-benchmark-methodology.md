@@ -29,7 +29,7 @@ The Holistic Evaluation of Language Models framework introduced the concept of m
 The AI Safety Institute's Inspect framework provides built-in token tracking per evaluation step. Their architecture of capturing `TokenUsage(input, output, total)` per task and aggregating across runs is a validated pattern — and it's exactly what `run_benchmark.py` already implements.
 
 **LMSys Chatbot Arena**
-While focused on human preference rather than token efficiency, Arena's contribution to methodology is the **pairwise comparison** approach. Rather than absolute scoring, comparing two models head-to-head on the same task is more statistically robust than comparing each model's absolute score. This maps to the Track 1 vs Track 2 comparison design.
+While focused on human preference rather than token efficiency, Arena's contribution to methodology is the **pairwise comparison** approach. Rather than absolute scoring, comparing two models head-to-head on the same task is more statistically robust than comparing each model's absolute score. This maps to the Unaided vs Bridge-Aided comparison design.
 
 ### Recommended Metrics Stack
 
@@ -110,7 +110,7 @@ The current `generate_report()` calculates mean, median, min, max. Add:
 
 ### Significance Testing
 
-**For Track 1 vs Track 2 comparison (paired design):**
+**For Unaided vs Bridge-Aided comparison (paired design):**
 
 Since the same questions are asked in both tracks, this is a **paired samples** design. The correct test is:
 
@@ -126,7 +126,7 @@ Since the same questions are asked in both tracks, this is a **paired samples** 
 
 Statistical significance (p < 0.05) isn't enough — you need to show the effect *matters*. Report:
 - **Cohen's d** for paired comparisons: d = mean_difference / pooled_sd. d > 0.8 = large effect.
-- **Percentage reduction**: "(Track 2 reduced mean output tokens by X% relative to Track 1)" is the most interpretable metric for this project.
+- **Percentage reduction**: "(Bridge-Aided reduced mean output tokens by X% relative to Unaided)" is the most interpretable metric for this project.
 
 ### Confidence Intervals
 
@@ -170,7 +170,7 @@ This is stdlib-compatible and works with small sample sizes (k=3–5).
 
 ### Statistical Power Analysis
 
-For detecting a 20% reduction in token cost (the minimum practically meaningful effect) between Track 1 and Track 2:
+For detecting a 20% reduction in token cost (the minimum practically meaningful effect) between Unaided and Bridge-Aided:
 
 | Assumed CV | k needed (power=0.8, α=0.05) | k needed (power=0.9) |
 |-----------|------|------|
@@ -181,7 +181,7 @@ For detecting a 20% reduction in token cost (the minimum practically meaningful 
 **Recommendation for this project:**
 - **Phase 1 (validation):** k=3 across all 30 questions × 3 LLMs = 270 calls. Use this to identify high-variance questions and calibrate.
 - **Phase 2 (measurement):** k=5 for Claude/Gemini, k=7 for Codex. Total: 30 × (5+5+7) = 510 calls.
-- **Phase 3 (Track 1 vs Track 2 claim):** k=5 minimum per track per model. 30 × 3 × 5 × 2 = 900 calls per track comparison.
+- **Phase 3 (Unaided vs Bridge-Aided claim):** k=5 minimum per track per model. 30 × 3 × 5 × 2 = 900 calls per track comparison.
 
 ### Variance Monitoring
 
@@ -192,7 +192,7 @@ After Phase 1, compute CV per question per model. If any question has CV > 1.0, 
 
 ---
 
-## 5. Best Practices for A/B Testing LLM Capabilities (Track 1 vs Track 2)
+## 5. Best Practices for A/B Testing LLM Capabilities (Unaided vs Bridge-Aided)
 
 ### Design Principles
 
@@ -203,17 +203,17 @@ This is already the project's approach. Both tracks run the same 30 questions on
 If questions are always run T01→T30, caching effects create systematic bias (later questions benefit from warm caches). Randomize the order per run. The current `run_benchmark.py` does not randomize — add `random.shuffle(questions)` before each run (with a fixed seed for reproducibility).
 
 **3. Run tracks in separate sessions**
-To get clean cold-cache measurements, do not run Track 1 and Track 2 back-to-back in the same session. Anthropic's prompt cache has a ~5-minute TTL; running both tracks within that window means Track 2 always gets warm caches from Track 1's inputs.
+To get clean cold-cache measurements, do not run Unaided and Bridge-Aided back-to-back in the same session. Anthropic's prompt cache has a ~5-minute TTL; running both tracks within that window means Bridge-Aided always gets warm caches from Unaided's inputs.
 
 **Recommended protocol:**
 ```
-Session 1: Track 1, all models, k=5
+Session 1: Unaided, all models, k=5
 [Wait 10 minutes or new terminal session]
-Session 2: Track 2, all models, k=5
+Session 2: Bridge-Aided, all models, k=5
 ```
 
 **4. Control for the injection cost**
-Track 2 prepends `posix-core.md` (~800 tokens) to every prompt. This increases input tokens by a fixed amount. When comparing total billable tokens, **subtract the injection overhead** to isolate the actual efficiency gain:
+Bridge-Aided prepends `posix-core.md` (~800 tokens) to every prompt. This increases input tokens by a fixed amount. When comparing total billable tokens, **subtract the injection overhead** to isolate the actual efficiency gain:
 
 ```
 net_savings = (track1_billable - track2_billable) + injection_overhead_per_question
@@ -222,16 +222,16 @@ net_savings = (track1_billable - track2_billable) + injection_overhead_per_quest
 If net_savings > 0, the reference pays for itself. Report both the gross and net numbers.
 
 **5. Pre-register your hypotheses**
-Before running Track 2, state explicitly what "success" looks like:
-- H1: Track 2 reduces mean output tokens by ≥20%
-- H2: Track 2 reduces `non_posix_substitution` failure mode by ≥50%
-- H3: Track 2 achieves ≥80% POSIX compliance vs Track 1's baseline
-- H4: Track 2 eliminates Issue 8 refusals (count → 0)
+Before running Bridge-Aided, state explicitly what "success" looks like:
+- H1: Bridge-Aided reduces mean output tokens by ≥20%
+- H2: Bridge-Aided reduces `non_posix_substitution` failure mode by ≥50%
+- H3: Bridge-Aided achieves ≥80% POSIX compliance vs Unaided's baseline
+- H4: Bridge-Aided eliminates Issue 8 refusals (count → 0)
 
 Pre-registration prevents post-hoc cherry-picking of metrics that happened to improve.
 
 **6. Report negative results**
-If Track 2 makes things *worse* for certain tiers or models, report that. A common pattern in RAG-augmented systems: injecting reference material can confuse the model for tasks it already handles well (Tier 1), while helping significantly for tasks it fails (Tier 3). Report per-tier deltas separately.
+If Bridge-Aided makes things *worse* for certain difficulty levels or models, report that. A common pattern in RAG-augmented systems: injecting reference material can confuse the model for tasks it already handles well (Common), while helping significantly for tasks it fails (Obscure). Report per-difficulty deltas separately.
 
 ---
 
@@ -387,12 +387,12 @@ For the primary benchmark claims (token efficiency, POSIX compliance rate), no j
 | 3 | Add bootstrap confidence intervals to report | Medium | Low |
 | 4 | Set k=5 as default (k=7 for Codex) | High | Config change |
 | 5 | Randomize question order per run with fixed seed | High | Low |
-| 6 | Pre-register Track 1 vs Track 2 hypotheses before running | High | Documentation |
+| 6 | Pre-register Unaided vs Bridge-Aided hypotheses before running | High | Documentation |
 | 7 | Separate cold/warm cache reporting in summaries | Medium | Medium |
-| 8 | Subtract injection overhead when comparing Track 1 vs Track 2 | High | Low |
+| 8 | Subtract injection overhead when comparing Unaided vs Bridge-Aided | High | Low |
 | 9 | Add "Do NOT reward verbosity" to judge rubric | Medium | Low |
-| 10 | Use Wilcoxon signed-rank test for paired Track 1/Track 2 comparison | Medium | Low |
-| 11 | Report per-tier deltas (not just overall) for A/B comparison | High | Medium |
+| 10 | Use Wilcoxon signed-rank test for paired Unaided/Bridge-Aided comparison | Medium | Low |
+| 11 | Report per-difficulty deltas (not just overall) for A/B comparison | High | Medium |
 | 12 | Run grade k=3 and use mode for judge consistency | Low | Medium |
 | 13 | Frame "minimal answer gap + failure mode taxonomy" as the novel contribution | High | Documentation |
 

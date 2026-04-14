@@ -10,6 +10,11 @@ POSIX_UTILITIES_FILE = SCRIPT_DIR / "posix-utilities.txt"
 POSIX_SKILL_FILE = SCRIPT_DIR / "skill" / "SKILL.md"
 FIXTURES_DIR = SCRIPT_DIR / "fixtures"
 
+# Result directories map to benchmark modes:
+#   baseline/       → Unaided (no bridge)
+#   stepup/         → Bridge-Aided (bridge injected)
+#   execute/        → Command Verification (commands run against fixtures)
+#   stepup-execute/ → Bridge-Aided Verification (bridge + execution)
 RESULTS_ROOT = SCRIPT_DIR / "results"
 RESULTS_DIR_BASE = RESULTS_ROOT / "baseline"
 RESULTS_DIR_STEPUP = RESULTS_ROOT / "stepup"

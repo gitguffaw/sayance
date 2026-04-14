@@ -30,15 +30,15 @@ This means the bridge is closer to a retrieval cue than a reference manual.
 
 For cross-LLM system prompt injection, the bridge must share context with other instructions. Target: **1,200-1,800 tokens** (~900-1,400 words). This is achievable because the bridge is a recall activator, not documentation.
 
-### Three-Tier Architecture
+### Three-Layer Architecture
 
 ```
-Tier 1: Behavioral Directive       (~150 tokens)
-Tier 2: Intent-to-Command Map      (~900 tokens)
-Tier 3: Composition Patterns       (~300 tokens)
+Discovery Map: Behavioral Directive       (~150 tokens)
+Syntax Lookup: Intent-to-Command Map      (~900 tokens)
+Spec Search:   Composition Patterns       (~300 tokens)
 ```
 
-#### Tier 1: Behavioral Directive
+#### Discovery Map: Behavioral Directive
 
 A short preamble that shifts the LLM's default behavior. This is the highest-ROI section per token.
 
@@ -52,7 +52,7 @@ network calls, or logic that pipes cannot express.
 
 Why this works: LLMs are instruction-followers. A direct behavioral nudge changes the prior probability of reaching for `comm` vs. `pandas`. Without this, the bridge is just a reference the LLM may ignore.
 
-#### Tier 2: Intent-to-Command Map
+#### Syntax Lookup: Intent-to-Command Map
 
 This is the core of the bridge. Organized by **user intent**, not command name. Only includes commands where LLMs demonstrably under-retrieve; the top ~40 commands (grep, sed, awk, find, sort, etc.) are excluded because LLMs already reach for them reliably.
 
@@ -141,11 +141,11 @@ Issue 8 (published 14 June 2024) added 7 utilities and removed 12 from Issue 7. 
 | i18n tools (gettext, msgfmt, ngettext, xgettext) | 4 | Skip: narrow audience (optional variant) |
 | Dev tools (ar, c99, lex, yacc, nm, strip, etc.) | 9 | Optional: dev-focused bridge variant |
 | LLMs already retrieve reliably | ~43 | Skip (validate empirically per model) |
-| **Bridge candidates** | **~48** | **Core Tier 2 content** |
+| **Bridge candidates** | **~48** | **Core Syntax Lookup content** |
 
 The ~48 bridge candidates include 3 commands new in Issue 8 (`timeout`, `realpath`, `readlink`) that are high-value for agent contexts. The "LLMs already retrieve" count is a hypothesis for frontier models; validate empirically by running discovery tasks against the bare LLM and excluding commands with >80% retrieval accuracy.
 
-#### Tier 3: Composition Patterns
+#### Spec Search: Composition Patterns
 
 Short pipe idioms that demonstrate how to chain commands. These teach composition by example rather than by rule.
 
@@ -176,7 +176,7 @@ iconv -f ISO-8859-1 -t UTF-8 input.txt | tr -d '\r' > output.txt
 
 Several techniques keep the bridge within token budget:
 
-1. **Omit the empirically obvious**: Run discovery tasks against the bare LLM (no bridge) and measure which commands it retrieves at >80% accuracy. Those are excluded from Tier 2. The hypothesis is that ~40 commands (grep, sed, awk, find, sort, cat, ls, chmod, cp, mv, head, tail, wc, diff, etc.) will pass this bar on frontier models, but smaller models may only reliably reach for ~25. The cutoff is per-model, not universal.
+1. **Omit the empirically obvious**: Run discovery tasks against the bare LLM (no bridge) and measure which commands it retrieves at >80% accuracy. Those are excluded from the Syntax Lookup layer. The hypothesis is that ~40 commands (grep, sed, awk, find, sort, cat, ls, chmod, cp, mv, head, tail, wc, diff, etc.) will pass this bar on frontier models, but smaller models may only reliably reach for ~25. The cutoff is per-model, not universal.
 
 2. **Trigger phrases over man pages**: "Merge columns side by side → paste" is 7 tokens. A man-page description of paste is 50+ tokens. The trigger phrase is the semantic bridge; the LLM fills in the usage details from latent knowledge.
 
@@ -306,7 +306,7 @@ User: "I need to find which usernames are in our January list but not February"
         comm -23 <(sort jan.txt) <(sort feb.txt)
 ```
 
-The skill file costs ~1,500 tokens always. The binary costs ~0 tokens until invoked, then ~50-100 tokens per call. This is dramatically more efficient than loading all flag documentation into context.
+The skill file (Discovery Map) costs ~1,500 tokens always. The binary (Syntax Lookup) costs ~0 tokens until invoked, then ~50-100 tokens per call. This is dramatically more efficient than loading all flag documentation into context.
 
 ### Build Phases
 
@@ -406,7 +406,7 @@ Example tasks:
 
 ### Task Generation Methodology
 
-For each of the ~48 bridge candidate commands in Tier 2:
+For each of the ~48 bridge candidate commands in the Syntax Lookup layer:
 
 1. Write 3 task descriptions at varying specificity levels:
    - **High specificity**: "I need to find lines common to both sorted files" (clearly `comm`)
@@ -514,7 +514,7 @@ Each task is a JSON object:
 
 3. **GNU extensions**: Commands like `parallel`, `jq`, `fd`, `ripgrep` are not POSIX but are ubiquitous. A second bridge layer for "modern CLI" could follow the same architecture. Keep POSIX-pure for v1.
 
-4. **Dynamic loading**: For agent frameworks that support it, the bridge could be split into Tier 1 (always loaded) + Tier 2 (loaded on demand when the task looks CLI-relevant). This halves the base token cost. Not viable for generic system prompt injection, but worth noting.
+4. **Dynamic loading**: For agent frameworks that support it, the bridge could be split into the Discovery Map (always loaded) + Syntax Lookup (loaded on demand when the task looks CLI-relevant). This halves the base token cost. Not viable for generic system prompt injection, but worth noting.
 
 ### Eval Design Questions
 
@@ -524,7 +524,7 @@ Each task is a JSON object:
 
 3. **Human baseline**: Have 2-3 experienced Unix users solve the same tasks to establish a ceiling score. If the bridge gets the LLM within 80% of human performance, that's strong.
 
-4. **Ablation studies**: Test each tier independently (Tier 1 only, Tier 2 only, Tier 1+2, full bridge) to measure marginal contribution per tier.
+4. **Ablation studies**: Test each layer independently (Discovery Map only, Syntax Lookup only, Discovery Map + Syntax Lookup, full bridge) to measure marginal contribution per layer.
 
 ---
 

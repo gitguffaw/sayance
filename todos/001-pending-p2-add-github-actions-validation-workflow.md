@@ -35,7 +35,7 @@ This matters for both quality and professionalism:
 
 ### Option 1: Single CI Workflow For All Core Checks
 
-**Approach:** Add one GitHub Actions workflow that runs syntax checks, unit tests, and Lane B product-path checks on every push and pull request.
+**Approach:** Add one GitHub Actions workflow that runs syntax checks, unit tests, and Install Testing product-path checks on every push and pull request.
 
 **Pros:**
 - Simple public signal of repo health
@@ -44,7 +44,7 @@ This matters for both quality and professionalism:
 
 **Cons:**
 - Slower workflow if every job runs serially
-- Lane B shell checks may need careful runner assumptions
+- Install Testing shell checks may need careful runner assumptions
 
 **Effort:** 2-4 hours
 
@@ -54,7 +54,7 @@ This matters for both quality and professionalism:
 
 ### Option 2: Split Fast And Full Workflows
 
-**Approach:** Add a fast workflow for `py_compile` + `unittest` and a second workflow for Lane B product conformance.
+**Approach:** Add a fast workflow for `py_compile` + `unittest` and a second workflow for Install Testing product conformance.
 
 **Pros:**
 - Faster feedback for ordinary changes
@@ -99,8 +99,8 @@ This matters for both quality and professionalism:
 - `docs/test-and-regression.md`
 
 **Related components:**
-- Lane A benchmark validation
-- Lane B installed product-path conformance
+- Simulation Testing benchmark validation
+- Install Testing installed product-path conformance
 - Future release/review workflow
 
 **Database changes (if any):**

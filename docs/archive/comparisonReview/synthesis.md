@@ -32,7 +32,7 @@ The gap to close is not deeper benchmark sophistication. The gap is repo surface
 1. **Benchmark rigor**
    - Larger corpus.
    - Multiple providers with explicit model pinning.
-   - Track 1 / 2 / 3 / 3b separation.
+   - Unaided / Bridge-Aided / Command Verification / Bridge-Aided Verification separation.
    - Judge support, execution validation, telemetry validity semantics, and comparison reporting.
 
 2. **Product-path verification**

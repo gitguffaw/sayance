@@ -2,7 +2,7 @@
 title: "Agent-Native Tool Design Best Practices for Knowledge Retrieval"
 date: 2026-03-29
 status: complete
-scope: Research for POSIX Step-Up 3-Tier Architecture (Tier 2 & Tier 3 tools)
+scope: Research for POSIX Step-Up 3-Layer Architecture (Syntax Lookup & Spec Search tools)
 sources:
   - "Skill: agent-native-architecture (Compound Engineering)"
   - "Skill: build-mcp-server (Claude Plugins Official)"
@@ -20,9 +20,9 @@ sources:
 
 ## Context
 
-This research supports the POSIX Step-Up Architecture's Tier 2 (`get_posix_syntax`) tool. The goal: design tool interfaces that LLMs call reliably, return results that minimize token consumption, and structurally enforce lookup-before-execute behavior.
+This research supports the POSIX Step-Up Architecture's Syntax Lookup (`get_posix_syntax`) tool. The goal: design tool interfaces that LLMs call reliably, return results that minimize token consumption, and structurally enforce lookup-before-execute behavior.
 
-> **Note on Tier 3 (`search_posix_spec`):** This tool is currently **deferred**. No benchmark question required it, and no measured failure motivated it. All references to `search_posix_spec` in this document are retained as forward-looking design guidance only — it is not implemented and should not be built until Track 3 data shows Tier 2 is insufficient.
+> **Note on Spec Search (`search_posix_spec`):** This tool is currently **deferred**. No benchmark question required it, and no measured failure motivated it. All references to `search_posix_spec` in this document are retained as forward-looking design guidance only — it is not implemented and should not be built until Command Verification data shows Syntax Lookup is insufficient.
 
 ---
 
@@ -191,7 +191,7 @@ This pattern:
 
 ### 3.1 The Problem
 
-The PRD identifies the "Rebellious Agent" failure mode: LLM reads `pax` in Tier 1, ignores Tier 2, and confidently writes `pax -z` (which doesn't exist). Prompt-level instructions ("DO NOT GUESS") are fragile.
+The PRD identifies the "Rebellious Agent" failure mode: LLM reads `pax` in the Discovery Map, ignores the Syntax Lookup layer, and confidently writes `pax -z` (which doesn't exist). Prompt-level instructions ("DO NOT GUESS") are fragile.
 
 ### 3.2 Pattern A: MCP `instructions` Field (Weakest, Easiest)
 
@@ -212,7 +212,7 @@ mcp = FastMCP(
 The PRD already identifies the correct long-term pattern: **intercept the shell execution layer.**
 
 ```
-IF agent calls bash/shell with a Tier 1 utility
+IF agent calls bash/shell with a Discovery Map utility
 AND agent did NOT call get_posix_syntax for that utility in this turn
 THEN return structured error:
   "ERROR: You used 'pax' without looking up its syntax.
@@ -377,7 +377,7 @@ if utility not in posix_db:
     }
 ```
 
-### 5.5 Progress Reporting for Tier 3 (Spec Search)
+### 5.5 Progress Reporting for Spec Search
 
 If `search_posix_spec` performs vector search that takes time:
 ```python
@@ -565,6 +565,6 @@ mcp = FastMCP(
 
 5. **Batch via array parameters, not parallel calls.** One call returning 3 utilities is cheaper (token-wise) than 3 separate call/response cycles.
 
-6. **Two tools is the sweet spot** for this domain. More adds context-window tax. Fewer loses the Tier 2/3 separation.
+6. **Two tools is the sweet spot** for this domain. More adds context-window tax. Fewer loses the Syntax Lookup / Spec Search separation.
 
 7. **Cross-provider forced tool use works.** All three major providers (Claude, OpenAI, Gemini) support forcing specific tool calls — use it for the "lookup before execute" pattern.

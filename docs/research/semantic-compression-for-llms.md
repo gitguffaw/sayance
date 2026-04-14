@@ -1,7 +1,7 @@
 # Semantic Compression for LLMs: Research Findings
 
 **Date:** 2026-03-29  
-**Purpose:** Actionable research for designing a ~800-token Tier 1 semantic map of 155 POSIX utilities  
+**Purpose:** Actionable research for designing a ~800-token Discovery Map (semantic map) of 155 POSIX utilities  
 
 ---
 

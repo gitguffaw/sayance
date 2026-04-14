@@ -78,7 +78,7 @@ def main():
     )
     parser.add_argument(
         "--execute", action="store_true",
-        help="Execute extracted commands against fixtures (Track 3)",
+        help="Execute extracted commands against fixtures (Command Verification)",
     )
     parser.add_argument(
         "--results-dir",

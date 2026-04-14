@@ -35,7 +35,7 @@ awk, basename, bat/cat, chmod, chown, chgrp, cmp, cp, cut, date, dd, df, diff, d
 
 Note: This list is a hypothesis for frontier models. The "obvious" boundary must be validated empirically by running discovery tasks against the bare LLM and measuring >80% retrieval accuracy. Smaller models may only reliably retrieve ~25-30 of these.
 
-### Bridge Candidates (~48): Core Tier 2 content
+### Bridge Candidates (~48): Core Syntax Lookup content
 
 **Text Processing (12)**
 | Command | Intent trigger | Notes |

@@ -35,7 +35,7 @@ LLM training data is dominated by GNU/Linux usage, Stack Overflow answers, and b
 
 ## Measured Token Waste
 
-Benchmark results (Track 1, 30 questions, k=1, all three providers):
+Benchmark results (Unaided, 30 questions, k=1, all three providers):
 
 | Provider | Mean Output Tokens | POSIX Compliance | Notable Failure Mode |
 |----------|--------------------|-----------------|----------------------|

@@ -473,7 +473,7 @@ def run_single(
             codex_model=codex_model,
         )
 
-    # Track 3: execute the extracted command if --execute was passed
+    # Command Verification: execute the extracted command if --execute was passed
     exec_record = None
     if execute:
         exec_record = execute_question_fn(question, response_text)
@@ -624,13 +624,13 @@ def run_benchmark(
     """Run the full benchmark across all providers."""
     total_calls = len(questions) * len(llms) * k
 
-    mode_label = "Track 1 (Raw)"
+    mode_label = "Unaided"
     if inject_posix and execute:
-        mode_label = "Track 3b (Step-Up + Execute)"
+        mode_label = "Bridge-Aided Verification"
     elif execute:
-        mode_label = "Track 3a (Raw + Execute)"
+        mode_label = "Command Verification"
     elif inject_posix:
-        mode_label = "Track 2 (Step-Up)"
+        mode_label = "Bridge-Aided"
 
     manifest = execution_module.load_fixture_manifest() if execute else {}
     exec_qs = [q for q in questions if q["id"] in manifest] if execute else []

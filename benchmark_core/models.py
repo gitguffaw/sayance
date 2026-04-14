@@ -103,7 +103,7 @@ class QuestionResult:
     execution: ExecutionMetrics
     analysis: ResponseAnalysis
     accuracy: AccuracyGrade | None
-    execution_record: ExecutionRecord | None  # Track 3: populated when --execute is used
+    execution_record: ExecutionRecord | None  # Command Verification: populated when --execute is used
     cache_state: str             # "cold" or "warm"
     timestamp: str
 

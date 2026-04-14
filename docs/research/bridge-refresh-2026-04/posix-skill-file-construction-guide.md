@@ -9,16 +9,16 @@ How to build the ~1,050-token SKILL.md file, line by line.
 The file has exactly three sections, in this order. No frontmatter, no preamble, no trailing commentary.
 
 ```
-TIER 1: Behavioral Directive         ~150 tokens
-TIER 2: Intent-to-Command Map        ~800 tokens
-TIER 3: Composition Idioms           ~100 tokens
+DISCOVERY MAP:  Behavioral Directive         ~150 tokens
+SYNTAX LOOKUP:  Intent-to-Command Map        ~800 tokens
+SPEC SEARCH:    Composition Idioms           ~100 tokens
 ```
 
-Total budget: 1,050 tokens. Hard ceiling: 2,000. Needle-in-haystack studies (Anthropic, 2024; Google, 2024) show near-perfect retrieval for context under 2K tokens across all major models. The 1,050 target keeps Tier 2 in the sub-1K "perfect retrieval" zone (<5% positional degradation) while leaving headroom for other system prompt content sharing the context window.
+Total budget: 1,050 tokens. Hard ceiling: 2,000. Needle-in-haystack studies (Anthropic, 2024; Google, 2024) show near-perfect retrieval for context under 2K tokens across all major models. The 1,050 target keeps the Syntax Lookup layer in the sub-1K "perfect retrieval" zone (<5% positional degradation) while leaving headroom for other system prompt content sharing the context window.
 
 ---
 
-## Tier 1: Behavioral Directive
+## Discovery Map: Behavioral Directive
 
 **Budget:** 150 tokens (roughly 3-5 sentences)
 **Purpose:** Shift the LLM's default from "write a Python script" to "reach for a POSIX command"
@@ -31,17 +31,17 @@ Total budget: 1,050 tokens. Hard ceiling: 2,000. Needle-in-haystack studies (Ant
 4. A directive to call `posix-ref` before executing any command listed below (if the companion binary is deployed)
 
 **What to avoid:**
-- Do not list specific commands here. That is Tier 2's job.
+- Do not list specific commands here. That is the Syntax Lookup layer's job.
 - Do not use imperative negation ("NEVER use Python"). Use conditional framing ("Reach for Python/Node only when...") [Inferred from Tang et al. (2024) and Wegner ironic process: imperative negation activates the negated token. Parenthetical/conditional framing avoids this. See Q6 in semantic-compression-for-llms.md.]
 - Do not explain what POSIX is. The LLM knows.
 
 **Format rules:**
 - Plain prose. No headers, no bullets, no structural markup.
-- This section is intentionally different from Tier 2's structured format. The prose-to-structure transition signals to the LLM that the mode is shifting from "behavioral instruction" to "reference lookup." [Cited as "Anthropic system prompt research" in the synthesis doc, but no specific paper. Speculative: inferred from Clark et al. (2019) showing attention heads specialize by structural mode, and from the observation that format shifts reset parsing expectations.]
+- This section is intentionally different from the Syntax Lookup layer's structured format. The prose-to-structure transition signals to the LLM that the mode is shifting from "behavioral instruction" to "reference lookup." [Cited as "Anthropic system prompt research" in the synthesis doc, but no specific paper. Speculative: inferred from Clark et al. (2019) showing attention heads specialize by structural mode, and from the observation that format shifts reset parsing expectations.]
 
 ---
 
-## Tier 2: Intent-to-Command Map
+## Syntax Lookup: Intent-to-Command Map
 
 **Budget:** 800 tokens (roughly 48 entries across 6-8 namespaces)
 **Purpose:** When a user describes a task, the LLM scans this section and finds the right POSIX command. This is the core of the bridge.
@@ -149,7 +149,7 @@ Make the first entries in each namespace exemplary: perfectly formatted, clear t
 
 **Exception for rare-command namespaces:** If a namespace contains mostly sub-40% retrieval commands and no bridge candidate above ~60%, one "obvious" command (>80% baseline retrieval) is permitted as the schema primer. The LLM's high confidence in recognizing the obvious command reinforces the format parse, which lifts retrieval for the obscure entries that follow. Cost: ~15 tokens. Expected benefit: improved parsing accuracy across the remaining namespace entries. Prefer a moderately-known bridge candidate (40-60% retrieval) as primer when one exists; fall back to an obvious command only when the entire namespace is deep sub-40% territory. [Speculative: no direct study on "obvious anchors improve parsing of rare entries." Inferred from LLMLingua's schema priming finding plus the observation that confident recognition of a known command strengthens format extrapolation. Testable: run the namespace with and without the anchor, compare retrieval on remaining entries across 3 models.]
 
-### What NOT to Include in Tier 2
+### What NOT to Include in the Syntax Lookup Layer
 
 **Commands the LLM already retrieves at >80%.** The bridge's value is activating recall of under-utilized commands. grep, sed, awk, find, sort, cat, ls, chmod, cp, mv, head, tail, wc, diff are already well-served by the LLM's training data. Including them wastes tokens and dilutes attention from the commands that actually need bridging. [Name familiarity bias: Gorilla (Patil et al., 2023) documents that LLMs are biased toward tools seen more frequently in training data. Including already-known commands burns tokens without overcoming any bias.]
 
@@ -165,7 +165,7 @@ The "obvious" list must be validated empirically per target model. Run discovery
 
 ---
 
-## Tier 3: Composition Idioms
+## Spec Search: Composition Idioms
 
 **Budget:** 100 tokens (4-6 one-line pipe examples)
 **Purpose:** Teach multi-command composition by example. Knowing individual commands does not guarantee the LLM can chain them. [NL2SH: LLM-Supported NL to Bash Translation (NAACL 2025) provides a 600-pair NL-to-Bash benchmark with functional equivalence testing, demonstrating that pipeline composition is a distinct capability from single-command selection.]
@@ -183,7 +183,7 @@ find . -name '*.log' -print0 | xargs -0 -P4 gzip
 paste -d'\t' names.txt scores.txt
 ```
 
-**Selection criteria:** Each idiom should use 2-5 commands, at least one of which is a Tier 2 bridge candidate. Prefer idioms that demonstrate patterns (process substitution, xargs parallelism, sort|uniq counting) over one-off recipes. [Speculative: the "must include a bridge candidate" constraint is a design heuristic. No study directly compares all-obvious-command idioms vs. bridge-candidate idioms for compositional learning. Rationale: the idiom section's budget is too small to waste on patterns the LLM can already construct.]
+**Selection criteria:** Each idiom should use 2-5 commands, at least one of which is a Syntax Lookup bridge candidate. Prefer idioms that demonstrate patterns (process substitution, xargs parallelism, sort|uniq counting) over one-off recipes. [Speculative: the "must include a bridge candidate" constraint is a design heuristic. No study directly compares all-obvious-command idioms vs. bridge-candidate idioms for compositional learning. Rationale: the idiom section's budget is too small to waste on patterns the LLM can already construct.]
 
 **What to avoid:** Do not include idioms that only use well-known commands (grep | wc -l). The idiom must bridge at least one under-retrieved command.
 
@@ -195,9 +195,9 @@ These apply to the entire file.
 
 1. **ASCII only.** No Unicode arrows, no em dashes, no smart quotes. Use `->` not `→`. Claude and GPT handle Unicode fine; Gemini is inconsistent in structured injection contexts. ASCII is the cross-model safe default.
 
-2. **No markdown formatting.** No bold, no italic, no headers (except Tier 1 can use plain prose). The file is a structured reference, not a document. Markdown triggers "document reading" mode; the file needs "structured data scanning" mode. [Inferred from Clark et al. (2019) attention head specialization. The specific "document reading" vs. "structured data scanning" framing is a descriptive model, not a cited result. Speculative but consistent with observed LLM behavior on code vs. prose inputs.]
+2. **No markdown formatting.** No bold, no italic, no headers (except the Discovery Map layer can use plain prose). The file is a structured reference, not a document. Markdown triggers "document reading" mode; the file needs "structured data scanning" mode. [Inferred from Clark et al. (2019) attention head specialization. The specific "document reading" vs. "structured data scanning" framing is a descriptive model, not a cited result. Speculative but consistent with observed LLM behavior on code vs. prose inputs.]
 
-3. **Perfect consistency.** Every Tier 2 entry follows the identical pattern: `trigger phrase -> command` or `trigger phrase -> command (qualifier)`. Zero exceptions. Inconsistency (mixing formats, omitting the arrow on some lines, using different delimiters) degrades retrieval by 10-15%. [The 10-15% degradation figure is from semantic-compression-for-llms.md Q5, attributed to format comparison studies (Sui et al., 2024 and related work). The exact percentage is an estimate across multiple studies, not a single measurement.]
+3. **Perfect consistency.** Every Syntax Lookup entry follows the identical pattern: `trigger phrase -> command` or `trigger phrase -> command (qualifier)`. Zero exceptions. Inconsistency (mixing formats, omitting the arrow on some lines, using different delimiters) degrades retrieval by 10-15%. [The 10-15% degradation figure is from semantic-compression-for-llms.md Q5, attributed to format comparison studies (Sui et al., 2024 and related work). The exact percentage is an estimate across multiple studies, not a single measurement.]
 
 4. **No blank lines between entries within a namespace.** Blank lines between entries waste tokens and can be misinterpreted as section breaks. One blank line between namespace headers is fine.
 
@@ -207,7 +207,7 @@ These apply to the entire file.
 
 ## Token Counting
 
-Before finalizing, count tokens with tiktoken `o200k_base` (the cross-model reference tokenizer; Artificial Analysis methodology uses o200k_base as the normalization standard). If your final file exceeds 2,000 tokens, cut entries from Tier 2 starting with the commands closest to the "obvious" boundary, or trim Tier 3 to 3 idioms. Target remains 1,050; anything under 2,000 is within the validated near-perfect retrieval zone.
+Before finalizing, count tokens with tiktoken `o200k_base` (the cross-model reference tokenizer; Artificial Analysis methodology uses o200k_base as the normalization standard). If your final file exceeds 2,000 tokens, cut entries from the Syntax Lookup layer starting with the commands closest to the "obvious" boundary, or trim the Spec Search layer to 3 idioms. Target remains 1,050; anything under 2,000 is within the validated near-perfect retrieval zone.
 
 ```python
 import tiktoken
@@ -225,9 +225,9 @@ If tiktoken is not available, word count * 1.3 is a reasonable proxy for English
 
 Before shipping the skill file, verify:
 
-- [ ] Tier 1 is plain prose, not structured
-- [ ] Tier 2 uses [BRACKET_CAPS] headers
-- [ ] Tier 2 entries are trigger-phrase-first, not command-first
+- [ ] Discovery Map is plain prose, not structured
+- [ ] Syntax Lookup uses [BRACKET_CAPS] headers
+- [ ] Syntax Lookup entries are trigger-phrase-first, not command-first
 - [ ] Every trigger phrase is 2-5 words, verb-forward
 - [ ] No two entries in the same namespace share a primary verb
 - [ ] Negations (NOT x) are limited to 6-8 total, each with positive description first
@@ -251,7 +251,7 @@ Rules are tagged: **Cited** (directly supported by named research), **Inferred**
 | Rule | Source | Finding | Status |
 |------|--------|---------|--------|
 | Sub-2K token ceiling | Needle-in-haystack (Anthropic, 2024; Google, 2024) | Context under 2K tokens = near-perfect retrieval across all major models | Cited |
-| ~800 tokens for Tier 2 | Same needle-in-haystack studies | Sub-1K = <5% positional degradation; the "perfect retrieval" zone | Cited |
+| ~800 tokens for Syntax Lookup | Same needle-in-haystack studies | Sub-1K = <5% positional degradation; the "perfect retrieval" zone | Cited |
 | [BRACKET_CAPS] headers | Clark et al., "What Does BERT Look At?" (2019); Qin et al., ToolLLM (2023) | Attention heads specialize by structure; grouped tools with categorical headers show 15-30% higher selection accuracy | Cited (Clark on attention heads; ToolLLM on grouped accuracy). The "scanning mode" framing is inferred |
 | 6-8 namespaces | Miller, "Magical Number Seven" (1956); Qin et al., ToolLLM (2023) | 5-9 categories maximizes discrimination in both human cognition and LLM tool selection | Cited |
 | Verb-forward triggers | Schick et al., "Toolformer" (2023, Meta) | Verb-forward tool descriptions yield higher selection accuracy | Cited |
@@ -267,7 +267,7 @@ Rules are tagged: **Cited** (directly supported by named research), **Inferred**
 | Trigger-first entry order | Schick et al. (Toolformer, 2023) | Verb-forward improves selection; inferred that user-language-first entry order follows the same principle | Inferred |
 | Namespace ordering | Liu et al., "Lost in the Middle" (2023, Stanford/UC Berkeley) | Primacy > recency for factual retrieval; items at positions 1-3 retrieved ~90% vs. ~60% at mid-positions (at 4K+ token context) | Cited (but effect is attenuated at sub-2K context) |
 | Headers reset position counter | Inferred from Liu et al. (2023) + Clark et al. (2019) | Section headers create sub-contexts that partially counteract lost-in-the-middle | Speculative (mechanistically plausible, not directly measured) |
-| Prose Tier 1 before structured Tier 2 | Clark et al. (2019) attention head specialization | Format shift may signal attention mode transition | Speculative (no direct study on prose-to-structure transitions) |
+| Prose Discovery Map before structured Syntax Lookup | Clark et al. (2019) attention head specialization | Format shift may signal attention mode transition | Speculative (no direct study on prose-to-structure transitions) |
 | Behavioral directive efficacy | Wei et al. (2023); Anthropic tool-use docs | Instruction-following and system prompt instructions bias tool selection | Inferred (no direct study on "behavioral directive increases map utilization") |
 | Composition idioms | NL2SH (NAACL 2025) | 600-pair NL-to-Bash benchmark shows pipeline composition is distinct from single-command knowledge | Cited |
 | Consistency degrades retrieval 10-15% | Sui et al. (2024) and related format comparison work | Inconsistent formatting in structured references degrades retrieval | Cited (aggregate estimate across multiple studies, not a single measurement) |

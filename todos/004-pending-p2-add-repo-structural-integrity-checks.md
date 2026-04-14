@@ -48,7 +48,7 @@ This matters because:
 
 **Cons:**
 - Additional script surface to maintain
-- Some checks may duplicate Lane B logic if not scoped carefully
+- Some checks may duplicate Install Testing logic if not scoped carefully
 
 **Effort:** 2-4 hours
 

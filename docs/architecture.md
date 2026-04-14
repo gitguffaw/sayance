@@ -12,9 +12,9 @@ The root cause is not that the LLM "can't do it" — it's that it doesn't know t
 
 ---
 
-## The Two Tiers
+## The Two Layers
 
-### Tier 1 — The Semantic Map (`posix-core.md`)
+### The Discovery Map (`posix-core.md`)
 
 A single file injected into the agent's context at the start of every session. It lists all 155 POSIX Issue 8 utilities with a 2–5 word hook that tells the agent what the tool *does* and, crucially, what it is *not*.
 
@@ -28,9 +28,9 @@ comm: compare two sorted lists
 
 This file is capped at ~800 tokens. Its only job is to make sure the agent knows the tool exists so it doesn't reach for a non-POSIX substitute. It does not contain full syntax.
 
-### Tier 2 — The Syntax Lookup CLI (`posix-lookup`)
+### The Syntax Lookup CLI (`posix-lookup`)
 
-An executable Python 3 CLI the LLM calls via bash before executing a Tier 1 utility. It accepts a utility name and returns the exact, pure-POSIX syntax strings — no GNU extensions, no BSD variants.
+An executable Python 3 CLI the LLM calls via bash before executing a utility from the Discovery Map. It accepts a utility name and returns the exact, pure-POSIX syntax strings — no GNU extensions, no BSD variants.
 
 ```bash
 $ posix-lookup pax
@@ -39,7 +39,7 @@ $ posix-lookup pax
   DO NOT USE tar (not guaranteed POSIX).
 ```
 
-The agent is instructed to always call `posix-lookup <utility>` before using any utility it found in Tier 1. This prevents the "Rebellious Agent" failure mode: the LLM sees `pax` in Tier 1, decides it already knows the syntax, and confidently writes `pax -z` (which doesn't exist).
+The agent is instructed to always call `posix-lookup <utility>` before using any utility it found in the Discovery Map. This prevents the "Rebellious Agent" failure mode: the LLM sees `pax` in the Discovery Map, decides it already knows the syntax, and confidently writes `pax -z` (which doesn't exist).
 
 The CLI is backed by `posix-tldr.json`, a local structured file. The LLM never reads that file directly — it always goes through the CLI, which prevents token flooding from a naive `cat posix-tldr.json`.
 
@@ -47,16 +47,16 @@ The CLI is backed by `posix-tldr.json`, a local structured file. The LLM never r
 
 ---
 
-## How the Tiers Work Together
+## How the Layers Work Together
 
 ```
 User prompt
     |
     v
-[Tier 1] Does posix-core.md tell me a native tool exists for this?
+[Discovery Map] Does posix-core.md tell me a native tool exists for this?
     |-- YES --> Run: posix-lookup <utility>
     |               |
-    |           [Tier 2] Returns exact POSIX syntax via bash
+    |           [Syntax Lookup] Returns exact POSIX syntax via bash
     |               |-- Use it, answer the question
     |
     |-- NO --> Use general knowledge (expected to be rare)
@@ -78,7 +78,7 @@ Context tax. A single `sed` man page is ~4,000 tokens. Injecting all 155 would c
 **Why not rely on ALL CAPS warnings like "DO NOT GUESS SYNTAX"?**  
 Prompt instructions are fragile. A confident LLM will ignore them. Structural enforcement — requiring a CLI call before a shell call — is far more reliable than text warnings.
 
-**Why is Tier 1 grouped by namespace?**  
+**Why is the Discovery Map grouped by namespace?**  
 The LLM processes the list hierarchically. Grouping under `[TEXT_DATA_PROC]`, `[FILE_DIR_OPS]`, etc. reduces the search space for intent-matching and prevents the LLM from pattern-matching on the wrong utility.
 
 ---
@@ -101,10 +101,10 @@ Within each namespace, no two tools can share the same primary verb. If `join` u
 
 Benchmark runs across Claude, Codex, and Gemini confirm the architecture works:
 
-| Provider | Track 1 Compliance | Track 2 Compliance | Output Tokens T1 | Output Tokens T2 |
+| Provider | Unaided Compliance | Bridge-Aided Compliance | Output Tokens Unaided | Output Tokens Bridge-Aided |
 |----------|-------------------|--------------------|------------------|------------------|
 | Claude | 63.3% | 76.7% | 228 | 374 |
 | Codex | 58.6% | 86.7% | 930 | 1,289 |
 | Gemini | 65.4% | 86.7% | 215 | 105 |
 
-Track 1 and Track 2 prove that injection improves compliance. What they do not yet prove is the real-world token cost difference — because in both tracks the model never actually executes anything. In a real environment, a Track 1 model that reaches for the wrong tool will retry, debug, and potentially write its own script, burning orders of magnitude more tokens. A Track 2 model that reaches the correct command on the first attempt incurs none of that retry cost. Track 3 (execution validation) will measure this delta. The working hypothesis is that Track 2's real-world total cost is substantially lower than Track 1's, even accounting for the injection overhead.
+Unaided and Bridge-Aided prove that injection improves compliance. What they do not yet prove is the real-world token cost difference — because in both modes the model never actually executes anything. In a real environment, an Unaided model that reaches for the wrong tool will retry, debug, and potentially write its own script, burning orders of magnitude more tokens. A Bridge-Aided model that reaches the correct command on the first attempt incurs none of that retry cost. Command Verification will measure this delta. The working hypothesis is that Bridge-Aided's real-world total cost is substantially lower than Unaided's, even accounting for the injection overhead.

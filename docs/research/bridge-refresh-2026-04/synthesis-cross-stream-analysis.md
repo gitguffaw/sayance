@@ -9,7 +9,7 @@
 
 **Stream A (Jerome's prior research):** Three documents totaling ~25K words. Empirically grounded in ToolLLM, Gorilla, Lost-in-the-Middle, LLMLingua, and other cited work. Proposes a ~800 token semantic map with [BRACKET_CAPS] headers, an MCP-based `get_posix_syntax` tool with structural enforcement layers, and a statistical benchmark framework with TES composite metric.
 
-**Stream B (Claude's architecture doc):** ~10K words. Proposes a three-tier skill file (behavioral directive + intent map + composition patterns) at 1,200-1,800 tokens, a companion binary (`posix-ref`) in Go/Rust, and an A/B eval framework with 4 task categories.
+**Stream B (Claude's architecture doc):** ~10K words. Proposes a three-layer skill file (behavioral directive + intent map + composition patterns) at 1,200-1,800 tokens, a companion binary (`posix-ref`) in Go/Rust, and an A/B eval framework with 4 task categories.
 
 ---
 
@@ -34,9 +34,9 @@ These points are settled. No further debate needed.
 
 **Stream B says 1,200-1,800.** Includes a behavioral directive (150 tokens) and composition patterns (300 tokens) that Stream A doesn't have.
 
-**Resolution:** Stream A's 800-token budget is the right constraint for Tier 2 (the intent map). Stream B's Tier 1 (behavioral directive, ~150 tokens) and Tier 3 (composition idioms, ~100 tokens streamlined) are additive layers worth their cost. Total: **~1,050 tokens**, splitting the difference. The behavioral directive is high-ROI per token (changes the LLM's prior toward POSIX). Composition idioms teach multi-command patterns at ~25 tokens each.
+**Resolution:** Stream A's 800-token budget is the right constraint for the Syntax Lookup layer (the intent map). Stream B's Discovery Map (behavioral directive, ~150 tokens) and Spec Search (composition idioms, ~100 tokens streamlined) are additive layers worth their cost. Total: **~1,050 tokens**, splitting the difference. The behavioral directive is high-ROI per token (changes the LLM's prior toward POSIX). Composition idioms teach multi-command patterns at ~25 tokens each.
 
-**Decision:** ~1,050 tokens. Tier 1 (150) + Tier 2 (800) + Tier 3 (100).
+**Decision:** ~1,050 tokens. Discovery Map (150) + Syntax Lookup (800) + Spec Search (100).
 
 ---
 
@@ -140,7 +140,7 @@ For the MCP mode, implement layers 1-3. Layer 4 (tool_choice forcing) is a deplo
 - 4 task categories (discovery, composition, preference, distractor)
 - 3 specificity levels per command (high/medium/low naturalness)
 - Functional equivalence testing (execution + LLM judge)
-- Ablation studies (test each tier independently)
+- Ablation studies (test each layer independently)
 - Distractor tasks (POSIX is wrong answer; tests precision)
 
 **Resolution: Merge.** Use Stream B's task architecture with Stream A's statistical framework.
@@ -179,9 +179,9 @@ Every response also gets tagged with a failure mode code from Stream A's taxonom
 ┌─────────────────────────────────────────────────────────┐
 │                    SKILL FILE (~1,050 tokens)            │
 │                                                         │
-│  Tier 1: Behavioral Directive              (~150 tokens) │
-│  Tier 2: Intent Map in [BRACKET_CAPS]      (~800 tokens) │
-│  Tier 3: Composition Idioms (4-6 examples) (~100 tokens) │
+│  Discovery Map: Behavioral Directive              (~150 tokens) │
+│  Syntax Lookup: Intent Map in [BRACKET_CAPS]      (~800 tokens) │
+│  Spec Search:   Composition Idioms (4-6 examples) (~100 tokens) │
 │                                                         │
 │  Format: [BRACKET_CAPS] headers                         │
 │          trigger phrase → command                        │
@@ -218,7 +218,7 @@ Every response also gets tagged with a failure mode code from Stream A's taxonom
 
 2. **Unified 9-point rubric with failure mode tagging.** Stream A had TES, Stream B had a 6-point rubric. The merged 9-point rubric plus failure mode codes captures accuracy, correctness, preference, equivalence, AND verbosity in one framework.
 
-3. **Tier budget allocation.** Neither stream computed the optimal token split across tiers. The 150/800/100 allocation gives the behavioral directive and composition patterns just enough budget without exceeding Stream A's validated retrieval zone.
+3. **Layer budget allocation.** Neither stream computed the optimal token split across layers. The 150/800/100 allocation gives the behavioral directive and composition patterns just enough budget without exceeding Stream A's validated retrieval zone.
 
 4. **The hybrid format.** [BRACKET_CAPS] structural headers (Stream A's research) combined with trigger-phrase entries (Stream B's efficiency) is not something either stream proposed. It takes the best format choice from each.
 
@@ -236,7 +236,7 @@ Every response also gets tagged with a failure mode code from Stream A's taxonom
 | 6 | Binary v1: CLI mode, 48 commands, posix-ref <cmd> | 1 week | Phase 1 data |
 | 7 | Full eval: A/B, 3 models, k=5, statistical analysis | 3 days | Phases 5-6 |
 | 8 | Binary v2: MCP mode + enforcement layers | 1 week | Phase 6 |
-| 9 | Ablation studies (per-tier contribution) | 2 days | Phase 7 |
+| 9 | Ablation studies (per-layer contribution) | 2 days | Phase 7 |
 
 ---
 

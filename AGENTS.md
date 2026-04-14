@@ -24,12 +24,12 @@ Use Python directly; there is no virtualenv or build step.
 - `python3 run_benchmark.py --questions T01 T02 --k 3` repeats specific questions for comparison.
 - `python3 run_benchmark.py --judge claude` enables grading when you want token and accuracy data.
 - `python3 run_benchmark.py --no-grade` skips LLM-as-judge grading (token-only mode).
-- `python3 run_benchmark.py --inject-posix` runs the Step-Up simulation (Track 2): injects `posix-core.md` into the prompt and simulates Tier 2 tool calls. It now fails fast if bridge coverage is incomplete.
-- `python3 run_benchmark.py --execute` runs extracted commands against fixtures for execution validation (Track 3).
-- `python3 run_benchmark.py --inject-posix --execute` combines Step-Up + execution validation (Track 3b).
+- `python3 run_benchmark.py --inject-posix` runs the Bridge-Aided simulation: injects `posix-core.md` into the prompt and simulates Syntax Lookup tool calls. It now fails fast if bridge coverage is incomplete.
+- `python3 run_benchmark.py --execute` runs extracted commands against fixtures for Command Verification.
+- `python3 run_benchmark.py --inject-posix --execute` combines Bridge-Aided + Command Verification (Bridge-Aided Verification).
 - In custom `--results-dir` runs, only the latest `summary-*.json` and `report-*.html` are retained in that directory.
-- `make test-product` runs Lane B installed product-path conformance checks in an isolated `HOME` (includes single-target install tests, installed-level drift validation, and partial-uninstall symlink verification).
-- `make test-product-negative` runs Lane B failure-injection checks (missing file, broken symlink, malformed JSON, installed SKILL.md drift).
+- `make test-product` runs Install Testing product-path conformance checks in an isolated `HOME` (includes single-target install tests, installed-level drift validation, and partial-uninstall symlink verification).
+- `make test-product-negative` runs Install Testing failure-injection checks (missing file, broken symlink, malformed JSON, installed SKILL.md drift).
 - `make test-product-live-claude` / `make test-product-live-codex` run opt-in live canary tests (requires `POSIX_LIVE_CANARY=1`; billable API calls, NOT part of the pre-merge gate).
 - `python3 -m py_compile run_benchmark.py benchmark_core/*.py` is the fastest syntax sanity check before committing.
 
@@ -39,11 +39,11 @@ Follow the existing Python style across `benchmark_core/` and `run_benchmark.py`
 
 ## Testing Guidelines
 
-There is no dedicated `tests/` directory yet. Use a dual-lane validation approach:
-- Lane A (legacy): dry runs and focused benchmark runs.
-- Lane B (additive): installed product-path checks via `make test-product` and `make test-product-negative`. Includes single-target install isolation, installed artifact drift validation, and partial-uninstall symlink correctness. Optional live canary extension (`make test-product-live-claude` / `make test-product-live-codex`) is billable and informational — not part of the pre-merge gate.
-For logic changes, run `python3 -m py_compile run_benchmark.py benchmark_core/*.py`, at least one targeted Lane A command such as `python3 run_benchmark.py --dry-run --questions T01`, and Lane B product conformance when packaging/skill behavior is touched. If you change parsing, grading, or result serialization, note a sample JSON path from the relevant timestamped run directory under `results/`, but do not commit generated output.
-If GitHub required status checks are unavailable for this repository plan, enforce Lane B as a local gate before merge/release by running `make test-product` and `make test-product-negative`.
+There is no dedicated `tests/` directory yet. Use a dual-path validation approach:
+- Simulation Testing (legacy): dry runs and focused benchmark runs.
+- Install Testing (additive): installed product-path checks via `make test-product` and `make test-product-negative`. Includes single-target install isolation, installed artifact drift validation, and partial-uninstall symlink correctness. Optional live canary extension (`make test-product-live-claude` / `make test-product-live-codex`) is billable and informational — not part of the pre-merge gate.
+For logic changes, run `python3 -m py_compile run_benchmark.py benchmark_core/*.py`, at least one targeted Simulation Testing command such as `python3 run_benchmark.py --dry-run --questions T01`, and Install Testing product conformance when packaging/skill behavior is touched. If you change parsing, grading, or result serialization, note a sample JSON path from the relevant timestamped run directory under `results/`, but do not commit generated output.
+If GitHub required status checks are unavailable for this repository plan, enforce Install Testing as a local gate before merge/release by running `make test-product` and `make test-product-negative`.
 
 ## Commit & Pull Request Guidelines
 
