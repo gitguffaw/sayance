@@ -32,6 +32,8 @@ Use Python directly; there is no virtualenv or build step.
 - `make test-product-negative` runs Install Testing failure-injection checks (missing file, broken symlink, malformed JSON, installed SKILL.md drift).
 - `make test-product-live-claude` / `make test-product-live-codex` run opt-in live canary tests (requires `POSIX_LIVE_CANARY=1`; billable API calls, NOT part of the pre-merge gate).
 - `python3 -m py_compile run_benchmark.py benchmark_core/*.py` is the fastest syntax sanity check before committing.
+- `make test-repo` runs repo structural integrity checks (source artifact presence, JSON validity, 155-utility coherence across all four sources, CLI executable sanity, installer references, fixture directory coverage).
+- `make verify` runs all verification checks in sequence: syntax, unit tests, repo integrity, product conformance, failure injection. This is the canonical single command for pre-commit and CI validation.
 
 ## Coding Style & Naming Conventions
 
@@ -39,11 +41,14 @@ Follow the existing Python style across `benchmark_core/` and `run_benchmark.py`
 
 ## Testing Guidelines
 
-There is no dedicated `tests/` directory yet. Use a dual-path validation approach:
+Unit tests live in `tests/` (token accounting, reporting integrity) and run via `python3 -m unittest`. Repo integrity checks live in `scripts/verify_repo.py` and run via `make test-repo`. The unified command is `make verify`.
+
+Use a three-path validation approach:
 - Simulation Testing (legacy): dry runs and focused benchmark runs.
 - Install Testing (additive): installed product-path checks via `make test-product` and `make test-product-negative`. Includes single-target install isolation, installed artifact drift validation, and partial-uninstall symlink correctness. Optional live canary extension (`make test-product-live-claude` / `make test-product-live-codex`) is billable and informational — not part of the pre-merge gate.
-For logic changes, run `python3 -m py_compile run_benchmark.py benchmark_core/*.py`, at least one targeted Simulation Testing command such as `python3 run_benchmark.py --dry-run --questions T01`, and Install Testing product conformance when packaging/skill behavior is touched. If you change parsing, grading, or result serialization, note a sample JSON path from the relevant timestamped run directory under `results/`, but do not commit generated output.
-If GitHub required status checks are unavailable for this repository plan, enforce Install Testing as a local gate before merge/release by running `make test-product` and `make test-product-negative`.
+- Repo Integrity: structural coherence checks via `make test-repo`.
+
+For any change, run `make verify` before committing. For logic changes, also run at least one targeted Simulation Testing command such as `python3 run_benchmark.py --dry-run --questions T01`. If you change parsing, grading, or result serialization, note a sample JSON path from the relevant timestamped run directory under `results/`, but do not commit generated output.
 
 ## Commit & Pull Request Guidelines
 

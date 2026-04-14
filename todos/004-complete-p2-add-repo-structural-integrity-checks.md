@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p2
 issue_id: "004"
 tags: [code-review, testing, integrity, packaging]
@@ -123,13 +123,13 @@ This matters because:
 
 ## Acceptance Criteria
 
-- [ ] A dedicated repo-integrity command exists
-- [ ] It validates core artifact consistency at the source level
-- [ ] It validates JSON/metadata parseability
-- [ ] It validates shipped CLI executable assumptions
-- [ ] It validates 155-utility completeness from source artifacts
-- [ ] It is documented in README or regression docs
-- [ ] It is wired into the canonical verification command
+- [x] A dedicated repo-integrity command exists
+- [x] It validates core artifact consistency at the source level
+- [x] It validates JSON/metadata parseability
+- [x] It validates shipped CLI executable assumptions
+- [x] It validates 155-utility completeness from source artifacts
+- [x] It is documented in README or regression docs
+- [x] It is wired into the canonical verification command
 
 ## Work Log
 
@@ -145,6 +145,20 @@ This matters because:
 **Learnings:**
 - Product-path validation and repo-integrity validation are related but distinct.
 - This is one of the clearest places to match `caveman`’s repo surface without inheriting its weaker maintenance story.
+
+### 2026-04-14 - Implementation Complete
+
+**By:** Claude + Codex
+
+**Actions:**
+- Created `scripts/verify_repo.py` with 6 check categories, 18 total assertions
+- Checks: source artifact presence, JSON validity, 155-utility consistency (4 cross-checks), CLI executable sanity, installer sanity, fixture directory coverage
+- Wired into `make test-repo` and `make verify`
+- All 18/18 checks pass on current repo
+
+**Learnings:**
+- Utility extraction regex from test_product.sh (lines 53-80) was reused for consistency — same three patterns (bullet, comma-separated, SCCS-style).
+- Repo integrity and installed-product integrity are cleanly separated: verify_repo.py checks source coherence, test_product.sh checks installed behavior.
 
 ## Notes
 

@@ -21,8 +21,9 @@ Use both testing modes together:
 
 - **Simulation Testing:** benchmark simulation checks in `run_benchmark.py` for comparability and metric tracking.
 - **Install Testing:** installed product-path conformance checks for `SKILL.md` + `posix-lookup`. Includes single-target install tests (`install-claude` / `install-codex` independently), installed-level drift validation (SKILL.md, posix-tldr.json, and `posix-lookup --list` agree on 155 utilities), and partial-uninstall symlink correctness.
+- **Repo Integrity:** structural coherence checks for source-of-truth artifacts via `make test-repo`. Validates artifact presence, JSON validity, 155-utility count consistency across all four sources, CLI executable sanity, installer references, and fixture directory coverage.
 
-Simulation Testing does not replace Install Testing, and Install Testing does not replace Simulation Testing.
+All three paths are complementary. None replaces another.
 
 Install Testing commands (required pre-merge gate):
 
@@ -39,6 +40,26 @@ POSIX_LIVE_CANARY=1 make test-product-live-codex
 ```
 
 Live canaries install the bridge into an isolated HOME, run a prompt through the CLI, and assert the response uses the correct POSIX utility. Results are informational — nondeterministic LLM output makes hard gates unreliable.
+
+Repo Integrity commands:
+
+```bash
+make test-repo               # source artifact consistency, JSON validity, 155-utility coherence
+```
+
+---
+
+## Unified Verification
+
+`make verify` runs all checks in sequence and fails on the first error:
+
+1. `python3 -m py_compile run_benchmark.py benchmark_core/*.py` (syntax check)
+2. `python3 -m unittest` (unit tests)
+3. `make test-repo` (repo structural integrity)
+4. `make test-product` (installed product conformance)
+5. `make test-product-negative` (failure injection sensitivity)
+
+This is the canonical single command for pre-commit validation and CI. GitHub Actions CI invokes `make verify` on every push and pull request to `main`.
 
 ---
 
@@ -110,12 +131,8 @@ Observed for `gitguffaw/posix` on 2026-04-03:
 - Required status-check merge gating via branch protection is unavailable for the current private-repo plan.
 
 Until repo plan/visibility changes, use this enforcement model:
-1. Run Install Testing locally before merge/release:
-   ```bash
-   make test-product
-   make test-product-negative
-   ```
-2. Treat GitHub workflow runs as informational visibility, not a hard merge gate.
+1. Run `make verify` locally before merge/release (covers syntax, unit tests, repo integrity, and Install Testing).
+2. GitHub Actions CI runs `make verify` on every push and PR for visibility, but cannot enforce merge gating on the current plan.
 
 ---
 
@@ -195,8 +212,8 @@ Review every question shown in the output against the rules in `benchmark_data.j
 
 Before committing any change to `benchmark_data.json`, `run_benchmark.py`, or `benchmark_core/`:
 
-1. Run `python3 -m py_compile run_benchmark.py benchmark_core/*.py` — must pass.
-2. Run `python3 run_benchmark.py --dry-run` — verify questions look correct.
+1. Run `make verify` — must pass all five stages.
+2. For question changes, also run `python3 run_benchmark.py --dry-run` to verify Taboo compliance.
 3. Do not commit result files. The `results/` directory is gitignored.
 4. Do not commit API keys, credentials, or cost data.
 
