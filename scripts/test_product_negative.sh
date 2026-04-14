@@ -25,7 +25,12 @@ run_case() {
       ;;
     drift_skill)
       # Remove one utility (pax) from the installed SKILL.md to simulate drift
-      sed -i '' '/pax/d' "${tmp_home}/.claude/skills/posix/SKILL.md"
+      # sed -i differs between macOS (BSD) and Linux (GNU)
+      if sed --version >/dev/null 2>&1; then
+        sed -i '/pax/d' "${tmp_home}/.claude/skills/posix/SKILL.md"
+      else
+        sed -i '' '/pax/d' "${tmp_home}/.claude/skills/posix/SKILL.md"
+      fi
       ;;
     *)
       echo "Unknown mode: ${mode}"
