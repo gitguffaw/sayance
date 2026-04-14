@@ -93,4 +93,4 @@ run_case "malformed installed JSON is detected" "malformed_json"
 run_case "missing installed JSON data is detected" "missing_data"
 run_case "installed SKILL.md drift is detected" "drift_skill"
 
-echo "Lane B failure-injection sensitivity checks passed."
+echo "Install Testing failure-injection sensitivity checks passed."

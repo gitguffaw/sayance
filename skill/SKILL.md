@@ -7,7 +7,7 @@ description: POSIX Issue 8 utility bridge — fixes LLM blindness to the 155 POS
 
 You are operating in an environment with access to POSIX.1-2024 (Issue 8) utilities. Before writing Python/Bash scripts for file or data manipulation, check whether a native POSIX utility handles it.
 
-## Tier 1 — What Exists
+## Discovery Map — What Exists
 
 ### [CORE_TRIVIAL] (Assumed known, no lookup needed)
 cd, ls, cat, echo, rm, mkdir, rmdir, pwd, grep, find, mv, cp, ln, kill, chmod, chown, chgrp, date, sleep, tail, head, touch, wc, who, env, true, false, sh, test, expr, printf, read, more, man
@@ -112,7 +112,7 @@ uucp, uustat, uux
 ### [SHELL_BUILTINS_MISC]
 alias, unalias, at, batch, bc, cal, command, crontab, fc, hash, tput, type, ulimit, umask, vi, getopts, gettext, xgettext, ngettext, msgfmt, gencat, tabs, stty, newgrp, asa
 
-## Tier 2 — How To Use It
+## Syntax Lookup — How To Use It
 
 When you identify a utility above that fits the task, get exact syntax BEFORE executing:
 

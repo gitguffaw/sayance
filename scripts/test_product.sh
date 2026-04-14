@@ -50,10 +50,10 @@ path = sys.argv[1]
 text = open(path).read()
 names = set()
 
-# Only parse Tier 1 section (between "## Tier 1" and "## Tier 2")
-tier1_match = re.search(r'## Tier 1[^\n]*\n(.*?)## Tier 2', text, re.DOTALL)
+# Only parse Discovery Map section (between "## Discovery Map" and "## Syntax Lookup")
+tier1_match = re.search(r'## Discovery Map[^\n]*\n(.*?)## Syntax Lookup', text, re.DOTALL)
 if not tier1_match:
-    sys.exit("Could not find Tier 1 section in SKILL.md")
+    sys.exit("Could not find Discovery Map section in SKILL.md")
 tier1 = tier1_match.group(1)
 
 for line in tier1.splitlines():
@@ -287,7 +287,7 @@ PATH="${lane_partial2}" posix-lookup pax >/dev/null && pass "partial uninstall-c
 # ---------------------------------------------------------------------------
 echo ""
 total=$((pass_count + fail_count))
-echo "Lane B product conformance: ${pass_count}/${total} passed."
+echo "Install Testing product conformance: ${pass_count}/${total} passed."
 if [ "${fail_count}" -gt 0 ]; then
   exit 1
 fi

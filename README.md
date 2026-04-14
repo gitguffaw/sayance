@@ -2,7 +2,7 @@
 
 **LLMs don't know the shell tools that already exist.** They reach for `tar` when `pax` is right there. They write Python scripts to hex-dump a file instead of calling `od`. They reject `readlink` as "not POSIX" even though it's been standard since 2024. Every wrong tool is wasted tokens, wasted time, and a fragile non-portable script you now have to maintain.
 
-This project fixes that with a two-tier reference injection system — and proves it works across Claude, Codex, and Gemini.
+This project fixes that with a two-layer reference injection system — and proves it works across Claude, Codex, and Gemini.
 
 ## The Problem
 
@@ -21,9 +21,9 @@ The result: you ask for a portable archive command and get `tar`. You ask for a 
 
 ## The Solution
 
-A two-tier progressive reference system that gives the LLM just enough context to reach for the right tool:
+A two-layer progressive reference system that gives the LLM just enough context to reach for the right tool:
 
-### Tier 1 — Discovery (`posix-core.md`)
+### Discovery Map (`posix-core.md`)
 
 A ~750-token semantic map of all 155 POSIX utilities (budget: 1,200 tokens), injected into the agent's context. Each utility gets a 2–5 word hook — enough to know it exists and when to reach for it.
 
@@ -37,7 +37,7 @@ comm: side-by-side sorted-file diff (NOT diff)
 
 The agent scans this and thinks: "oh, `comm` exists — I should look it up instead of writing a Python script."
 
-### Tier 2 — Syntax Lookup (`posix-lookup` CLI)
+### Syntax Lookup (`posix-lookup` CLI)
 
 A CLI tool backed by `posix-tldr.json` that returns POSIX-correct syntax, flags, and common traps. The LLM calls it via bash — no MCP server, no schema tokens, no persistent process.
 
@@ -52,7 +52,7 @@ $ posix-lookup sed
   DO NOT USE -i (not POSIX). Always use redirect and mv.
 ```
 
-Tier 1 tells the agent what exists. Tier 2 tells it how to use it correctly. Together, they cost ~925 tokens of context (cached after first turn) plus ~50-200 tokens per on-demand lookup — and they work.
+The Discovery Map tells the agent what exists. Syntax Lookup tells it how to use it correctly. Together, they cost ~925 tokens of context (cached after first turn) plus ~50-200 tokens per on-demand lookup — and they work.
 
 ## The Proof
 
@@ -60,7 +60,7 @@ The repository now ships a 40-question benchmark corpus. The published numbers b
 
 ### POSIX Compliance: Before and After
 
-| Provider | Without Step-Up | With Step-Up | Delta |
+| Provider | Unaided | Bridge-Aided | Delta |
 |:---------|:----------------|:-------------|:------|
 | **Claude** | `██████░░░░` 63.3% | `████████░░` 76.7% | **+13.4 pts** |
 | **Codex** | `██████░░░░` 58.6% | `█████████░` 86.7% | **+28.1 pts** |
@@ -86,7 +86,7 @@ The repository now ships a 40-question benchmark corpus. The published numbers b
 
 ### What the Benchmark Doesn't Prove (Yet)
 
-Tracks 1 and 2 measure compliance in a controlled text-analysis environment. No commands are actually executed. The real cost story — what happens when a wrong first answer triggers retries, debugging, and workaround scripts — is **Track 3's job**. The hypothesis: the Step-Up's small upfront cost prevents expensive downstream failure loops.
+The Unaided and Bridge-Aided modes measure compliance in a controlled text-analysis environment. No commands are actually executed. The real cost story — what happens when a wrong first answer triggers retries, debugging, and workaround scripts — is **Command Verification's job**. The hypothesis: the bridge's small upfront cost prevents expensive downstream failure loops.
 
 ## Install the Skill
 
@@ -135,8 +135,8 @@ After install, restart Claude Code or Codex. The skill auto-loads the semantic m
 ```bash
 # Dev workflow — edit and iterate
 make test                  # test from repo without installing
-make test-product          # Lane B: installed product-path conformance (isolated HOME)
-make test-product-negative # Lane B: failure-injection sensitivity checks
+make test-product          # Install Testing: product-path conformance (isolated HOME)
+make test-product-negative # Install Testing: failure-injection sensitivity checks
 make uninstall             # remove skill and CLI
 ```
 
@@ -185,26 +185,26 @@ Summary validity semantics:
 - In custom `--results-dir` runs, benchmark artifacts are retained as a single latest pair (`summary-*.json` and `report-*.html`) to avoid ambiguous multi-summary directories.
 - In comparison HTML, latency is shown in seconds, `Total Cost (USD)` is intentionally omitted, and token context rows include input/cached/billable-minus-output values.
 
-## Dual-Lane Validation
+## Validation
 
-This repo now uses two complementary validation lanes:
+This repo uses two complementary validation paths:
 
-- **Lane A (legacy, unchanged):** benchmark/simulation path (`run_benchmark.py` and Track 1/2/3 flows). This preserves historical comparability and benchmark metrics.
-- **Lane B (new, additive):** shipped-product conformance path for installed `SKILL.md` + `posix-lookup`.
+- **Simulation Testing (legacy, unchanged):** benchmark simulation path (`run_benchmark.py` in Unaided / Bridge-Aided / Command Verification modes). Preserves historical comparability and benchmark metrics.
+- **Install Testing (new, additive):** shipped-product conformance path for installed `SKILL.md` + `posix-lookup`.
 
-Run Lane B locally:
+Run Install Testing locally:
 
 ```bash
 make test-product
 make test-product-negative
 ```
 
-Lane B does not replace Lane A; it catches install/activation packaging regressions that the benchmark simulation cannot.
+Install Testing does not replace Simulation Testing; it catches install/activation packaging regressions that the benchmark simulation cannot.
 
 GitHub enforcement note (current repo state, observed 2026-04-03):
 - Actions workflows can run.
 - Required status-check merge gating for protected branches is not currently available on this private repo plan.
-- Until that changes, treat Lane B as a local pre-merge/release gate by running:
+- Until that changes, treat Install Testing as a local pre-merge/release gate by running:
   - `make test-product`
   - `make test-product-negative`
 
@@ -212,10 +212,10 @@ GitHub enforcement note (current repo state, observed 2026-04-03):
 
 | File | Purpose |
 |------|---------|
-| `skill/SKILL.md` | **The Product** — Claude Code skill combining Tier 1 map + Tier 2 CLI instruction |
-| `skill/posix-lookup` | **Tier 2 CLI** — executable Python 3 CLI, zero deps, called via bash |
+| `skill/SKILL.md` | **The Product** — Claude Code skill combining Discovery Map + Syntax Lookup instruction |
+| `skill/posix-lookup` | **Syntax Lookup CLI** — executable Python 3 CLI, zero deps, called via bash |
 | `skill/posix-tldr.json` | Syntax lookup database (shared by CLI and benchmark) |
-| `posix-core.md` | **Tier 1** — semantic map of all 155 POSIX utilities (~925 tokens) |
+| `posix-core.md` | **Discovery Map** — semantic map of all 155 POSIX utilities (~925 tokens) |
 | `Makefile` | Build, test, and install pipeline |
 | `run_benchmark.py` | Stable benchmark CLI entrypoint + compatibility facade |
 | `benchmark_core/` | Internal benchmark implementation (`cli`, `runner`, `providers`, `execution`, `reporting`, `models`, `config`) |
@@ -226,13 +226,13 @@ GitHub enforcement note (current repo state, observed 2026-04-03):
 
 ```
 results/
-  <llm>/                        per-question Track 1 results
-  summary-*.json               aggregate Track 1 summaries
-  report-*.html                aggregate Track 1 HTML reports
+  <llm>/                        per-question Unaided results
+  summary-*.json               aggregate Unaided summaries
+  report-*.html                aggregate Unaided HTML reports
   comparison-*.html            multi-run comparison reports
-  stepup/<llm>/                per-question Track 2 results
-  execute/<llm>/               per-question Track 3 results
-  stepup-execute/<llm>/        per-question Track 3b results
+  stepup/<llm>/                per-question Bridge-Aided results
+  execute/<llm>/               per-question Command Verification results
+  stepup-execute/<llm>/        per-question Bridge-Aided Verification results
   baseline-scheduled-5h/       scheduled baseline series (runNN + logs)
   stepup-scheduled-5h/         scheduled Step-Up series (runNN + logs)
 ```
@@ -245,12 +245,12 @@ Results are gitignored and not committed.
 
 - POSIX.1-2024 Issue 8 is canonical: [pubs.opengroup.org](https://pubs.opengroup.org/onlinepubs/9799919799/idx/utilities.html)
 - `readlink`, `realpath`, and `timeout` are POSIX in Issue 8. Models trained pre-2024 incorrectly reject these — that's a scoreable failure.
-- Gemini is safe at one call every 30 seconds, max 50 calls/day on most accounts. Track 2 may exceed the daily limit since the Step-Up simulation can trigger a second call per question.
+- Gemini is safe at one call every 30 seconds, max 50 calls/day on most accounts. Bridge-Aided runs may exceed the daily limit since the simulation can trigger a second call per question.
 - Codex uses `--skip-git-repo-check` for benchmark execution context.
 
 ## Further Reading
 
-- [Architecture](docs/architecture.md) — how the two-tier system works
+- [Architecture](docs/architecture.md) — how the two-layer system works
 - [Benchmark Methodology](docs/benchmarks.md) — how we measure
 - [Test & Regression](docs/test-and-regression.md) — validation procedures
 
