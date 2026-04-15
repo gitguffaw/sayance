@@ -42,7 +42,7 @@ relational join on shared field (like SQL JOIN) -> join
 
 The design is research-informed, not ad hoc:
 
-- **~925 tokens deployed, under a 2,000-token hard ceiling.** Needle-in-the-haystack studies (Anthropic, 2024; Google, 2024) show near-perfect retrieval for injected context under 2K tokens across all major models. At sub-1K, positional degradation drops below 5%. ([docs/research](docs/research/semantic-compression-for-llms.md))
+- **~925 tokens deployed, under a 2,000-token hard ceiling.** Needle-in-the-haystack studies (Anthropic, 2024; Google, 2024) show near-perfect retrieval for injected context under 2K tokens across all major models. At sub-1K, positional degradation drops below 5%. ([docs/design-rationale](docs/design-rationale/semantic-compression-for-llms.md))
 - **8 namespaces with `[BRACKET_CAPS]` headers.** Grouped tools with categorical headers show 15-30% higher selection accuracy versus flat lists ([Qin et al., "ToolLLM," 2023](https://arxiv.org/abs/2307.16789)). The bracket format triggers structural attention modes in code-trained transformers ([Clark et al., 2019](https://arxiv.org/abs/1906.04341)).
 - **"One Verb, One Tool" rule.** Verb overlap is the #1 collision vector in tool-selection benchmarks — tools sharing a primary verb see 3-5x higher confusion rates ([Patil et al., "Gorilla," 2023](https://arxiv.org/abs/2305.15334)). No two entries in the same namespace share a verb.
 - **Negation with positive-first framing.** `pax: portable archive (NOT tar)` reduces wrong-tool selection by 40-60% ([Tang et al., 2024](https://arxiv.org/abs/2306.06624)). Standalone negation without an alternative is worse than nothing — the ironic process effect ([Shi et al., 2023](https://arxiv.org/abs/2302.00093)).
