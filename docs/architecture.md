@@ -73,7 +73,7 @@ The LLM's bash tool is always registered in its schema — zero additional conte
 If we expose `posix-tldr.json` directly to the shell, the agent will run `cat posix-tldr.json`, flooding its context with thousands of tokens. Wrapping it behind a CLI forces single-utility lookups.
 
 **Why not just inject the full POSIX man pages?**  
-Context tax. A single `sed` man page is ~4,000 tokens. Injecting all 142 would consume the entire context window before the user's question is even answered.
+Context tax. A single `sed` man page is ~4,000 tokens. Injecting even our 142 macOS-available utilities as man pages would consume the entire context window before the user's question is even answered.
 
 **Why not rely on ALL CAPS warnings like "DO NOT GUESS SYNTAX"?**  
 Prompt instructions are fragile. A confident LLM will ignore them. Structural enforcement — requiring a CLI call before a shell call — is far more reliable than text warnings.

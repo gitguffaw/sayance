@@ -166,7 +166,7 @@ python3 run_benchmark.py --llms claude codex
 python3 run_benchmark.py --llms claude codex --inject-posix
 ```
 
-`--inject-posix` now fails fast if `posix-core.md` or `posix-tldr.json` do not fully cover the 142 POSIX Issue 8 utilities.
+`--inject-posix` now fails fast if `posix-core.md` or `posix-tldr.json` do not fully cover the 142 macOS-available POSIX Issue 8 utilities.
 
 Model selection defaults:
 - Claude is pinned by default to `claude-opus-4-6`.
@@ -201,7 +201,7 @@ This repo uses three complementary validation paths:
 
 - **Simulation Testing:** benchmark simulation path (`run_benchmark.py` in Unaided / Bridge-Aided / Command Verification modes). Preserves historical comparability and benchmark metrics.
 - **Install Testing:** shipped-product conformance for installed `SKILL.md` + `posix-lookup`. Includes single-target install tests, drift detection, and partial-uninstall verification.
-- **Repo Integrity:** structural coherence checks for source-of-truth artifacts. Validates 142-utility count consistency across all four sources, JSON validity, CLI sanity, and fixture coverage.
+- **Repo Integrity:** structural coherence checks for source-of-truth artifacts. Validates 142-utility (macOS subset) count consistency across all four sources, JSON validity, CLI sanity, and fixture coverage.
 
 The canonical single command for all validation:
 
@@ -228,12 +228,12 @@ GitHub Actions CI runs `make verify` on every push and pull request to `main`.
 | `skill/SKILL.md` | **The Product** — Claude Code skill combining Discovery Map + Syntax Lookup instruction |
 | `skill/posix-lookup` | **Syntax Lookup CLI** — executable Python 3 CLI, zero deps, called via bash |
 | `skill/posix-tldr.json` | Syntax lookup database (shared by CLI and benchmark) |
-| `posix-core.md` | **Discovery Map** — semantic map of all 142 POSIX utilities (~925 tokens) |
+| `posix-core.md` | **Discovery Map** — semantic map of all 142 macOS-available POSIX utilities (~925 tokens) |
 | `Makefile` | Build, test, and install pipeline |
 | `run_benchmark.py` | Stable benchmark CLI entrypoint + compatibility facade |
 | `benchmark_core/` | Internal benchmark implementation (`cli`, `runner`, `providers`, `execution`, `reporting`, `models`, `config`) |
 | `benchmark_data.json` | 40 intent-based questions with expected POSIX answers |
-| `posix-utilities.txt` | All 142 POSIX Issue 8 utilities (canonical list) |
+| `posix-utilities.txt` | All 142 macOS-available POSIX Issue 8 utilities (canonical list) |
 
 ## Output Files
 

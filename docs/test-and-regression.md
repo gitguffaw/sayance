@@ -20,8 +20,8 @@ A regression is any change to the codebase, prompt, question set, or tool that m
 Use both testing modes together:
 
 - **Simulation Testing:** benchmark simulation checks in `run_benchmark.py` for comparability and metric tracking.
-- **Install Testing:** installed product-path conformance checks for `SKILL.md` + `posix-lookup`. Includes single-target install tests (`install-claude` / `install-codex` independently), installed-level drift validation (SKILL.md, posix-tldr.json, and `posix-lookup --list` agree on 142 utilities), and partial-uninstall symlink correctness.
-- **Repo Integrity:** structural coherence checks for source-of-truth artifacts via `make test-repo`. Validates artifact presence, JSON validity, 142-utility count consistency across all four sources, CLI executable sanity, installer references, and fixture directory coverage.
+- **Install Testing:** installed product-path conformance checks for `SKILL.md` + `posix-lookup`. Includes single-target install tests (`install-claude` / `install-codex` independently), installed-level drift validation (SKILL.md, posix-tldr.json, and `posix-lookup --list` agree on 142 macOS-available utilities), and partial-uninstall symlink correctness.
+- **Repo Integrity:** structural coherence checks for source-of-truth artifacts via `make test-repo`. Validates artifact presence, JSON validity, 142-utility (macOS subset) count consistency across all four sources, CLI executable sanity, installer references, and fixture directory coverage.
 
 All three paths are complementary. None replaces another.
 
@@ -44,7 +44,7 @@ Live canaries install the bridge into an isolated HOME, run a prompt through the
 Repo Integrity commands:
 
 ```bash
-make test-repo               # source artifact consistency, JSON validity, 142-utility coherence
+make test-repo               # source artifact consistency, JSON validity, 142-utility (macOS) coherence
 ```
 
 ---
@@ -117,7 +117,7 @@ Run these for packaging/distribution changes and before releasing skill updates:
    make test-product-negative
    ```
 
-`make test-product` verifies install/uninstall in an isolated `HOME`, Claude/Codex skill file placement, CLI discoverability, lookup behavior, and 142-entry coverage.
+`make test-product` verifies install/uninstall in an isolated `HOME`, Claude/Codex skill file placement, CLI discoverability, lookup behavior, and 142-entry (macOS subset) coverage.
 
 `make test-product-negative` intentionally breaks installed artifacts and confirms failures are detected for:
 - missing installed file

@@ -130,7 +130,7 @@ def main():
             for error in bridge_errors:
                 print(f"    - {error}")
             raise SystemExit(1)
-        print("  POSIX bridge validation passed: core + tldr cover all 142 utilities.")
+        print("  POSIX bridge validation passed: core + tldr cover all 142 macOS-available utilities.")
         if args.validate_bridge:
             return
 
