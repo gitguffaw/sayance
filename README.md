@@ -1,5 +1,24 @@
 # posix
 
+In 1986, Jon Bentley challenged Donald Knuth — the legendary author of *The Art of Computer Programming* — to demonstrate his new literate-programming system (WEB) in the "Programming Pearls" column of *Communications of the ACM*. The task was simple: read a text file and output the N most frequently occurring words along with their counts, sorted by frequency.
+
+Knuth delivered a meticulously engineered Pascal program that ran more than ten pages and hundreds of lines long. It was a masterpiece of custom data structures, thoughtful algorithms, and interwoven documentation — exactly the kind of beautiful, over-engineered solution a brilliant mind would build from scratch.
+
+Doug McIlroy (Unix pioneer and inventor of the pipe) reviewed it. After polite praise, he demolished the entire effort by replacing Knuth's multi-page program with a six-line POSIX shell pipeline:
+
+```sh
+tr -cs A-Za-z '\n' |
+tr A-Z a-z |
+sort |
+uniq -c |
+sort -rn |
+sed ${1}q
+```
+
+McIlroy didn't just solve the problem — he showed that the right combination of tiny, battle-tested command-line tools could outperform a hand-crafted masterpiece in elegance, speed, and maintainability.
+
+That was 1986. Today, LLMs have the same blind spot Knuth had — they reach for bespoke solutions instead of the tools that are already there.
+
 **LLMs don't know the shell tools that already exist.** They reach for `tar` when `pax` is right there. They write Python scripts to hex-dump a file instead of calling `od`. They reject `readlink` as "not POSIX" even though it's been standard since 2024. Every wrong tool is wasted tokens, wasted time, and a fragile non-portable script you now have to maintain.
 
 This project fixes that with a two-layer reference injection system — and proves it works across Claude, Codex, and Gemini.
