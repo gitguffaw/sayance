@@ -44,7 +44,7 @@ run_case() {
 
   if [ "${mode}" = "drift_skill" ]; then
     # For drift detection, we check that the installed SKILL.md utility count
-    # no longer matches posix-lookup --list count (155 vs 154).
+    # no longer matches posix-lookup --list count (142 vs 141).
     local skill_count list_count
     skill_count="$(python3 - "${tmp_home}/.claude/skills/posix/SKILL.md" <<'PY'
 import re, sys
