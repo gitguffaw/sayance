@@ -233,7 +233,7 @@ GitHub Actions CI runs `make verify` on every push and pull request to `main`.
 | `run_benchmark.py` | Stable benchmark CLI entrypoint + compatibility facade |
 | `benchmark_core/` | Internal benchmark implementation (`cli`, `runner`, `providers`, `execution`, `reporting`, `models`, `config`) |
 | `benchmark_data.json` | 40 intent-based questions with expected POSIX answers |
-| `posix-utilities.txt` | All 142 macOS-available POSIX Issue 8 utilities (canonical list) |
+| `macOS-posix-utilities.txt` | All 142 macOS-available POSIX Issue 8 utilities (canonical list) |
 
 ## Output Files
 
