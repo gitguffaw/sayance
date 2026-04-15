@@ -66,37 +66,40 @@ The Discovery Map tells the agent *what exists*. Syntax Lookup tells it *how to 
 
 ## The Proof
 
-The repository now ships a 40-question benchmark corpus. The published numbers below are the original 30-question baseline comparison, kept as a historical before/after reference.
+40-question benchmark corpus (k=1), tested 2026-04-15. Models: Claude Opus 4.6, Codex GPT-5.4, Gemini 3.1 Pro Preview. All providers run with 1 concurrent worker; Gemini enforces a 30-second minimum delay between calls.
 
 ### POSIX Compliance: Before and After
 
 | Provider | Unaided | Bridge-Aided | Delta |
 |:---------|:----------------|:-------------|:------|
-| **Claude** | `██████░░░░` 63.3% | `████████░░` 76.7% | **+13.4 pts** |
-| **Codex** | `██████░░░░` 58.6% | `█████████░` 86.7% | **+28.1 pts** |
-| **Gemini** | `███████░░░` 65.4% | `█████████░` 86.7% | **+21.3 pts** |
+| **Claude** | `███████░░░` 70% | `█████████░` 88% | **+18 pts** |
+| **Codex** | `███████░░░` 69% | `██████████` 95% | **+26 pts** |
+| **Gemini** | `██████░░░░` 61% | `████████░░` 85% | **+24 pts** |
 
-### Historical Results (30 questions, k=1)
+### Full Results (40 questions, k=1)
 
 | | Claude | Codex | Gemini |
 |:---|:---:|:---:|:---:|
-| **Compliance (before)** | 63.3% | 58.6% | 65.4% |
-| **Compliance (after)** | 76.7% | 86.7% | 86.7% |
-| **Output tokens (before)** | 228 | 930 | 215 |
-| **Output tokens (after)** | 374 | 1,289 | 105 |
-| **Non-POSIX substitutions (before)** | 6 | 9 | 7 |
-| **Non-POSIX substitutions (after)** | 7 | 1 | 3 |
-| **Dominant response style (after)** | over_explaining | tool_heavy_detour | minimal_or_near_minimal |
+| **Compliance (unaided)** | 70% | 69% | 61% |
+| **Compliance (bridge-aided)** | 88% | 95% | 85% |
+| **Mean output tokens (unaided)** | 314 | 1,052 | 243 |
+| **Mean output tokens (bridge-aided)** | 452 | 1,392 | 92 |
+| **Mean latency (unaided)** | 10.1s | 22.3s | 20.7s |
+| **Mean latency (bridge-aided)** | 14.4s | 32.1s | 24.4s |
+| **Non-POSIX substitutions (unaided)** | 6 | 6 | 7 |
+| **Non-POSIX substitutions (bridge-aided)** | 1 | 0 | 3 |
+| **Valid results** | 40/40 | 39/40 | 28/40 unaided, 40/40 bridge |
+| **Dominant style (bridge-aided)** | over_explaining | tool_heavy_detour | minimal_or_near_minimal |
 
-**Gemini** got both more correct *and* more concise — output tokens dropped 51% while compliance rose 21 points. 24 of 30 answers were classified `minimal_or_near_minimal` — the best outcome.
+**Codex** jumped 26 points to 95% compliance. Non-POSIX substitutions dropped from 6 to zero. Token count rose because it narrates tool usage verbosely (`tool_heavy_detour`), not because it gave worse answers.
 
-**Codex** jumped 28 points in compliance. Non-POSIX substitutions dropped from 9 to 1. Token count rose because it narrates tool usage verbosely (`tool_heavy_detour`), not because it gave worse answers.
+**Gemini** got both more correct *and* more concise — output tokens dropped 62% (243 to 92) while compliance rose 24 points. The bridge also eliminated all 12 provider errors that occurred in the unaided run.
 
-**Claude** improved 13 points. Non-POSIX substitutions slightly increased (6 to 7) — the smallest gain, but compliance still rose due to fewer workarounds.
+**Claude** improved 18 points. Non-POSIX substitutions dropped from 6 to 1. Latency increased modestly (10s to 14s) due to the bridge injection overhead.
 
-### What the Benchmark Doesn't Prove (Yet)
+### What the Benchmark Measures and What It Doesn't
 
-The Unaided and Bridge-Aided modes measure compliance in a controlled text-analysis environment. No commands are actually executed. The real cost story — what happens when a wrong first answer triggers retries, debugging, and workaround scripts — is **Command Verification's job**. The hypothesis: the bridge's small upfront cost prevents expensive downstream failure loops.
+Unaided and Bridge-Aided runs measure token efficiency and response time. They do not execute commands. The `--execute` flag enables Command Verification, which runs extracted commands against fixtures and validates output. 30/40 questions have execution fixtures; T31-T40 are unverified. The hypothesis: the bridge's small upfront token cost prevents expensive downstream failure loops.
 
 ## Install the Skill
 
@@ -166,7 +169,7 @@ python3 run_benchmark.py --llms claude codex
 python3 run_benchmark.py --llms claude codex --inject-posix
 ```
 
-`--inject-posix` now fails fast if `posix-core.md` or `posix-tldr.json` do not fully cover the 142 macOS-available POSIX Issue 8 utilities.
+`--inject-posix` now fails fast if `posix-core.md` or `posix-tldr.json` do not fully cover all 155 POSIX Issue 8 utilities.
 
 Model selection defaults:
 - Claude is pinned by default to `claude-opus-4-6`.
@@ -193,7 +196,7 @@ Summary validity semantics:
 - `usage_invalid_results` and `invalid_usage_reasons` explain parser/telemetry issues.
 - `valid_results` remains as a backward-compatible alias of `usage_valid_results`.
 - In custom `--results-dir` runs, benchmark artifacts are retained as a single latest pair (`summary-*.json` and `report-*.html`) to avoid ambiguous multi-summary directories.
-- In comparison HTML, latency is shown in seconds, `Total Cost (USD)` is intentionally omitted, and token context rows include input/cached/billable-minus-output values.
+- In comparison HTML, latency is shown in seconds and token context rows include input/cached/billable-minus-output values.
 
 ## Validation
 
