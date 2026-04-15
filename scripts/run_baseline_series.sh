@@ -1,7 +1,7 @@
 #!/bin/zsh
 set -euo pipefail
 
-ROOT="/Users/jeremyneal/Library/Mobile Documents/com~apple~CloudDocs/Fermenting/posix"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RESULTS_ROOT="$ROOT/results/baseline-scheduled-5h"
 LOGS_DIR="$RESULTS_ROOT/logs"
 
