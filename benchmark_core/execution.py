@@ -1,5 +1,6 @@
 import filecmp
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -111,13 +112,16 @@ def setup_fixture(fixture_spec: dict) -> tuple[Path | None, str]:
     # except expected_stdout and expected/
     setup_dir = fixture_path / "setup"
     if setup_dir.is_dir():
-        shutil.copytree(setup_dir, temp_dir, dirs_exist_ok=True)
+        shutil.copytree(setup_dir, temp_dir, symlinks=True, dirs_exist_ok=True)
     else:
         for item in fixture_path.iterdir():
             if item.name in ("expected_stdout", "expected", "setup_timestamps.sh"):
                 continue
-            if item.is_dir():
-                shutil.copytree(item, temp_dir / item.name)
+            if item.is_symlink():
+                link_target = os.readlink(item)
+                (temp_dir / item.name).symlink_to(link_target)
+            elif item.is_dir():
+                shutil.copytree(item, temp_dir / item.name, symlinks=True)
             else:
                 shutil.copy2(item, temp_dir / item.name)
 
