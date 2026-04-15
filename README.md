@@ -23,15 +23,6 @@ That was 1986. Today, LLMs have the same blind spot Knuth had — they reach for
 
 This project fixes that with a two-layer reference injection system — and proves it works across Claude, Codex, and Gemini.
 
-| You ask for | LLM suggests | POSIX answer |
-|-------------|-------------|--------------|
-| Portable archive | `tar` | `pax` |
-| Hex dump | `xxd`, `hexdump` | `od` |
-| File checksum | `md5sum`, `sha256sum` | `cksum` |
-| Edit file in place | `sed -i` | `sed 's/…/' f > tmp && mv tmp f` |
-| Recursive grep | `grep -r` | `find … -exec grep` |
-| Resolve symlink | "not POSIX" | `readlink` (Issue 8) |
-
 ## How It Works
 
 The fix isn't more training data. LLMs already *know* what `comm`, `paste`, `tsort`, and `csplit` do — they just don't reach for them. Training data is dominated by GNU/Linux blog posts and Stack Overflow answers, so the model's prior overwhelmingly favors `tar` over `pax` even when it knows both exist ([Patil et al., "Gorilla," 2023](https://arxiv.org/abs/2305.15334) — name familiarity bias is the #1 cause of wrong tool selection in LLM function-calling benchmarks).
