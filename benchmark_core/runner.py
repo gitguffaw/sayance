@@ -45,6 +45,10 @@ def load_existing_result(provider: str, question: dict, run_k: int) -> QuestionR
         return None
     try:
         data = json.loads(path.read_text())
+        # Strip removed cost fields from old result files
+        tokens_data = dict(data["tokens"])
+        tokens_data.pop("cost_usd", None)
+        tokens_data.pop("cost_source", None)
         execution_data = data.get("execution")
         execution = ExecutionMetrics(**execution_data) if execution_data else ExecutionMetrics(
             latency_ms=0,
@@ -59,7 +63,7 @@ def load_existing_result(provider: str, question: dict, run_k: int) -> QuestionR
         analysis = providers.analyze_response(
             question=question,
             response=data["response"],
-            tokens=TokenUsage(**data["tokens"]),
+            tokens=TokenUsage(**tokens_data),
             llm=data["llm"],
             execution=execution,
         )
@@ -70,9 +74,10 @@ def load_existing_result(provider: str, question: dict, run_k: int) -> QuestionR
         exec_rec = ExecutionRecord(**exec_rec_data) if exec_rec_data else None
         return QuestionResult(
             id=data["id"], llm=data["llm"], model=data.get("model", "unknown"),
+            requested_model=data.get("requested_model", ""),
             run_k=data["run_k"],
             question=data["question"], response=data["response"],
-            tokens=TokenUsage(**data["tokens"]),
+            tokens=TokenUsage(**tokens_data),
             execution=execution,
             analysis=analysis,
             accuracy=AccuracyGrade(**data["accuracy"]) if data.get("accuracy") else None,
@@ -328,9 +333,12 @@ def run_single(
     execute_question_fn=execution_module.execute_question,
 ) -> QuestionResult:
     """Run a single question against a single LLM and return the result."""
-    if delay > 0:
+    effective_delay = delay
+    if llm == "gemini":
+        effective_delay = max(delay, GEMINI_MIN_DELAY_SECONDS)
+    if effective_delay > 0:
         with _provider_locks[llm]:
-            time.sleep(delay)
+            time.sleep(effective_delay)
 
     q_id = question["id"]
     # Benchmark prompt must remain the raw user task. Do not prime with "POSIX"
@@ -360,6 +368,10 @@ def run_single(
         invocation.latency_ms,
         codex_model=codex_model,
     )
+
+    requested = claude_model if llm == "claude" else (codex_model if llm == "codex" else "")
+    if requested and model != "unknown" and requested.lower() != model.lower():
+        print(f"  [{q_id}] WARNING: requested model '{requested}' but detected '{model}'")
 
     # Determine cache state from actual token data
     if tokens.input_cached > 0:
@@ -394,6 +406,9 @@ def run_single(
                 f"{prompt}\n\nAssistant: {tool_call}\n\n"
                 f"TOOL_RESULT:\n{json.dumps(syntax)}\nNow complete the task."
             )
+            if effective_delay > 0:
+                with _provider_locks[llm]:
+                    time.sleep(effective_delay)
             inv2 = invoke_cli_fn(
                 llm,
                 follow_up,
@@ -429,11 +444,6 @@ def run_single(
                 if reason
             ]
             combined_invalid_reason = "; ".join(combined_invalid_reasons)
-            combined_cost_source = tokens.cost_source
-            if not combined_usage_valid:
-                invalid_sources = [tok.cost_source for tok in (tokens, tok2) if not tok.usage_valid]
-                if invalid_sources:
-                    combined_cost_source = invalid_sources[0]
 
             # Keep the raw totals intact; adjusted reporting is derived later.
             tokens = TokenUsage(
@@ -442,8 +452,6 @@ def run_single(
                 output=tokens.output + tok2.output,
                 thoughts=tokens.thoughts + tok2.thoughts,
                 billable=tokens.billable + tok2.billable,
-                cost_usd=((tokens.cost_usd or 0) + (tok2.cost_usd or 0)) if (tokens.cost_usd is not None or tok2.cost_usd is not None) else None,
-                cost_source=combined_cost_source,
                 raw={
                     "run1": tokens.raw,
                     "run2": tok2.raw,
@@ -487,6 +495,7 @@ def run_single(
         id=q_id,
         llm=llm,
         model=model,
+        requested_model=requested or "",
         run_k=run_k,
         question=question["question"],
         response=response_text,
@@ -501,10 +510,12 @@ def run_single(
 
 
 PROVIDER_CONCURRENCY = {
-    "claude": 3,
-    "gemini": 5,
-    "codex": 2,
+    "claude": 1,
+    "gemini": 1,
+    "codex": 1,
 }
+
+GEMINI_MIN_DELAY_SECONDS = 30
 
 _provider_locks: dict[str, threading.Lock] = {
     "claude": threading.Lock(),
@@ -533,7 +544,7 @@ def run_provider_batch(
     write_incremental_fn=write_incremental,
 ) -> list[QuestionResult]:
     """Run all questions for a single provider with concurrency."""
-    workers = max_workers or PROVIDER_CONCURRENCY.get(llm, 2)
+    workers = max_workers or PROVIDER_CONCURRENCY.get(llm, 1)
     results: list[QuestionResult] = []
     tasks_to_run = []
 

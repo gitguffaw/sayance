@@ -62,7 +62,6 @@ def generate_report(all_results: dict[str, list[QuestionResult]], questions: lis
         latency = [r.execution.latency_ms for r in visible_results]
         steps = [r.execution.step_count for r in visible_results]
         excess = [r.analysis.estimated_excess_output_tokens for r in token_results]
-        costs = [r.tokens.cost_usd for r in token_results if r.tokens.cost_usd is not None]
         compliant = [r for r in visible_results if r.analysis.posix_compliant]
         issue8_refusals = [r for r in visible_results if r.analysis.issue8_refusal]
         inefficiency_modes = Counter(r.analysis.inefficiency_mode for r in visible_results)
@@ -84,10 +83,6 @@ def generate_report(all_results: dict[str, list[QuestionResult]], questions: lis
         print(f"    Cached input:   {stats(cached)}")
         print(f"    Thoughts:       {stats(thoughts)}")
         print(f"    Billable:       {stats(billable)}")
-        if costs:
-            print(f"    Cost (USD):     mean={sum(costs)/len(costs):.4f}  total={sum(costs):.4f}")
-        else:
-            print(f"    Cost (USD):     not reported")
         print(
             "    Tool-sim adjusted billable: "
             f"{stats([adjusted.adjusted_billable for adjusted in adjustments])}"
@@ -125,7 +120,7 @@ def generate_report(all_results: dict[str, list[QuestionResult]], questions: lis
         if invalid_usage:
             print(
                 f"    Usage invalid: {len(invalid_usage)}/{total_results} "
-                f"(excluded from token/cost aggregates)"
+                f"(excluded from token aggregates)"
             )
             reason_counts = invalid_usage_reason_counts(results)
             reason_str = ", ".join(
@@ -249,9 +244,6 @@ def save_summary(
             "total_estimated_excess_output_tokens": sum(
                 r.analysis.estimated_excess_output_tokens for r in token_results
             ),
-            "total_cost_usd": sum(
-                r.tokens.cost_usd for r in token_results if r.tokens.cost_usd is not None
-            ),
             "mean_output_tokens": (
                 sum(r.tokens.output for r in token_results) / len(token_results) if token_results else 0
             ),
@@ -368,7 +360,6 @@ def save_visual_report(
             "mean_latency": mean([r.execution.latency_ms / 1000.0 for r in visible_results]),
             "mean_steps": mean([r.execution.step_count for r in visible_results]),
             "tool_calls": sum(r.execution.tool_call_count for r in visible_results),
-            "total_cost": sum(r.tokens.cost_usd for r in token_results if r.tokens.cost_usd is not None),
             "inefficiency_modes": inefficiency_modes,
             "errors": errors,
             "invalid_usage": invalid_usage,
@@ -520,10 +511,6 @@ def save_visual_report(
               <ul>{invalid_items}</ul>
             </div>
             """
-        cost_line = ""
-        if card["total_cost"] > 0:
-            cost_line = f"<div><span>Total cost</span><strong>${card['total_cost']:.4f}</strong></div>"
-
         model_sections.append(f"""
         <section class="model-card">
           <div class="model-heading">
@@ -539,7 +526,6 @@ def save_visual_report(
           {metric_bar(card["mean_latency"], max(max_latency_seconds, 1.0), "Mean latency", " s", ".2f")}
           <div class="micro-stats">
             <div><span>Mean steps</span><strong>{card["mean_steps"]:.1f}</strong></div>
-            {cost_line}
             <div><span>Inefficiency modes</span><strong>{escape(inefficiency_summary or 'none')}</strong></div>
           </div>
           {error_html}
@@ -1038,9 +1024,9 @@ def save_visual_report(
       <div class="section-header">
         <div>
           <p class="eyebrow">Model Summary</p>
-          <h2>Performance and cost profile by provider</h2>
+          <h2>Performance profile by provider</h2>
         </div>
-        <p>Compliance and efficiency are measured on report-visible records. Token and cost metrics use usage-valid records.</p>
+        <p>Compliance and efficiency are measured on report-visible records. Token metrics use usage-valid records.</p>
       </div>
       <div class="model-grid">
         {''.join(model_sections) if model_sections else "<p class='empty-state'>No model data available.</p>"}

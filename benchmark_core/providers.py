@@ -259,9 +259,13 @@ def invoke_cli(
                 latency_ms=latency_ms,
             )
         return CLIInvocation(stdout=strip_cli_noise(result.stdout), latency_ms=latency_ms)
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
         latency_ms = int((time.perf_counter() - started) * 1000)
-        return CLIInvocation(stdout='{"error": "timeout"}', latency_ms=latency_ms)
+        stderr_hint = exc.stderr.strip()[:200] if exc.stderr else ""
+        return CLIInvocation(
+            stdout=f'{{"error": "timeout", "stderr": {json.dumps(stderr_hint)}}}',
+            latency_ms=latency_ms,
+        )
     except FileNotFoundError:
         latency_ms = int((time.perf_counter() - started) * 1000)
         return CLIInvocation(
@@ -303,8 +307,6 @@ def parse_claude_tokens(raw_json: dict) -> TokenUsage:
     assert output_tokens is not None
     input_cached = cache_read
 
-    # billable includes cache_creation (charged at reduced rate) + fresh input + output
-    # Claude reports total_cost_usd which accounts for cache pricing, so use that
     billable = input_tokens + cache_creation + cache_read + output_tokens
 
     return TokenUsage(
@@ -313,8 +315,6 @@ def parse_claude_tokens(raw_json: dict) -> TokenUsage:
         output=output_tokens,
         thoughts=0,
         billable=billable,
-        cost_usd=raw_json.get("total_cost_usd"),
-        cost_source="reported" if "total_cost_usd" in raw_json else "unknown",
         raw=usage,
     )
 
@@ -365,8 +365,6 @@ def parse_gemini_tokens(raw_json: dict) -> TokenUsage:
         output=output_tokens,
         thoughts=thoughts,
         billable=billable,
-        cost_usd=None,
-        cost_source="calculated",
         raw={"models": normalized_models} if len(normalized_models) > 1 else next(iter(normalized_models.values())),
     )
 
@@ -374,8 +372,6 @@ def parse_gemini_tokens(raw_json: dict) -> TokenUsage:
 def invalid_token_usage(
     reason: str,
     raw: dict | None = None,
-    *,
-    cost_source: str = "usage_invalid",
 ) -> TokenUsage:
     """Return a token payload that preserves explicit usage-invalid state."""
     return TokenUsage(
@@ -384,8 +380,6 @@ def invalid_token_usage(
         output=0,
         thoughts=0,
         billable=0,
-        cost_usd=None,
-        cost_source=cost_source,
         raw=raw or {},
         usage_valid=False,
         usage_invalid_reason=reason,
@@ -613,8 +607,6 @@ def parse_codex_tokens(raw_stdout: str) -> TokenUsage:
         output=output_tokens,
         thoughts=0,
         billable=input_tokens - cached + output_tokens,
-        cost_usd=None,
-        cost_source="calculated",
         raw=raw_usage,
     )
 
@@ -623,10 +615,13 @@ def _detect_codex_model() -> str:
     """Read Codex model from config (not available in JSONL output)."""
     import tomllib
     config_path = Path.home() / ".codex" / "config.toml"
-    if config_path.exists():
-        with open(config_path, "rb") as f:
-            codex_cfg = tomllib.load(f)
-        return codex_cfg.get("model", "unknown")
+    try:
+        if config_path.exists():
+            with open(config_path, "rb") as f:
+                codex_cfg = tomllib.load(f)
+            return codex_cfg.get("model", "unknown")
+    except (tomllib.TOMLDecodeError, PermissionError, OSError):
+        pass
     return "unknown"
 
 
@@ -695,8 +690,7 @@ def parse_response(
             if isinstance(maybe_error, dict) and "error" in maybe_error:
                 return f"[ERROR] {maybe_error['error']}", TokenUsage(
                     input=0, input_cached=0, output=0, thoughts=0,
-                    billable=0, cost_usd=None, cost_source="error",
-                    raw=maybe_error,
+                    billable=0, raw=maybe_error,
                 ), (codex_model or _detect_codex_model()), ExecutionMetrics(
                     latency_ms=latency_ms,
                     step_count=1,
@@ -732,7 +726,6 @@ def parse_response(
         return raw_stdout, invalid_token_usage(
             "response JSON parse failed",
             raw={"raw_stdout": raw_stdout[:200]},
-            cost_source="parse_error",
         ), "unknown", ExecutionMetrics(
             latency_ms=latency_ms,
             step_count=1,
@@ -743,7 +736,7 @@ def parse_response(
     if "error" in data:
         return f"[ERROR] {data['error']}", TokenUsage(
             input=0, input_cached=0, output=0, thoughts=0,
-            billable=0, cost_usd=None, cost_source="error", raw=data,
+            billable=0, raw=data,
         ), "unknown", ExecutionMetrics(
             latency_ms=latency_ms,
             step_count=1,
@@ -754,23 +747,32 @@ def parse_response(
     if llm == "claude":
         tokens = parse_claude_tokens(data)
         text = data.get("result", "")
-        # Model from modelUsage keys
+        # Model from modelUsage: pick the model with the most output tokens
+        # (the CLI uses haiku for routing and the requested model for the response)
         model_usage = data.get("modelUsage", {})
-        model = next(iter(model_usage), "unknown")
+        if model_usage:
+            model = max(model_usage, key=lambda m: model_usage[m].get("outputTokens", 0))
+        else:
+            model = "unknown"
         return text, tokens, model, parse_claude_execution(data, latency_ms)
 
     if llm == "gemini":
         tokens = parse_gemini_tokens(data)
         text = data.get("response", "")
-        # Model from stats.models keys
+        # Model from stats.models: pick the model with the most output tokens
         stats = data.get("stats", {})
         models = stats.get("models", {})
-        model = next(iter(models), "unknown")
+        if models:
+            def _gemini_output(m: str) -> int:
+                t = models[m].get("tokens", {}) if isinstance(models[m], dict) else {}
+                return t.get("candidates", 0) + t.get("output_tokens", 0) + t.get("output", 0)
+            model = max(models, key=_gemini_output)
+        else:
+            model = "unknown"
         return text, tokens, model, parse_gemini_execution(data, latency_ms)
 
     return raw_stdout, invalid_token_usage(
         "unknown llm parser",
-        cost_source="unknown_llm",
     ), "unknown", ExecutionMetrics(
         latency_ms=latency_ms,
         step_count=1,

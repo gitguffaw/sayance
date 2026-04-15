@@ -17,9 +17,9 @@ FIXTURES_DIR = SCRIPT_DIR / "fixtures"
 #   bridge-aided-execute/ → Bridge-Aided Verification (bridge + execution)
 RESULTS_ROOT = SCRIPT_DIR / "results"
 RESULTS_DIR_BASE = RESULTS_ROOT / "unaided"
-RESULTS_DIR_STEPUP = RESULTS_ROOT / "bridge-aided"
+RESULTS_DIR_BRIDGE_AIDED = RESULTS_ROOT / "bridge-aided"
 RESULTS_DIR_EXECUTE = RESULTS_ROOT / "execute"
-RESULTS_DIR_STEPUP_EXECUTE = RESULTS_ROOT / "bridge-aided-execute"
+RESULTS_DIR_BRIDGE_AIDED_EXECUTE = RESULTS_ROOT / "bridge-aided-execute"
 
 RESULTS_DIR = RESULTS_DIR_BASE
 
@@ -51,11 +51,11 @@ def current_run_label() -> str:
 
 def mode_results_dir(*, inject_posix: bool, execute: bool) -> Path:
     if inject_posix and execute:
-        return RESULTS_DIR_STEPUP_EXECUTE
+        return RESULTS_DIR_BRIDGE_AIDED_EXECUTE
     if execute:
         return RESULTS_DIR_EXECUTE
     if inject_posix:
-        return RESULTS_DIR_STEPUP
+        return RESULTS_DIR_BRIDGE_AIDED
     return RESULTS_DIR_BASE
 
 

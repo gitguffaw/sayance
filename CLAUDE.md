@@ -103,7 +103,7 @@ Results are saved under `results/` as JSON/HTML, with mode roots at `results/una
 ## Known Issues
 
 - [OBSERVED 2026-04-02] **Gemini MCP prefix**: Gemini CLI prepends "MCP issues detected..." to output. Must strip before any JSON parsing. `strip_cli_noise()` handles this plus ~10 other known noise prefixes.
-- [OBSERVED 2026-04-02] **Gemini quota planning**: For this repo, assume Gemini is safe at one benchmark call every 30 seconds and no more than 50 calls per day unless the active account limits clearly show otherwise. A 40-question Unaided run still fits, but only with 10 calls of headroom. Bridge-Aided runs may exceed the daily quota because the Step-Up simulation can trigger a second Gemini call for a question.
+- [OBSERVED 2026-04-02] **Gemini quota planning**: Gemini is hardcoded to 1 worker with a 30-second minimum delay between calls (`GEMINI_MIN_DELAY_SECONDS`). Assume no more than 50 calls per day unless the active account limits clearly show otherwise. A 40-question Unaided run still fits, but only with 10 calls of headroom. Bridge-Aided runs may exceed the daily quota because the bridge simulation can trigger a second Gemini call for a question.
 - [OBSERVED 2026-04-02] **Codex git-check behavior**: Use `--skip-git-repo-check` when running outside a git repository. In this repo, use it only if you need to bypass local checks.
 - [OBSERVED 2026-04-02] **POSIX Issue 8 vs 7**: `readlink`, `realpath`, and `timeout` are now POSIX (Issue 8, 2024). LLMs trained on older data will incorrectly call these "not POSIX." `c99` is now `c17`. The batch `q*` utilities and `fort77` were removed.
 - [OBSERVED 2026-04-03] **Bridge completeness gate**: Incomplete semantic bridge coverage can corrupt Bridge-Aided benchmark runs. `run_benchmark.py --inject-posix` now performs strict preflight validation and exits if `posix-core.md` or `posix-tldr.json` drift from 142-utility (macOS subset) coverage.
@@ -111,11 +111,12 @@ Results are saved under `results/` as JSON/HTML, with mode roots at `results/una
 
 ## Important Context
 
-- The primary metric is **token cost**, not accuracy. Accuracy is secondary.
-- Token counts differ across providers (different tokenizers). Use native tokens for cost, tiktoken o200k_base for cross-model comparison.
+- The primary metrics are **tokens and time**, not accuracy. Accuracy is secondary. Cost tracking has been removed from the codebase.
+- Token counts differ across providers (different tokenizers). Use native tokens for comparison, tiktoken o200k_base for normalization.
 - Token validity is explicit: prefer `usage_valid_results`, `report_visible_results`, `usage_invalid_results`, and `invalid_usage_reasons`. `valid_results` remains a compatibility alias of `usage_valid_results`.
 - Custom `--results-dir` runs retain only the latest `summary-*.json` and `report-*.html` to prevent ambiguous artifact sets.
-- Comparison HTML uses seconds-based latency display and intentionally omits `Total Cost (USD)`; use token-context rows (`Total Input Tokens`, `Total Cached Tokens`, `Billable - Output Tokens`) when interpreting billable totals.
-- Cache state (cold vs warm) creates 10x cost difference on Anthropic. Track per result.
+- **Measurement modes**: Unaided and Bridge-Aided runs measure token efficiency and response time only — they do not execute commands. The `--execute` flag enables Command Verification, which runs extracted commands against fixtures and validates output. 30/40 questions have execution fixtures; T31-T40 are unverified.
+- Cache state (cold vs warm) creates 10x token difference on Anthropic. Track per result.
+- All providers run with 1 concurrent worker to avoid rate limiting. Gemini enforces a 30-second minimum delay between calls.
 - LLM-as-judge is susceptible to prompt injection. Grading uses base64-encoded responses to mitigate. Never use the same model as both test subject and judge.
 - `benchmark_data.json` (questions and expected answers), `posix-tldr.json`, and `fixtures/` are frozen datasets for cross-model comparison. Do not modify them to fix benchmark results unless we are creating new base data because.

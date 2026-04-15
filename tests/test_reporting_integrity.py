@@ -73,7 +73,6 @@ class ComparisonReportTests(unittest.TestCase):
                 "total_cached_tokens": 11,
                 "total_output_tokens": 12,
                 "total_estimated_excess_output_tokens": 5,
-                "total_cost_usd": 1.2345,
                 "issue8_refusal_count": 1,
                 "inefficiency_modes": {"over_explaining": 1},
                 "errors": [],

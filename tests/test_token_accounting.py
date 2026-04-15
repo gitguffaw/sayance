@@ -42,6 +42,7 @@ def make_result(
         id=q_id,
         llm="claude",
         model="claude-opus-4-6",
+        requested_model="claude-opus-4-6",
         run_k=0,
         question=f"Question {q_id}",
         response=response,
@@ -129,7 +130,6 @@ class CodexTokenParsingTests(unittest.TestCase):
         )
 
         self.assertFalse(tokens.usage_valid)
-        self.assertEqual(tokens.cost_source, "usage_invalid")
         self.assertIn("input_tokens", tokens.usage_invalid_reason)
 
     def test_parse_codex_tokens_marks_missing_usage_invalid(self) -> None:
@@ -477,7 +477,6 @@ class ClaudeTokenParsingTests(unittest.TestCase):
         self.assertEqual(tokens.input, 100)
         self.assertEqual(tokens.input_cached, 7)
         self.assertEqual(tokens.billable, 148)
-        self.assertEqual(tokens.cost_source, "reported")
 
     def test_parse_claude_tokens_accepts_string_fields(self) -> None:
         tokens = parse_claude_tokens(
@@ -555,8 +554,6 @@ class ToolSimulationAdjustmentTests(unittest.TestCase):
             output=0,
             thoughts=0,
             billable=70,
-            cost_usd=None,
-            cost_source="calculated",
             raw={
                 "tool_simulation_adjustment": {
                     "replay_input_billable": 20,
@@ -606,8 +603,6 @@ class ToolSimulationAdjustmentTests(unittest.TestCase):
             output=0,
             thoughts=0,
             billable=30,
-            cost_usd=None,
-            cost_source="calculated",
             raw={
                 "run1": {"output_tokens": 4},
                 "run2": {"prompt": 18, "cached": 2, "candidates": 6},
@@ -666,8 +661,6 @@ class ToolSimulationAdjustmentTests(unittest.TestCase):
             output=24,
             thoughts=0,
             billable=30,
-            cost_usd=None,
-            cost_source="calculated",
             raw={"input_tokens": 20, "cached_input_tokens": 0, "output_tokens": 24},
         )
         run2_tokens = TokenUsage(
@@ -676,8 +669,6 @@ class ToolSimulationAdjustmentTests(unittest.TestCase):
             output=6,
             thoughts=0,
             billable=18,
-            cost_usd=None,
-            cost_source="calculated",
             raw={"prompt": 12, "cached": 0, "candidates": 6},
         )
         parse_response_mock.side_effect = [
@@ -730,8 +721,6 @@ class ValidityReportingTests(unittest.TestCase):
                 output=8,
                 thoughts=0,
                 billable=10,
-                cost_usd=None,
-                cost_source="calculated",
                 raw={
                     "tool_simulation_adjustment": {
                         "replay_input_billable": 7,
@@ -777,8 +766,6 @@ class ValidityReportingTests(unittest.TestCase):
                 output=4,
                 thoughts=0,
                 billable=14,
-                cost_usd=None,
-                cost_source="calculated",
                 raw={},
             ),
             latency_ms=100,
@@ -793,8 +780,6 @@ class ValidityReportingTests(unittest.TestCase):
                 output=0,
                 thoughts=0,
                 billable=0,
-                cost_usd=None,
-                cost_source="usage_invalid",
                 raw={},
                 usage_valid=False,
                 usage_invalid_reason="missing usage telemetry",
@@ -810,8 +795,6 @@ class ValidityReportingTests(unittest.TestCase):
                 output=0,
                 thoughts=0,
                 billable=0,
-                cost_usd=None,
-                cost_source="error",
                 raw={},
             ),
             latency_ms=500,
@@ -851,8 +834,6 @@ class ValidityReportingTests(unittest.TestCase):
                 output=4,
                 thoughts=0,
                 billable=14,
-                cost_usd=None,
-                cost_source="calculated",
                 raw={},
             ),
             latency_ms=100,
@@ -867,8 +848,6 @@ class ValidityReportingTests(unittest.TestCase):
                 output=0,
                 thoughts=0,
                 billable=0,
-                cost_usd=None,
-                cost_source="usage_invalid",
                 raw={},
                 usage_valid=False,
                 usage_invalid_reason="missing usage telemetry",
@@ -905,8 +884,6 @@ class ValidityReportingTests(unittest.TestCase):
                 output=0,
                 thoughts=0,
                 billable=0,
-                cost_usd=None,
-                cost_source="parse_error",
                 raw={},
                 usage_valid=False,
                 usage_invalid_reason="response JSON parse failed",
@@ -937,8 +914,6 @@ class ValidityReportingTests(unittest.TestCase):
                 output=4,
                 thoughts=0,
                 billable=14,
-                cost_usd=None,
-                cost_source="calculated",
                 raw={},
             ),
             latency_ms=100,
@@ -953,8 +928,6 @@ class ValidityReportingTests(unittest.TestCase):
                 output=0,
                 thoughts=0,
                 billable=0,
-                cost_usd=None,
-                cost_source="usage_invalid",
                 raw={},
                 usage_valid=False,
                 usage_invalid_reason="missing usage telemetry",
@@ -985,8 +958,6 @@ class ValidityReportingTests(unittest.TestCase):
                 output=8,
                 thoughts=0,
                 billable=10,
-                cost_usd=None,
-                cost_source="calculated",
                 raw={
                     "tool_simulation_adjustment": {
                         "replay_input_billable": 7,

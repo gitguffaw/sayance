@@ -16,8 +16,6 @@ class TokenUsage:
     output: int
     thoughts: int
     billable: int
-    cost_usd: float | None      # None if not reported by provider
-    cost_source: str             # "reported" or "calculated"
     raw: dict                    # original CLI JSON for reproducibility
     usage_valid: bool = True
     usage_invalid_reason: str = ""
@@ -95,7 +93,8 @@ class ExecutionRecord:
 class QuestionResult:
     id: str
     llm: str
-    model: str                   # e.g. "claude-opus-4-6", "gemini-3.1-pro-preview", "gpt-5.4"
+    model: str                   # detected from CLI response
+    requested_model: str         # model requested via --claude-model / --codex-model, or ""
     run_k: int
     question: str
     response: str                # full response text
@@ -148,7 +147,7 @@ def usage_invalid_results(results: list[QuestionResult]) -> list[QuestionResult]
 
 def invalid_usage_reason_counts(results: list[QuestionResult]) -> Counter:
     return Counter(
-        result.tokens.usage_invalid_reason or result.tokens.cost_source or "unknown"
+        result.tokens.usage_invalid_reason or "unknown"
         for result in usage_invalid_results(results)
     )
 
@@ -177,7 +176,7 @@ def summary_error_entries(results: list[QuestionResult]) -> list[dict]:
                     "question_id": result.id,
                     "error": result.tokens.usage_invalid_reason or "usage telemetry invalid",
                     "latency_ms": result.execution.latency_ms,
-                    "kind": result.tokens.cost_source if result.tokens.cost_source == "parse_error" else "usage_invalid",
+                    "kind": "parse_error" if "parse" in (result.tokens.usage_invalid_reason or "").lower() else "usage_invalid",
                 }
             )
     return entries
