@@ -10,7 +10,7 @@
 
 ## Project Structure & Module Organization
 
-This repository is a small, stdlib-only Python benchmark. `run_benchmark.py` is the stable CLI entrypoint and compatibility facade. Internal implementation lives under `benchmark_core/` (`cli`, `runner`, `providers`, `execution`, `reporting`, `models`, `config`). Benchmark inputs live in `benchmark_data.json`, and the POSIX utility source of truth lives in `posix-utilities.txt`. Research notes and planning docs are under `docs/brainstorms/`, `docs/plans/`, and `docs/solutions/`. Generated output is written under `results/`, with mode roots at `results/unaided/`, `results/bridge-aided/`, `results/execute/`, and `results/bridge-aided-execute/`. Each benchmark invocation writes to its own run directory using `label-DYYYY-MM-DD-THH-MM-SS`, for example `claude-codex-D2026-04-10-T08-55-15`. Each run directory also includes a `run.json` manifest so context is not encoded only in the folder name. Generated output is ignored by Git.
+This repository is a small, stdlib-only Python benchmark. `run_benchmark.py` is the stable CLI entrypoint and compatibility facade. Internal implementation lives under `benchmark_core/` (`cli`, `runner`, `providers`, `execution`, `reporting`, `models`, `config`). Benchmark inputs live in `benchmark_data.json`, and the POSIX utility source of truth lives in `posix-utilities.txt`. Design rationale and research are under `docs/design-rationale/`. Generated output is written under `results/`, with mode roots at `results/unaided/`, `results/bridge-aided/`, `results/execute/`, and `results/bridge-aided-execute/`. Each benchmark invocation writes to its own run directory using `label-DYYYY-MM-DD-THH-MM-SS`, for example `claude-codex-D2026-04-10-T08-55-15`. Each run directory also includes a `run.json` manifest so context is not encoded only in the folder name. Generated output is ignored by Git.
 
 ## Build, Test, and Development Commands
 
@@ -66,9 +66,6 @@ Run after every benchmark run that produces results. Doc drift is the primary ri
 **In the same commit as the results:**
 - [ ] Does CLAUDE.md Known Issues still match reality? Each bullet must have an `[OBSERVED date]` tag.
 - [ ] Are there one-shot scripts (`patch_*`, `migrate_*`, `fix_once_*`) in the repo root that were run to produce this result? Delete them now.
-
-**Before the next planning session:**
-- [ ] Pull `docs/plans/`. Any plan whose expiry condition has been met must be archived before a new plan is created.
 
 ## Repository-Specific Notes
 
