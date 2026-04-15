@@ -17,7 +17,7 @@ This repository is a small, stdlib-only Python benchmark. `run_benchmark.py` is 
 Use Python directly; there is no virtualenv or build step.
 
 - `python3 run_benchmark.py --dry-run` checks question selection and CLI wiring without making API calls.
-- `python3 run_benchmark.py --validate-bridge` verifies `posix-core.md` + `posix-tldr.json` cover all 155 utilities and exits.
+- `python3 run_benchmark.py --validate-bridge` verifies `posix-core.md` + `posix-tldr.json` cover all 142 utilities and exits.
 - `python3 run_benchmark.py --llms gemini claude` runs selected providers only.
 - `python3 run_benchmark.py --llms claude --claude-model claude-opus-4-6` runs Claude with the pinned baseline model (also the default).
 - `python3 run_benchmark.py --llms codex --codex-model gpt-5.4` runs Codex with the pinned baseline model (also the default).
@@ -32,7 +32,7 @@ Use Python directly; there is no virtualenv or build step.
 - `make test-product-negative` runs Install Testing failure-injection checks (missing file, broken symlink, malformed JSON, installed SKILL.md drift).
 - `make test-product-live-claude` / `make test-product-live-codex` run opt-in live canary tests (requires `POSIX_LIVE_CANARY=1`; billable API calls, NOT part of the pre-merge gate).
 - `python3 -m py_compile run_benchmark.py benchmark_core/*.py` is the fastest syntax sanity check before committing.
-- `make test-repo` runs repo structural integrity checks (source artifact presence, JSON validity, 155-utility coherence across all four sources, CLI executable sanity, installer references, fixture directory coverage).
+- `make test-repo` runs repo structural integrity checks (source artifact presence, JSON validity, 142-utility coherence across all four sources, CLI executable sanity, installer references, fixture directory coverage).
 - `make verify` runs all verification checks in sequence: syntax, unit tests, repo integrity, product conformance, failure injection. This is the canonical single command for pre-commit and CI validation.
 
 ## Coding Style & Naming Conventions

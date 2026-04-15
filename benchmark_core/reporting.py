@@ -36,7 +36,7 @@ def generate_report(all_results: dict[str, list[QuestionResult]], questions: lis
     print(f"\n{'=' * 70}")
     print(f"  POSIX TOKEN EFFICIENCY REPORT")
     print(f"  {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-    print(f"  Spec: POSIX.1-2024 (Issue 8) — 155 utilities")
+    print(f"  Spec: POSIX.1-2024 (Issue 8) — 142 utilities (macOS)")
     print(f"{'=' * 70}\n")
 
     for llm, results in all_results.items():
@@ -184,7 +184,7 @@ def save_summary(
         "version": "0.4",
         "timestamp": ts,
         "spec": "POSIX.1-2024 (Issue 8)",
-        "utilities_count": 155,
+        "utilities_count": 142,
         "requested_models": requested_models or {},
         "llms": {},
     }

@@ -1,4 +1,3 @@
-admin
 alias
 ar
 asa
@@ -8,11 +7,9 @@ basename
 batch
 bc
 bg
-c17
 cal
 cat
 cd
-cflow
 chgrp
 chmod
 chown
@@ -26,10 +23,8 @@ crontab
 csplit
 ctags
 cut
-cxref
 date
 dd
-delta
 df
 diff
 dirname
@@ -48,7 +43,6 @@ find
 fold
 fuser
 gencat
-get
 getconf
 getopts
 gettext
@@ -94,7 +88,6 @@ pathchk
 pax
 pr
 printf
-prs
 ps
 pwd
 read
@@ -102,10 +95,7 @@ readlink
 realpath
 renice
 rm
-rmdel
 rmdir
-sact
-sccs
 sed
 sh
 sleep
@@ -120,7 +110,6 @@ talk
 tee
 test
 time
-timeout
 touch
 tput
 tr
@@ -134,7 +123,6 @@ unalias
 uname
 uncompress
 unexpand
-unget
 uniq
 unlink
 uucp
@@ -142,7 +130,6 @@ uudecode
 uuencode
 uustat
 uux
-val
 vi
 wait
 wc

@@ -1,7 +1,4 @@
 {
-  "admin": [
-    "SCCS administration command: admin [options] file"
-  ],
   "alias": [
     "Define shell alias: alias name='value'",
     "List aliases: alias"
@@ -30,9 +27,6 @@
   "bg": [
     "Resume suspended job in background: bg %1"
   ],
-  "c17": [
-    "Compile C source (Issue 8 name): c17 -o prog prog.c"
-  ],
   "cal": [
     "Print calendar: cal 2026"
   ],
@@ -41,9 +35,6 @@
   ],
   "cd": [
     "Change working directory: cd /path/to/dir"
-  ],
-  "cflow": [
-    "Generate C call graph: cflow source.c"
   ],
   "chgrp": [
     "Change group ownership: chgrp group file"
@@ -86,17 +77,11 @@
   "cut": [
     "Extract 3rd column: cut -d: -f3 /etc/passwd"
   ],
-  "cxref": [
-    "Generate C cross-reference: cxref source.c"
-  ],
   "date": [
     "Display current date/time: date"
   ],
   "dd": [
     "Block-level copy/convert: dd if=in.bin of=out.bin bs=1m"
-  ],
-  "delta": [
-    "Create SCCS delta: delta s.file"
   ],
   "df": [
     "Report filesystem free space: df -k"
@@ -151,9 +136,6 @@
   ],
   "gencat": [
     "Build message catalog: gencat catalog.msg source.msg"
-  ],
-  "get": [
-    "Extract SCCS revision: get s.file"
   ],
   "getconf": [
     "Query configuration value: getconf PATH"
@@ -270,7 +252,7 @@
     "Run in background safely: nohup ./script.sh &"
   ],
   "od": [
-    "Hex dump: od -A x -t x1z file",
+    "Hex dump: od -A x -t x1 file",
     "DO NOT USE xxd or hexdump."
   ],
   "paste": [
@@ -294,9 +276,6 @@
     "Portable output: printf 'yes\\n'",
     "Prefer printf over echo in POSIX shell scripts."
   ],
-  "prs": [
-    "Print SCCS file info: prs s.file"
-  ],
   "ps": [
     "List running processes: ps -ef"
   ],
@@ -318,17 +297,8 @@
   "rm": [
     "Remove files: rm file"
   ],
-  "rmdel": [
-    "Remove SCCS delta: rmdel -r1.2 s.file"
-  ],
   "rmdir": [
     "Remove empty directory: rmdir emptydir"
-  ],
-  "sact": [
-    "Show SCCS editing status: sact s.file"
-  ],
-  "sccs": [
-    "Front-end for SCCS commands: sccs get file"
   ],
   "sed": [
     "Replace all occurrences: sed 's/foo/bar/g' file > tmp && mv tmp file",
@@ -375,9 +345,6 @@
   "time": [
     "Measure command runtime: time command"
   ],
-  "timeout": [
-    "Kill command if slower than 30s: timeout 30 command"
-  ],
   "touch": [
     "Update timestamps or create file: touch file"
   ],
@@ -417,9 +384,6 @@
   "unexpand": [
     "Convert spaces to tabs: unexpand file"
   ],
-  "unget": [
-    "Undo SCCS pending delta: unget s.file"
-  ],
   "uniq": [
     "Count unique lines (must sort first): sort file | uniq | wc -l"
   ],
@@ -440,9 +404,6 @@
   ],
   "uux": [
     "Queue remote UUCP execution: uux 'system!command'"
-  ],
-  "val": [
-    "Validate SCCS file: val s.file"
   ],
   "vi": [
     "Open file in vi editor: vi file"

@@ -20,8 +20,8 @@ A regression is any change to the codebase, prompt, question set, or tool that m
 Use both testing modes together:
 
 - **Simulation Testing:** benchmark simulation checks in `run_benchmark.py` for comparability and metric tracking.
-- **Install Testing:** installed product-path conformance checks for `SKILL.md` + `posix-lookup`. Includes single-target install tests (`install-claude` / `install-codex` independently), installed-level drift validation (SKILL.md, posix-tldr.json, and `posix-lookup --list` agree on 155 utilities), and partial-uninstall symlink correctness.
-- **Repo Integrity:** structural coherence checks for source-of-truth artifacts via `make test-repo`. Validates artifact presence, JSON validity, 155-utility count consistency across all four sources, CLI executable sanity, installer references, and fixture directory coverage.
+- **Install Testing:** installed product-path conformance checks for `SKILL.md` + `posix-lookup`. Includes single-target install tests (`install-claude` / `install-codex` independently), installed-level drift validation (SKILL.md, posix-tldr.json, and `posix-lookup --list` agree on 142 utilities), and partial-uninstall symlink correctness.
+- **Repo Integrity:** structural coherence checks for source-of-truth artifacts via `make test-repo`. Validates artifact presence, JSON validity, 142-utility count consistency across all four sources, CLI executable sanity, installer references, and fixture directory coverage.
 
 All three paths are complementary. None replaces another.
 
@@ -44,7 +44,7 @@ Live canaries install the bridge into an isolated HOME, run a prompt through the
 Repo Integrity commands:
 
 ```bash
-make test-repo               # source artifact consistency, JSON validity, 155-utility coherence
+make test-repo               # source artifact consistency, JSON validity, 142-utility coherence
 ```
 
 ---
@@ -117,7 +117,7 @@ Run these for packaging/distribution changes and before releasing skill updates:
    make test-product-negative
    ```
 
-`make test-product` verifies install/uninstall in an isolated `HOME`, Claude/Codex skill file placement, CLI discoverability, lookup behavior, and 155-entry coverage.
+`make test-product` verifies install/uninstall in an isolated `HOME`, Claude/Codex skill file placement, CLI discoverability, lookup behavior, and 142-entry coverage.
 
 `make test-product-negative` intentionally breaks installed artifacts and confirms failures are detected for:
 - missing installed file
@@ -187,7 +187,7 @@ Compare `total_billable_tokens` between Unaided and Bridge-Aided for the same LL
 
 ### 4. Issue 8 refusals are zero
 
-Check `issue8_refusal_count` in both modes. The LLM should never say that `readlink`, `realpath`, or `timeout` are "not POSIX" — they are standard as of Issue 8 (2024). Any refusal here is a failure the Step-Up should fix.
+Check `issue8_refusal_count` in both modes. The LLM should never say that `readlink` or `realpath` are "not POSIX" — they are standard as of Issue 8 (2024). Any refusal here is a failure the Step-Up should fix. (Note: `timeout` is also POSIX Issue 8 but is excluded from the bridge because macOS does not ship it.)
 
 ---
 

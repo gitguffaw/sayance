@@ -88,7 +88,7 @@ extract_tldr_utilities() {
 
 # ---------------------------------------------------------------------------
 # Installed-level drift check: assert SKILL.md, posix-tldr.json, and
-# posix-lookup --list all agree on the same 155 utility names.
+# posix-lookup --list all agree on the same 142 utility names.
 # ---------------------------------------------------------------------------
 check_installed_drift() {
   local home="$1"
@@ -107,16 +107,16 @@ check_installed_drift() {
   tldr_count="$(echo "${tldr_names}" | wc -l | tr -d ' ')"
   list_count="$(echo "${list_names}" | wc -l | tr -d ' ')"
 
-  if [ "${skill_count}" -ne 155 ]; then
-    fail "${label}: SKILL.md has ${skill_count} utilities, expected 155"
+  if [ "${skill_count}" -ne 142 ]; then
+    fail "${label}: SKILL.md has ${skill_count} utilities, expected 142"
     return
   fi
-  if [ "${tldr_count}" -ne 155 ]; then
-    fail "${label}: posix-tldr.json has ${tldr_count} utilities, expected 155"
+  if [ "${tldr_count}" -ne 142 ]; then
+    fail "${label}: posix-tldr.json has ${tldr_count} utilities, expected 142"
     return
   fi
-  if [ "${list_count}" -ne 155 ]; then
-    fail "${label}: posix-lookup --list has ${list_count} utilities, expected 155"
+  if [ "${list_count}" -ne 142 ]; then
+    fail "${label}: posix-lookup --list has ${list_count} utilities, expected 142"
     return
   fi
 
@@ -136,7 +136,7 @@ check_installed_drift() {
     return
   fi
 
-  pass "${label}: all installed artifacts agree on 155 utilities"
+  pass "${label}: all installed artifacts agree on 142 utilities"
 }
 
 # ---------------------------------------------------------------------------
@@ -168,9 +168,9 @@ PATH="${lane_path}" posix-lookup --json od | python3 -c \
   "import json,sys; data=json.load(sys.stdin); assert 'od' in data and isinstance(data['od'], list)" \
   && pass "JSON mode od" || fail "JSON mode od failed"
 
-# 155-count via --list
+# 142-count via --list
 count="$(PATH="${lane_path}" posix-lookup --list | wc -l | tr -d ' ')"
-test "${count}" -eq 155 && pass "--list count = 155" || fail "--list count = ${count}, expected 155"
+test "${count}" -eq 142 && pass "--list count = 142" || fail "--list count = ${count}, expected 142"
 
 # Installed-level drift check (both skill dirs)
 check_installed_drift "${home_all}" "${claude_skill}" "drift-claude"

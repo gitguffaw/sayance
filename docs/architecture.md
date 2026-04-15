@@ -16,7 +16,7 @@ The root cause is not that the LLM "can't do it" — it's that it doesn't know t
 
 ### The Discovery Map (`posix-core.md`)
 
-A single file injected into the agent's context at the start of every session. It lists all 155 POSIX Issue 8 utilities with a 2–5 word hook that tells the agent what the tool *does* and, crucially, what it is *not*.
+A single file injected into the agent's context at the start of every session. It lists all 142 macOS-available POSIX Issue 8 utilities with a 2–5 word hook that tells the agent what the tool *does* and, crucially, what it is *not*.
 
 Example entries:
 ```
@@ -73,7 +73,7 @@ The LLM's bash tool is always registered in its schema — zero additional conte
 If we expose `posix-tldr.json` directly to the shell, the agent will run `cat posix-tldr.json`, flooding its context with thousands of tokens. Wrapping it behind a CLI forces single-utility lookups.
 
 **Why not just inject the full POSIX man pages?**  
-Context tax. A single `sed` man page is ~4,000 tokens. Injecting all 155 would consume the entire context window before the user's question is even answered.
+Context tax. A single `sed` man page is ~4,000 tokens. Injecting all 142 would consume the entire context window before the user's question is even answered.
 
 **Why not rely on ALL CAPS warnings like "DO NOT GUESS SYNTAX"?**  
 Prompt instructions are fragile. A confident LLM will ignore them. Structural enforcement — requiring a CLI call before a shell call — is far more reliable than text warnings.

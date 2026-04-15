@@ -1,6 +1,6 @@
 # Contributing to POSIX Semantic Bridge
 
-Thanks for your interest. This project is small and focused — a two-layer reference injection system that helps LLMs discover and correctly use all 155 POSIX.1-2024 utilities. Contributions that improve coverage, fix incorrect syntax entries, or strengthen the benchmark are welcome.
+Thanks for your interest. This project is small and focused — a two-layer reference injection system that helps LLMs discover and correctly use all 142 POSIX.1-2024 utilities. Contributions that improve coverage, fix incorrect syntax entries, or strengthen the benchmark are welcome.
 
 ## Quick Start
 
@@ -19,7 +19,7 @@ Run `make verify`. It chains five stages in fast-to-slow order:
 
 1. **Syntax check** — `python3 -m py_compile` on all Python files
 2. **Unit tests** — `python3 -m unittest`
-3. **Repo integrity** — source artifact presence, JSON validity, 155-utility consistency across all four sources
+3. **Repo integrity** — source artifact presence, JSON validity, 142-utility consistency across all four sources
 4. **Product conformance** — install/uninstall in an isolated HOME, CLI behavior, drift detection
 5. **Failure injection** — intentionally broken artifacts are detected correctly
 
@@ -29,7 +29,7 @@ All five must pass before proposing any change.
 
 **Syntax entries (`posix-tldr.json`):** Fix incorrect flags, add missing traps, improve examples. Every entry must reflect POSIX.1-2024 (Issue 8) — not GNU extensions, not BSD-specific behavior.
 
-**Discovery Map (`posix-core.md`, `skill/SKILL.md`):** Improve the 2-5 word semantic hooks that help LLMs find the right utility. Both files must stay in sync and cover all 155 utilities.
+**Discovery Map (`posix-core.md`, `skill/SKILL.md`):** Improve the 2-5 word semantic hooks that help LLMs find the right utility. Both files must stay in sync and cover all 142 utilities.
 
 **Benchmark questions (`benchmark_data.json`):** New questions must follow the Taboo rules defined in `benchmark_data.json` under `meta.question_rules`. The question text must never contain the expected utility name, the word "POSIX", or standards-specific language.
 
@@ -37,7 +37,7 @@ All five must pass before proposing any change.
 
 ## What Not to Change Without Discussion
 
-- The 155-utility scope (defined by POSIX.1-2024 Issue 8)
+- The 142-utility scope (defined by POSIX.1-2024 Issue 8)
 - Frozen benchmark datasets (`benchmark_data.json`, `fixtures/`, `posix-tldr.json`) unless creating a new baseline
 - The two-layer architecture (Discovery Map + Syntax Lookup)
 

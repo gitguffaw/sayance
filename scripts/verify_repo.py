@@ -63,7 +63,7 @@ def extract_discovery_map_utilities(text):
 
 
 def load_ground_truth():
-    """Load the 155 utility names from posix-utilities.txt."""
+    """Load the 142 utility names from posix-utilities.txt."""
     path = REPO / "posix-utilities.txt"
     lines = [l.strip().lower() for l in path.read_text().splitlines() if l.strip()]
     return set(lines), lines
@@ -112,26 +112,26 @@ def check_json_validity():
 
 
 # ---------------------------------------------------------------------------
-# 3. 155-utility count consistency
+# 3. 142-utility count consistency
 # ---------------------------------------------------------------------------
 
 def check_utility_consistency():
-    print("=== 155-Utility Count Consistency ===")
+    print("=== 142-Utility Count Consistency ===")
     truth_set, truth_list = load_ground_truth()
 
     # 3a: posix-utilities.txt count
-    if len(truth_list) == 155:
-        passed("posix-utilities.txt has 155 utilities")
+    if len(truth_list) == 142:
+        passed("posix-utilities.txt has 142 utilities")
     else:
-        failed(f"posix-utilities.txt has {len(truth_list)} utilities, expected 155")
+        failed(f"posix-utilities.txt has {len(truth_list)} utilities, expected 142")
 
     # 3b: posix-tldr.json key count
     tldr = json.loads((REPO / "skill/posix-tldr.json").read_text())
     tldr_keys = set(k.lower() for k in tldr.keys())
-    if len(tldr_keys) == 155:
-        passed("posix-tldr.json has 155 keys")
+    if len(tldr_keys) == 142:
+        passed("posix-tldr.json has 142 keys")
     else:
-        failed(f"posix-tldr.json has {len(tldr_keys)} keys, expected 155")
+        failed(f"posix-tldr.json has {len(tldr_keys)} keys, expected 142")
     diff = truth_set - tldr_keys
     if diff:
         print(f"    missing from tldr: {sorted(diff)}")
@@ -145,7 +145,7 @@ def check_utility_consistency():
     if core_match:
         core_names = extract_discovery_map_utilities(core_match.group(0))
         if core_names == truth_set:
-            passed("posix-core.md contains all 155 utilities")
+            passed("posix-core.md contains all 142 utilities")
         else:
             missing = truth_set - core_names
             extra = core_names - truth_set
@@ -165,7 +165,7 @@ def check_utility_consistency():
     if dm_match:
         skill_names = extract_discovery_map_utilities(dm_match.group(1))
         if skill_names == truth_set:
-            passed("skill/SKILL.md Discovery Map contains all 155 utilities")
+            passed("skill/SKILL.md Discovery Map contains all 142 utilities")
         else:
             missing = truth_set - skill_names
             extra = skill_names - truth_set
@@ -197,10 +197,10 @@ def check_cli_sanity():
             capture_output=True, text=True, timeout=10, cwd=str(REPO)
         )
         lines = [l.strip().lower() for l in result.stdout.splitlines() if l.strip()]
-        if len(lines) == 155:
-            passed("posix-lookup --list produces 155 lines")
+        if len(lines) == 142:
+            passed("posix-lookup --list produces 142 lines")
         else:
-            failed(f"posix-lookup --list produces {len(lines)} lines, expected 155")
+            failed(f"posix-lookup --list produces {len(lines)} lines, expected 142")
 
         truth_set, _ = load_ground_truth()
         list_set = set(lines)

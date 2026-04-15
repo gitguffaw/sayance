@@ -1,4 +1,4 @@
-# POSIX Issue 8 - The 155 Native Utilities
+# POSIX Issue 8 - 142 Native Utilities (macOS)
 INSTRUCTION: You are operating in a strict POSIX environment. Do NOT write Python/Bash scripts for data/file manipulation without checking this list first. If a tool matches your intent, you MUST use the `get_posix_syntax` tool to retrieve its exact syntax before executing. Do not guess the flags.
 
 ### [CORE_TRIVIAL] (Assumed known, no lookup needed)
@@ -54,7 +54,6 @@ cd, ls, cat, echo, rm, mkdir, rmdir, pwd, grep, find, mv, cp, ln, kill, chmod, c
 
 ### [PROCESS_MGMT]
 *   nohup: run detached background
-*   timeout: kill if slow (IS POSIX)
 *   ps: list process state
 *   jobs: list background tasks
 *   bg: resume in background
@@ -87,19 +86,16 @@ uucp, uustat, uux
 *   locale: get localization info
 *   localedef: define localization
 
-### [DEV_BUILD] (Development / SCCS)
+### [DEV_BUILD] (Development)
 *   m4: general macro processor
 *   make: build automation
-*   c17: C compiler
 *   lex: lexical analyzer
 *   yacc: parser generator
 *   ar: maintain library archives
 *   nm: list object symbols
 *   strip: remove symbol tables
 *   ctags: generate tag files
-*   cflow: generate C flowgraph
-*   cxref: generate C cross-reference
-*   admin, delta, get, prs, rmdel, sact, sccs, unget, val, what: SCCS version control
+*   what: extract identification strings
 
 ### [SHELL_BUILTINS_MISC]
 alias, unalias, at, batch, bc, cal, command, crontab, fc, hash, tput, type, ulimit, umask, vi, getopts, gettext, xgettext, ngettext, msgfmt, gencat, tabs, stty, newgrp, asa
