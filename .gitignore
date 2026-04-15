@@ -9,3 +9,5 @@ docs/archive/*
 docs/archive/comparisonReview/*
 !docs/archive/comparisonReview/synthesis.md
 docs/solutions/workflow/
+docs/plans/
+todos/

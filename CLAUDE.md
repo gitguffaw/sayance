@@ -98,7 +98,7 @@ Results are saved under `results/` as JSON/HTML, with mode roots at `results/una
 - `benchmark_core/` — Internal benchmark implementation modules
 - `fixtures/` — Per-question test fixtures for Command Verification
 - `fixtures/manifest.json` — Maps question IDs to fixture specs and validation types
-- `docs/plans/` — Implementation plans (the deepened plan is the current roadmap)
+- `docs/design-rationale/` — Research backing design decisions (semantic compression, bridge architecture)
 
 ## Known Issues
 
