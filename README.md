@@ -64,23 +64,27 @@ $ posix-lookup sed
 
 The Discovery Map tells the agent *what exists*. Syntax Lookup tells it *how to use it correctly*. Together: ~925 tokens cached at session start, plus 50-200 tokens per on-demand lookup.
 
-## The Proof
+## What the Latest Benchmark Shows
 
-40-question benchmark corpus (k=1), tested 2026-04-15. Models: Claude Opus 4.6, Codex GPT-5.4, Gemini 3.1 Pro Preview. All providers run with 1 concurrent worker; Gemini enforces a 30-second minimum delay between calls.
+Latest snapshot: 40-question corpus, `k=1`, rerun on `2026-04-15`. Models: `claude-opus-4-6`, `gpt-5.4`, and `gemini-3.1-pro-preview`.
 
-### POSIX Compliance: Before and After
+These numbers are useful for regression tracking and product direction. They are not publication-grade statistical claims.
+
+### POSIX Compliance: Unaided vs Bridge-Aided
 
 | Provider | Unaided | Bridge-Aided | Delta |
-|:---------|:----------------|:-------------|:------|
+|:---------|:--------|:-------------|:------|
 | **Claude** | `███████░░░` 70% | `█████████░` 88% | **+18 pts** |
 | **Codex** | `███████░░░` 69% | `██████████` 95% | **+26 pts** |
-| **Gemini** | `██████░░░░` 61% | `████████░░` 85% | **+24 pts** |
+| **Gemini** | `██████░░░░` 61%* | `████████░░` 85% | **+24 pts** |
 
-### Full Results (40 questions, k=1)
+\* Gemini's unaided run had `12` provider errors, so the `61%` figure is computed over `28` visible results rather than the full `40`.
+
+### Snapshot (40 questions, k=1)
 
 | | Claude | Codex | Gemini |
 |:---|:---:|:---:|:---:|
-| **Compliance (unaided)** | 70% | 69% | 61% |
+| **Compliance (unaided)** | 70% | 69% | 61%* |
 | **Compliance (bridge-aided)** | 88% | 95% | 85% |
 | **Mean output tokens (unaided)** | 314 | 1,052 | 243 |
 | **Mean output tokens (bridge-aided)** | 452 | 1,392 | 92 |
@@ -88,18 +92,22 @@ The Discovery Map tells the agent *what exists*. Syntax Lookup tells it *how to 
 | **Mean latency (bridge-aided)** | 14.4s | 32.1s | 24.4s |
 | **Non-POSIX substitutions (unaided)** | 6 | 6 | 7 |
 | **Non-POSIX substitutions (bridge-aided)** | 1 | 0 | 3 |
-| **Valid results** | 40/40 | 39/40 | 28/40 unaided, 40/40 bridge |
-| **Dominant style (bridge-aided)** | over_explaining | tool_heavy_detour | minimal_or_near_minimal |
+| **Visible results** | 40/40 both | 39/39 both** | 28/40 unaided, 40/40 bridge |
+| **Dominant bridge-aided style** | over_explaining | tool_heavy_detour | minimal_or_near_minimal |
 
-**Codex** jumped 26 points to 95% compliance. Non-POSIX substitutions dropped from 6 to zero. Token count rose because it narrates tool usage verbosely (`tool_heavy_detour`), not because it gave worse answers.
+\** Codex is missing `T02` in both fresh reruns. Treat the current Codex snapshot as a `39`-question comparison until that benchmark-path issue is resolved.
 
-**Gemini** got both more correct *and* more concise — output tokens dropped 62% (243 to 92) while compliance rose 24 points. The bridge also eliminated all 12 provider errors that occurred in the unaided run.
+- **All three providers improved POSIX compliance** in the bridge-aided run.
+- **Gemini** showed the cleanest visible gain: higher compliance, much shorter answers, and no provider errors in bridge mode.
+- **Codex** improved the most on tool selection, but remained verbose and tool-heavy.
+- **Claude** improved on compliance and trap avoidance, but in this rerun it rarely invoked the explicit lookup path.
+- **Raw billable tokens did not decrease** in this simulation path. Bridge mode prepends the Discovery Map and may trigger a second model turn for lookup replay, so raw bridge cost is an upper bound rather than the final efficiency story.
 
-**Claude** improved 18 points. Non-POSIX substitutions dropped from 6 to 1. Latency increased modestly (10s to 14s) due to the bridge injection overhead.
+### What These Numbers Mean
 
-### What the Benchmark Measures and What It Doesn't
+Unaided and Bridge-Aided runs measure POSIX-target selection, verbosity, and latency on a fixed text-only benchmark. They do not, by themselves, prove end-to-end command correctness or real-world time savings.
 
-Unaided and Bridge-Aided runs measure token efficiency and response time. They do not execute commands. The `--execute` flag enables Command Verification, which runs extracted commands against fixtures and validates output. 30/40 questions have execution fixtures; T31-T40 are unverified. The hypothesis: the bridge's small upfront token cost prevents expensive downstream failure loops.
+The `--execute` flag enables Command Verification, which runs extracted commands against fixtures and validates output. `30/40` questions currently have execution fixtures; `T31`-`T40` remain unverified. The working hypothesis is that the bridge's upfront cost can still be worthwhile if it reduces retry loops and wrong-tool detours downstream.
 
 ## Install the Skill
 

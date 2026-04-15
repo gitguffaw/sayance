@@ -1,22 +1,120 @@
 # Benchmark Evidence
 
-This page documents the canonical benchmark results behind the numbers in the README. Raw result directories are gitignored — this curated summary provides the provenance and reproducibility details a reviewer needs.
+This page documents the benchmark results currently cited in the README.
 
-## Baseline Comparison (30 questions, k=1)
+Raw result directories are gitignored. This page records the specific artifacts, caveats, and interpretation needed to review the numbers without pretending the benchmark is stronger than it is.
 
-**Run date:** 2026-03-28  
-**Corpus:** 30 intent-based questions (pre-expansion to 40)  
-**Mode:** Unaided (no bridge injection) vs. Bridge-Aided (Discovery Map + Syntax Lookup)
+## Current Snapshot (40 Questions, k=1)
 
-### Models Tested
+**Run date:** 2026-04-15  
+**Corpus:** 40 intent-based questions  
+**Mode:** Unaided vs. Bridge-Aided  
+**Models:** `claude-opus-4-6`, `gpt-5.4`, `gemini-3.1-pro-preview`
 
-| Provider | Model | Version |
-|----------|-------|---------|
-| Claude | claude-sonnet-4-20250514 | Baseline era |
-| Codex | codex-mini-latest | Baseline era |
-| Gemini | gemini-2.5-pro-preview-03-25 | Baseline era |
+**Artifacts:**
+- Unaided summary: [results/unaided/claude-codex-gemini-D2026-04-15-T16-23-20/summary-claude-codex-gemini-D2026-04-15-T16-23-20.json](</Users/jeremyneal/Library/Mobile Documents/com~apple~CloudDocs/Fermenting/posix/results/unaided/claude-codex-gemini-D2026-04-15-T16-23-20/summary-claude-codex-gemini-D2026-04-15-T16-23-20.json>)
+- Bridge-Aided summary: [results/bridge-aided/claude-codex-gemini-D2026-04-15-T15-19-11/summary-claude-codex-gemini-D2026-04-15-T15-19-11.json](</Users/jeremyneal/Library/Mobile Documents/com~apple~CloudDocs/Fermenting/posix/results/bridge-aided/claude-codex-gemini-D2026-04-15-T15-19-11/summary-claude-codex-gemini-D2026-04-15-T15-19-11.json>)
+
+These runs are useful for regression tracking and product direction. They are not publication-grade statistical claims.
 
 ### POSIX Compliance
+
+| Provider | Unaided | Bridge-Aided | Delta |
+|----------|---------|-------------|-------|
+| Claude | 70.0% | 87.5% | +17.5 pts |
+| Codex | 69.2% | 94.9% | +25.6 pts |
+| Gemini | 60.7%* | 85.0% | +24.3 pts |
+
+\* Gemini's unaided rate is computed over `28` visible results. That run had `12` provider errors.
+
+### Snapshot Table
+
+| Metric | Claude | Codex | Gemini |
+|---|---|---|---|
+| Visible results (unaided) | 40/40 | 39/39** | 28/40 |
+| Visible results (bridge-aided) | 40/40 | 39/39** | 40/40 |
+| Compliance (unaided) | 70.0% | 69.2% | 60.7%* |
+| Compliance (bridge-aided) | 87.5% | 94.9% | 85.0% |
+| Mean output tokens (unaided) | 314 | 1,052 | 243 |
+| Mean output tokens (bridge-aided) | 452 | 1,392 | 92 |
+| Mean latency (unaided) | 10.1s | 22.3s | 20.7s |
+| Mean latency (bridge-aided) | 14.4s | 32.1s | 24.4s |
+| Non-POSIX substitutions (unaided) | 6 | 6 | 7 |
+| Non-POSIX substitutions (bridge-aided) | 1 | 0 | 3 |
+| Dominant bridge-aided style | `over_explaining` | `tool_heavy_detour` | `minimal_or_near_minimal` |
+
+\** Codex is missing `T02` in both fresh reruns. Treat the current Codex snapshot as a `39`-question comparison until that benchmark-path issue is resolved.
+
+### Lookup Engagement
+
+Bridge-Aided mode does not guarantee that every provider will actually use the explicit lookup path. In the current rerun:
+
+| Provider | Questions with `get_posix_syntax` calls | Notes |
+|---|---:|---|
+| Claude | 1/40 | Mostly benefited from prompt injection alone |
+| Codex | 35/39 | Lookup path engaged heavily |
+| Gemini | 37/40 | Lookup path engaged heavily |
+
+This matters when interpreting the results. The current bridge is a mix of injected context and optional lookup behavior, not a fully enforced tool gate.
+
+### Token-Cost Read
+
+Raw billable tokens increased in Bridge-Aided mode for all three providers:
+
+| Provider | Raw billable unaided | Raw billable bridge-aided |
+|---|---:|---:|
+| Claude | 1,967,017 | 3,358,750 |
+| Codex | 1,075,623 | 1,579,552 |
+| Gemini | 347,609 | 546,811 |
+
+That is expected in the current simulation path. Bridge-Aided mode prepends the Discovery Map and may trigger a second model turn for tool replay.
+
+The benchmark therefore also records **simulation-adjusted** bridge billable totals:
+
+| Provider | Unaided billable | Bridge-Aided simulation-adjusted billable |
+|---|---:|---:|
+| Claude | 1,967,017 | 3,320,074 |
+| Codex | 1,075,623 | 959,177 |
+| Gemini | 347,609 | 225,699 |
+
+Interpretation:
+- Claude improved on POSIX compliance, but did not show a token-efficiency win in this rerun.
+- Codex improved strongly on compliance, and its adjusted bridge cost improved despite verbose answers.
+- Gemini improved on both visible compliance and adjusted bridge cost, and its answers got much shorter.
+
+## What This Snapshot Supports
+
+- All three providers improved POSIX compliance in Bridge-Aided mode.
+- Gemini showed the cleanest visible gain: better compliance, shorter answers, and no provider errors in bridge mode.
+- Codex improved the most on POSIX-target selection, but remained verbose and tool-heavy.
+- Claude improved on compliance and trap avoidance, but in this rerun rarely used the explicit lookup path.
+
+## Known Confounds
+
+- **k=1 only.** These runs are directional, not publication-grade.
+- **Raw bridge cost is an upper bound.** The harness replays prompt context during simulated lookup, so raw billable cost overstates the eventual value of correct-first-time behavior.
+- **Prompt injection and lookup usage are not the same thing.** Claude mostly benefited from injected context without taking the explicit lookup path.
+- **Gemini unaided is denominator-unstable.** The `12` provider errors in the unaided run mean part of the bridge delta may reflect reliability, not just tool selection.
+- **Codex coverage is incomplete in the latest rerun.** `T02` is missing in both fresh Codex tracks, so the current Codex table is based on a 39-question subset.
+
+## What the Benchmark Measures
+
+- **POSIX compliance rate:** Did the answer stay within the intended POSIX solution space?
+- **Non-POSIX substitutions:** How often did the model reach for a trap tool or non-portable alternative?
+- **Output tokens:** How verbose was the answer?
+- **Latency and step count:** How much agentic overhead did the provider incur?
+
+The Unaided and Bridge-Aided modes are still text-analysis benchmarks. They do not, by themselves, prove end-to-end command correctness or real-world time savings.
+
+Command Verification (`--execute`) is the next layer for that. It extracts commands, runs them against fixtures, and validates output. `30/40` questions currently have execution fixtures; `T31`-`T40` remain unverified.
+
+## Historical Baseline (30 Questions, k=1)
+
+The original 30-question comparison is preserved for historical continuity.
+
+**Run date:** 2026-03-28  
+**Corpus:** 30 intent-based questions  
+**Models:** `claude-sonnet-4-20250514`, `codex-mini-latest`, `gemini-2.5-pro-preview-03-25`
 
 | Provider | Unaided | Bridge-Aided | Delta |
 |----------|---------|-------------|-------|
@@ -24,72 +122,36 @@ This page documents the canonical benchmark results behind the numbers in the RE
 | Codex | 58.6% | 86.7% | +28.1 pts |
 | Gemini | 65.4% | 86.7% | +21.3 pts |
 
-### Token Efficiency
+Historical token/verbosity snapshot:
 
-| | Claude | Codex | Gemini |
+| Metric | Claude | Codex | Gemini |
 |---|---|---|---|
 | Output tokens (unaided) | 228 | 930 | 215 |
 | Output tokens (bridge-aided) | 374 | 1,289 | 105 |
 | Non-POSIX substitutions (unaided) | 6 | 9 | 7 |
 | Non-POSIX substitutions (bridge-aided) | 7 | 1 | 3 |
 
-Gemini's output tokens dropped 51% while compliance rose 21 points — the strongest efficiency gain. Codex's token increase reflects verbose tool narration, not worse answers.
+This baseline is still useful as a before/after reference, but the README now points to the 40-question rerun above.
 
-### Commands Used
+## Reproducing the Current Snapshot
+
+At minimum:
 
 ```bash
-# Unaided runs
-python3 run_benchmark.py --llms claude --questions T01-T30
-python3 run_benchmark.py --llms codex --questions T01-T30
-python3 run_benchmark.py --llms gemini --max-workers 1 --delay 30 --questions T01-T30
-
-# Bridge-Aided runs
-python3 run_benchmark.py --llms claude --inject-posix --questions T01-T30
-python3 run_benchmark.py --llms codex --inject-posix --questions T01-T30
-python3 run_benchmark.py --llms gemini --inject-posix --max-workers 1 --delay 30 --questions T01-T30
+python3 run_benchmark.py --validate-bridge
+python3 run_benchmark.py --llms claude codex gemini
+python3 run_benchmark.py --llms claude codex gemini --inject-posix
 ```
 
-## Current Corpus
+Pinned models for Claude and Codex should be used when reproducing the current comparison:
 
-The benchmark corpus has been expanded to **40 questions** covering Common, Uncommon, and Obscure POSIX utilities. The 30-question comparison above is preserved as a historical before/after reference. New unaided runs on the 40-question corpus with pinned models (`claude-opus-4-6`, `gpt-5.4`) are planned.
+```bash
+python3 run_benchmark.py --llms claude codex --claude-model claude-opus-4-6 --codex-model gpt-5.4
+python3 run_benchmark.py --llms claude codex --claude-model claude-opus-4-6 --codex-model gpt-5.4 --inject-posix
+```
 
-## Reproducing These Results
-
-1. Clone the repo and confirm the bridge is complete:
-   ```bash
-   python3 run_benchmark.py --validate-bridge
-   ```
-
-2. Run an unaided benchmark:
-   ```bash
-   python3 run_benchmark.py --llms claude --claude-model claude-opus-4-6
-   ```
-
-3. Run a bridge-aided comparison:
-   ```bash
-   python3 run_benchmark.py --llms claude --claude-model claude-opus-4-6 --inject-posix
-   ```
-
-4. Compare summaries in `results/summary-*.json`.
-
-API keys for Claude, Codex, and Gemini are required. Gemini runs should use `--max-workers 1 --delay 30` to stay within quota.
-
-## What the Benchmark Measures
-
-- **POSIX compliance rate:** Did the LLM recommend the correct POSIX utility?
-- **Non-POSIX substitutions:** How often did the LLM suggest a non-standard tool (tar, xxd, md5sum)?
-- **Output tokens:** How concise was the response?
-- **Issue 8 refusals:** Did the LLM incorrectly reject `readlink`, `realpath`, or `timeout` as non-POSIX?
-
-The benchmark does not execute commands. It measures whether the LLM reaches for the right tool, not whether the generated command runs correctly. Command Verification (`--execute`) is a separate mode for that.
-
-## Limitations
-
-- Results are non-deterministic — LLM outputs vary between runs even with identical prompts.
-- Token counts differ across providers due to different tokenizers.
-- Cache state (cold vs. warm) creates significant cost differences on Anthropic.
-- The 30-question comparison used pre-pinning model versions; exact reproducibility requires matching the model versions listed above.
+Gemini runs require conservative pacing and may need to be resumed if the provider fails mid-run.
 
 ## Update Policy
 
-This evidence page is updated when new canonical benchmark runs are performed at project milestones. It is not updated for every development run. The run date and model versions above identify exactly which results are cited in the README.
+This page should be updated only when the README's cited benchmark snapshot changes or when a previously disclosed confound is resolved. Development runs belong in `results/`, not here.
