@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p3
 issue_id: "003"
 tags: [code-review, docs, benchmarks, presentation]
@@ -115,12 +115,12 @@ Our repo is methodologically stronger, but a new reviewer has to read prose and 
 
 ## Acceptance Criteria
 
-- [ ] A committed, reviewer-friendly evidence surface exists outside `results/`
-- [ ] It identifies the exact run date and model versions behind the published numbers
-- [ ] It clearly distinguishes curated evidence from live/generated result directories
-- [ ] It links back to the commands or process used to produce the artifact
-- [ ] It includes a drift-prevention note or update policy
-- [ ] README links to the evidence surface
+- [x] A committed, reviewer-friendly evidence surface exists outside `results/`
+- [x] It identifies the exact run date and model versions behind the published numbers
+- [x] It clearly distinguishes curated evidence from live/generated result directories
+- [x] It links back to the commands or process used to produce the artifact
+- [x] It includes a drift-prevention note or update policy
+- [x] README links to the evidence surface
 
 ## Work Log
 
@@ -136,6 +136,15 @@ Our repo is methodologically stronger, but a new reviewer has to read prose and 
 **Learnings:**
 - External credibility is partly determined by how quickly a reviewer can inspect evidence, not only by how rigorous that evidence is.
 - Any committed evidence layer must be designed with explicit anti-drift rules.
+
+### 2026-04-14 - Implementation
+
+**By:** Claude
+
+**Actions:**
+- Created `docs/evidence.md` with canonical run date, model versions, compliance/token tables, exact commands, reproduction steps, limitations, and update policy.
+- Updated README Further Reading section with link to evidence page.
+- Chose Option 1 (curated markdown) — simplest to maintain, readable on GitHub, no binary artifacts.
 
 ## Notes
 

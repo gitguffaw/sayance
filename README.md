@@ -187,26 +187,29 @@ Summary validity semantics:
 
 ## Validation
 
-This repo uses two complementary validation paths:
+This repo uses three complementary validation paths:
 
-- **Simulation Testing (legacy, unchanged):** benchmark simulation path (`run_benchmark.py` in Unaided / Bridge-Aided / Command Verification modes). Preserves historical comparability and benchmark metrics.
-- **Install Testing (new, additive):** shipped-product conformance path for installed `SKILL.md` + `posix-lookup`.
+- **Simulation Testing:** benchmark simulation path (`run_benchmark.py` in Unaided / Bridge-Aided / Command Verification modes). Preserves historical comparability and benchmark metrics.
+- **Install Testing:** shipped-product conformance for installed `SKILL.md` + `posix-lookup`. Includes single-target install tests, drift detection, and partial-uninstall verification.
+- **Repo Integrity:** structural coherence checks for source-of-truth artifacts. Validates 155-utility count consistency across all four sources, JSON validity, CLI sanity, and fixture coverage.
 
-Run Install Testing locally:
+The canonical single command for all validation:
 
 ```bash
-make test-product
-make test-product-negative
+make verify
 ```
 
-Install Testing does not replace Simulation Testing; it catches install/activation packaging regressions that the benchmark simulation cannot.
+This runs five stages in order: syntax check, unit tests, repo integrity, product conformance, and failure injection. All must pass before merging.
 
-GitHub enforcement note (current repo state, observed 2026-04-03):
-- Actions workflows can run.
-- Required status-check merge gating for protected branches is not currently available on this private repo plan.
-- Until that changes, treat Install Testing as a local pre-merge/release gate by running:
-  - `make test-product`
-  - `make test-product-negative`
+Individual targets are also available:
+
+```bash
+make test-repo               # repo structural integrity only
+make test-product             # install/uninstall conformance
+make test-product-negative    # failure injection sensitivity
+```
+
+GitHub Actions CI runs `make verify` on every push and pull request to `main`.
 
 ## Repository Map
 
@@ -248,10 +251,15 @@ Results are gitignored and not committed.
 - Gemini is safe at one call every 30 seconds, max 50 calls/day on most accounts. Bridge-Aided runs may exceed the daily limit since the simulation can trigger a second call per question.
 - Codex uses `--skip-git-repo-check` for benchmark execution context.
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the contributor guide, validation requirements, and code style.
+
 ## Further Reading
 
 - [Architecture](docs/architecture.md) — how the two-layer system works
 - [Benchmark Methodology](docs/benchmarks.md) — how we measure
+- [Benchmark Evidence](docs/evidence.md) — provenance and reproducibility of published numbers
 - [Test & Regression](docs/test-and-regression.md) — validation procedures
 
 ## License

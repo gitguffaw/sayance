@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p3
 issue_id: "002"
 tags: [code-review, docs, contributor-experience, process]
@@ -117,12 +117,12 @@ Right now that information exists, but it is distributed across project-specific
 
 ## Acceptance Criteria
 
-- [ ] A concise `CONTRIBUTING.md` exists in the repo root
-- [ ] The guide points contributors to the required validation commands
-- [ ] A bug-report template asks for reproduction, environment, and observed/expected behavior
-- [ ] A feature-request template asks for concrete use case and evaluation criteria
-- [ ] Optional: PR template asks for commands run and whether API-backed or live tests were executed
-- [ ] README links to the contributor guide
+- [x] A concise `CONTRIBUTING.md` exists in the repo root
+- [x] The guide points contributors to the required validation commands
+- [x] A bug-report template asks for reproduction, environment, and observed/expected behavior
+- [x] A feature-request template asks for concrete use case and evaluation criteria
+- [x] Optional: PR template asks for commands run and whether API-backed or live tests were executed
+- [x] README links to the contributor guide
 
 ## Work Log
 
@@ -139,6 +139,18 @@ Right now that information exists, but it is distributed across project-specific
 **Learnings:**
 - Public polish is partly about using expected repository conventions, not just having the right information somewhere in the tree.
 - This is a low-effort improvement with outsized signaling value.
+
+### 2026-04-14 - Implementation
+
+**By:** Claude
+
+**Actions:**
+- Created `CONTRIBUTING.md` with quick start, validation requirements, contribution scope, PR process, and code style.
+- Created `.github/ISSUE_TEMPLATE/bug_report.md` with reproduction steps, environment, and `make verify` output fields.
+- Created `.github/ISSUE_TEMPLATE/feature_request.md` with use case and evaluation criteria fields.
+- Created `.github/pull_request_template.md` with validation checklist and test details.
+- Updated README with Contributing section and link.
+- `make verify` passes all stages.
 
 ## Notes
 
