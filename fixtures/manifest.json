@@ -59,7 +59,7 @@
     "T11": {
       "fixture_dir": "T11",
       "exec_validation_type": "stdout",
-      "exec_setup_note": "file.bin contains fixed bytes; od -A x -t x1z file.bin should print the expected hex+ASCII dump"
+      "exec_setup_note": "setup/ has two binary files differing at byte 6; cmp file1 file2 should report 'file1 file2 differ: char 6, line 1'"
     },
     "T12": {
       "fixture_dir": "T12",
@@ -88,8 +88,8 @@
     },
     "T17": {
       "fixture_dir": "T17",
-      "exec_validation_type": "exit_zero",
-      "exec_setup_note": "run.sh completes quickly; timeout 30 ./run.sh should finish before timeout and exit 0"
+      "exec_validation_type": "stdout",
+      "exec_setup_note": "setup/check_env.sh prints $MYVAR; env MYVAR=hello ./check_env.sh should output 'hello'"
     },
     "T18": {
       "fixture_dir": "T18",

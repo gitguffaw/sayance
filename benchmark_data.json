@@ -116,12 +116,12 @@
     {
       "id": "T11",
       "tier": 2,
-      "category": "text_processing",
-      "question": "I need to look at the raw bytes of a binary file displayed as hex values.",
-      "expected_commands": ["od"],
-      "expected_answer": "od -A x -t x1z file",
-      "posix_traps": ["xxd is NOT POSIX", "hexdump is NOT POSIX", "od is the POSIX hex viewer"],
-      "required_concepts": ["od", "not xxd", "not hexdump"]
+      "category": "file_ops",
+      "question": "I have two binary files that are supposed to be identical. I need to check if they match byte-for-byte, and if they differ, tell me exactly which byte position has the first mismatch.",
+      "expected_commands": ["cmp"],
+      "expected_answer": "cmp file1 file2",
+      "posix_traps": ["diff is text-oriented and unsuitable for binary comparison", "md5sum/shasum compare hashes but do not show mismatch position", "cmp is the POSIX byte-level binary comparator"],
+      "required_concepts": ["cmp", "byte comparison", "not diff"]
     },
     {
       "id": "T12",
@@ -177,11 +177,11 @@
       "id": "T17",
       "tier": 2,
       "category": "process",
-      "question": "I need to run an external command, but automatically abort it if it hasn't finished within 30 seconds.",
-      "expected_commands": ["timeout"],
-      "expected_answer": "timeout 30 command",
-      "posix_traps": ["timeout is POSIX as of Issue 8 (2024), many LLMs say it's not"],
-      "required_concepts": ["timeout", "POSIX Issue 8"]
+      "question": "I need to run a command with a specific environment variable set for just that one invocation, without modifying my current shell session.",
+      "expected_commands": ["env"],
+      "expected_answer": "env VAR=value command",
+      "posix_traps": ["export modifies the current shell permanently"],
+      "required_concepts": ["env", "environment variable", "not export"]
     },
     {
       "id": "T18",

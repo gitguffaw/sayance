@@ -55,7 +55,7 @@ _TRAP_PATTERNS_RAW: dict[str, list[str]] = {
     "T08": [r"\becho\b", r"\[\["],
     "T09": [r"cp\s+-a\b", r"cp\s+-r\b"],
     "T10": [r"\bdiff\b"],
-    "T11": [r"\bxxd\b", r"\bhexdump\b"],
+    "T11": [r"\bdiff\b", r"\bmd5sum\b", r"\bshasum\b"],
     "T14": [r"\bscreen\b", r"\btmux\b", r"\bdisown\b"],
     "T21": [r"cat\s+-n\b"],
     "T23": [r"<\("],
