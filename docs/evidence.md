@@ -38,7 +38,7 @@ Gemini's output tokens dropped 51% while compliance rose 21 points — the stron
 ### Commands Used
 
 ```bash
-# Unaided baselines
+# Unaided runs
 python3 run_benchmark.py --llms claude --questions T01-T30
 python3 run_benchmark.py --llms codex --questions T01-T30
 python3 run_benchmark.py --llms gemini --max-workers 1 --delay 30 --questions T01-T30
@@ -51,7 +51,7 @@ python3 run_benchmark.py --llms gemini --inject-posix --max-workers 1 --delay 30
 
 ## Current Corpus
 
-The benchmark corpus has been expanded to **40 questions** covering Common, Uncommon, and Obscure POSIX utilities. The 30-question baseline above is preserved as a historical before/after reference. New baseline runs on the 40-question corpus with pinned models (`claude-opus-4-6`, `gpt-5.4`) are planned.
+The benchmark corpus has been expanded to **40 questions** covering Common, Uncommon, and Obscure POSIX utilities. The 30-question comparison above is preserved as a historical before/after reference. New unaided runs on the 40-question corpus with pinned models (`claude-opus-4-6`, `gpt-5.4`) are planned.
 
 ## Reproducing These Results
 
@@ -60,7 +60,7 @@ The benchmark corpus has been expanded to **40 questions** covering Common, Unco
    python3 run_benchmark.py --validate-bridge
    ```
 
-2. Run an unaided baseline:
+2. Run an unaided benchmark:
    ```bash
    python3 run_benchmark.py --llms claude --claude-model claude-opus-4-6
    ```
@@ -88,8 +88,8 @@ The benchmark does not execute commands. It measures whether the LLM reaches for
 - Results are non-deterministic — LLM outputs vary between runs even with identical prompts.
 - Token counts differ across providers due to different tokenizers.
 - Cache state (cold vs. warm) creates significant cost differences on Anthropic.
-- The 30-question baseline used pre-pinning model versions; exact reproducibility requires matching the model versions listed above.
+- The 30-question comparison used pre-pinning model versions; exact reproducibility requires matching the model versions listed above.
 
 ## Update Policy
 
-This evidence page is updated when new canonical baseline runs are performed at project milestones. It is not updated for every development run. The run date and model versions above identify exactly which results are cited in the README.
+This evidence page is updated when new canonical benchmark runs are performed at project milestones. It is not updated for every development run. The run date and model versions above identify exactly which results are cited in the README.

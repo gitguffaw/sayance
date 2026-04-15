@@ -3,8 +3,8 @@
 
 Example:
   python3 scripts/compare_series_means.py \
-    --injected results/stepup-scheduled-5h \
-    --baseline results/baseline-scheduled-5h \
+    --bridge-aided results/bridge-aided-scheduled-5h \
+    --unaided results/unaided-scheduled-5h \
     --out results/series-comparison.json
 """
 
@@ -86,28 +86,28 @@ def collect_series(series_dir: Path, *, allow_ambiguous_summaries: bool = False)
 
 
 def build_delta(
-    injected: dict,
-    baseline: dict,
+    bridge_aided: dict,
+    unaided: dict,
 ) -> dict[str, dict[str, float]]:
     delta: dict[str, dict[str, float]] = {}
-    common_llms = set(injected.get("llms", {}).keys()) & set(baseline.get("llms", {}).keys())
+    common_llms = set(bridge_aided.get("llms", {}).keys()) & set(unaided.get("llms", {}).keys())
     for llm in sorted(common_llms):
         delta[llm] = {}
-        inj_payload = injected["llms"][llm]
-        base_payload = baseline["llms"][llm]
+        ba_payload = bridge_aided["llms"][llm]
+        ua_payload = unaided["llms"][llm]
         for metric in METRICS:
             k = f"avg_{metric}"
-            if k not in inj_payload or k not in base_payload:
+            if k not in ba_payload or k not in ua_payload:
                 continue
-            # Positive means baseline > injected.
-            delta[llm][f"baseline_minus_injected_{metric}"] = base_payload[k] - inj_payload[k]
+            # Positive means unaided > bridge-aided.
+            delta[llm][f"unaided_minus_bridge_aided_{metric}"] = ua_payload[k] - ba_payload[k]
     return delta
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Compare baseline vs injected series means")
-    parser.add_argument("--injected", required=True, help="Injected series directory")
-    parser.add_argument("--baseline", required=True, help="Baseline series directory")
+    parser = argparse.ArgumentParser(description="Compare unaided vs bridge-aided series means")
+    parser.add_argument("--bridge-aided", required=True, help="Bridge-aided series directory")
+    parser.add_argument("--unaided", required=True, help="Unaided series directory")
     parser.add_argument("--out", required=False, help="Optional JSON output path")
     parser.add_argument(
         "--allow-ambiguous-summaries",
@@ -116,19 +116,19 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    injected = collect_series(
-        Path(args.injected),
+    bridge_aided = collect_series(
+        Path(args.bridge_aided),
         allow_ambiguous_summaries=args.allow_ambiguous_summaries,
     )
-    baseline = collect_series(
-        Path(args.baseline),
+    unaided = collect_series(
+        Path(args.unaided),
         allow_ambiguous_summaries=args.allow_ambiguous_summaries,
     )
-    delta = build_delta(injected, baseline)
+    delta = build_delta(bridge_aided, unaided)
 
     report = {
-        "injected": injected,
-        "baseline": baseline,
+        "bridge_aided": bridge_aided,
+        "unaided": unaided,
         "delta": delta,
     }
 

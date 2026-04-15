@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-RESULTS_ROOT="$ROOT/results/baseline-scheduled-5h"
+RESULTS_ROOT="$ROOT/results/unaided-scheduled-5h"
 LOGS_DIR="$RESULTS_ROOT/logs"
 
 mkdir -p "$LOGS_DIR"
@@ -19,7 +19,7 @@ for idx in {1..10}; do
       --no-grade \
       --claude-model claude-opus-4-6 \
       --codex-model gpt-5.4 \
-      --results-dir "results/baseline-scheduled-5h/run${run_id}" \
+      --results-dir "results/unaided-scheduled-5h/run${run_id}" \
       > "$LOGS_DIR/run${run_id}.log" 2>&1
   ) &
 done

@@ -212,10 +212,10 @@ def main():
             requested_models=requested_models,
             run_metadata={
                 "mode": (
-                    "stepup-execute" if args.inject_posix and args.execute
+                    "bridge-aided-execute" if args.inject_posix and args.execute
                     else "execute" if args.execute
-                    else "stepup" if args.inject_posix
-                    else "baseline"
+                    else "bridge-aided" if args.inject_posix
+                    else "unaided"
                 ),
                 "label": config.current_run_label(),
                 "slug": config.current_run_slug(),

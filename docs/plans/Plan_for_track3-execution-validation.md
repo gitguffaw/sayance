@@ -55,10 +55,10 @@ Results land in new directories:
 
 | Flags              | Results dir               |
 |--------------------|--------------------------|
-| (none)             | `results/`               |
-| `--inject-posix`   | `results-stepup/`        |
-| `--execute`        | `results-execute/`       |
-| both               | `results-stepup-execute/` |
+| (none)             | `results/unaided/`              |
+| `--inject-posix`   | `results/bridge-aided/`         |
+| `--execute`        | `results/execute/`              |
+| both               | `results/bridge-aided-execute/` |
 
 ---
 
@@ -244,7 +244,7 @@ The existing `--compare` report gains an **Execution** section:
 | `benchmark_data.json` | Add `fixture_dir`, `exec_validation_type`, `exec_setup_note` to T01–T10 |
 | `fixtures/T01/` through `fixtures/T10/` | Create with minimal test data and expected outputs |
 | `docs/execution-validation.md` | Document Command Verification, fixture format, retry loop design |
-| `.gitignore` | Add `results-execute/`, `results-stepup-execute/` |
+| `.gitignore` | Add `results/execute/`, `results/bridge-aided-execute/` |
 
 ---
 
@@ -289,9 +289,9 @@ python3 run_benchmark.py --llms claude --inject-posix --execute
 # Compare all four modes
 python3 run_benchmark.py --compare \
   "Raw=results/summary-*.json" \
-  "StepUp=results-stepup/summary-*.json" \
+  "BridgeAided=results/bridge-aided/summary-*.json" \
   "RawExec=results-execute/summary-*.json" \
-  "StepUpExec=results-stepup-execute/summary-*.json"
+  "BridgeAidedExec=results/bridge-aided-execute/summary-*.json"
 ```
 
 Success criteria in the comparison report:

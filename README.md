@@ -159,10 +159,10 @@ python3 run_benchmark.py --dry-run
 # Validate bridge completeness (required before trusted Step-Up runs)
 python3 run_benchmark.py --validate-bridge
 
-# Run baseline (no injection) for Claude + Codex
+# Run unaided (no injection) for Claude + Codex
 python3 run_benchmark.py --llms claude codex
 
-# Run with Step-Up injection for Claude + Codex
+# Run bridge-aided (with injection) for Claude + Codex
 python3 run_benchmark.py --llms claude codex --inject-posix
 ```
 
@@ -174,17 +174,17 @@ Model selection defaults:
 - To change pinned models, pass `--claude-model <model-id>` and/or `--codex-model <model-id>`.
 - Unpinned runs are blocked by default. To bypass intentionally, use `--claude-model auto` and/or `--codex-model auto` together with `--allow-unpinned-models`.
 
-Fresh baseline commands (provider-isolated):
+Fresh unaided commands (provider-isolated):
 
 ```bash
-# Claude baseline (pinned default: claude-opus-4-6)
-python3 run_benchmark.py --llms claude --claude-model claude-opus-4-6 --results-dir results/baseline-claude-2026-04-03
+# Claude unaided (pinned default: claude-opus-4-6)
+python3 run_benchmark.py --llms claude --claude-model claude-opus-4-6 --results-dir results/unaided-claude-2026-04-03
 
-# Codex baseline (pinned default: gpt-5.4)
-python3 run_benchmark.py --llms codex --codex-model gpt-5.4 --results-dir results/baseline-codex-2026-04-03
+# Codex unaided (pinned default: gpt-5.4)
+python3 run_benchmark.py --llms codex --codex-model gpt-5.4 --results-dir results/unaided-codex-2026-04-03
 
-# Gemini baseline (quota-safe profile)
-python3 run_benchmark.py --llms gemini --max-workers 1 --delay 30 --results-dir results/baseline-gemini-2026-04-03
+# Gemini unaided (quota-safe profile)
+python3 run_benchmark.py --llms gemini --max-workers 1 --delay 30 --results-dir results/unaided-gemini-2026-04-03
 ```
 
 Summary validity semantics:
@@ -239,15 +239,12 @@ GitHub Actions CI runs `make verify` on every push and pull request to `main`.
 
 ```
 results/
-  <llm>/                        per-question Unaided results
-  summary-*.json               aggregate Unaided summaries
-  report-*.html                aggregate Unaided HTML reports
-  comparison-*.html            multi-run comparison reports
-  stepup/<llm>/                per-question Bridge-Aided results
-  execute/<llm>/               per-question Command Verification results
-  stepup-execute/<llm>/        per-question Bridge-Aided Verification results
-  baseline-scheduled-5h/       scheduled baseline series (runNN + logs)
-  stepup-scheduled-5h/         scheduled Step-Up series (runNN + logs)
+  unaided/<llm>/                    per-question Unaided results
+  bridge-aided/<llm>/               per-question Bridge-Aided results
+  execute/<llm>/                    per-question Command Verification results
+  bridge-aided-execute/<llm>/       per-question Bridge-Aided Verification results
+  unaided-scheduled-5h/            scheduled Unaided series (runNN + logs)
+  bridge-aided-scheduled-5h/       scheduled Bridge-Aided series (runNN + logs)
 ```
 
 For custom `--results-dir` runs, only the latest `summary-*.json` and `report-*.html` are retained in that directory.

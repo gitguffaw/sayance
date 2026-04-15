@@ -31,7 +31,7 @@ def write_summary(path: Path, payload: dict) -> None:
 
 class ComparisonReportTests(unittest.TestCase):
     def test_save_comparison_report_renders_missing_metrics_as_na(self) -> None:
-        baseline = make_summary(
+        unaided = make_summary(
             timestamp="20260403-100000",
             claude_payload={
                 "model": "claude-opus-4-6",
@@ -85,7 +85,7 @@ class ComparisonReportTests(unittest.TestCase):
             benchmark.RESULTS_DIR = Path(tmpdir)
             try:
                 report_path = save_comparison_report(
-                    [("Baseline", baseline), ("Experiment", experiment)]
+                    [("Unaided", unaided), ("Experiment", experiment)]
                 )
                 html = report_path.read_text()
             finally:
@@ -220,9 +220,9 @@ class SeriesComparisonTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
-            injected = root / "injected"
-            baseline = root / "baseline"
-            for series_dir in (injected, baseline):
+            bridge_aided = root / "bridge-aided"
+            unaided = root / "unaided"
+            for series_dir in (bridge_aided, unaided):
                 run_dir = series_dir / "run1"
                 write_summary(run_dir / "summary-20260403-100000.json", summary)
                 write_summary(run_dir / "summary-20260403-100100.json", summary)
@@ -233,10 +233,10 @@ class SeriesComparisonTests(unittest.TestCase):
                 [
                     sys.executable,
                     str(script),
-                    "--injected",
-                    str(injected),
-                    "--baseline",
-                    str(baseline),
+                    "--bridge-aided",
+                    str(bridge_aided),
+                    "--unaided",
+                    str(unaided),
                 ],
                 capture_output=True,
                 text=True,
@@ -249,10 +249,10 @@ class SeriesComparisonTests(unittest.TestCase):
                 [
                     sys.executable,
                     str(script),
-                    "--injected",
-                    str(injected),
-                    "--baseline",
-                    str(baseline),
+                    "--bridge-aided",
+                    str(bridge_aided),
+                    "--unaided",
+                    str(unaided),
                     "--allow-ambiguous-summaries",
                     "--out",
                     str(out_path),

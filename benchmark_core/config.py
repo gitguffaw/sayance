@@ -11,15 +11,15 @@ POSIX_SKILL_FILE = SCRIPT_DIR / "skill" / "SKILL.md"
 FIXTURES_DIR = SCRIPT_DIR / "fixtures"
 
 # Result directories map to benchmark modes:
-#   baseline/       → Unaided (no bridge)
-#   stepup/         → Bridge-Aided (bridge injected)
-#   execute/        → Command Verification (commands run against fixtures)
-#   stepup-execute/ → Bridge-Aided Verification (bridge + execution)
+#   unaided/              → Unaided (no bridge)
+#   bridge-aided/         → Bridge-Aided (bridge injected)
+#   execute/              → Command Verification (commands run against fixtures)
+#   bridge-aided-execute/ → Bridge-Aided Verification (bridge + execution)
 RESULTS_ROOT = SCRIPT_DIR / "results"
-RESULTS_DIR_BASE = RESULTS_ROOT / "baseline"
-RESULTS_DIR_STEPUP = RESULTS_ROOT / "stepup"
+RESULTS_DIR_BASE = RESULTS_ROOT / "unaided"
+RESULTS_DIR_STEPUP = RESULTS_ROOT / "bridge-aided"
 RESULTS_DIR_EXECUTE = RESULTS_ROOT / "execute"
-RESULTS_DIR_STEPUP_EXECUTE = RESULTS_ROOT / "stepup-execute"
+RESULTS_DIR_STEPUP_EXECUTE = RESULTS_ROOT / "bridge-aided-execute"
 
 RESULTS_DIR = RESULTS_DIR_BASE
 
