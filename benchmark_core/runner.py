@@ -229,14 +229,19 @@ def validate_posix_bridge(
         if isinstance(command, str) and command.strip()
     })
 
-    missing_expected_tldr = [cmd for cmd in expected_commands if cmd not in tldr_keys]
+    # Only flag expected commands that are in the bridge scope (posix-utilities.txt).
+    # Benchmark questions may test utilities excluded from the bridge (e.g. timeout
+    # on macOS); those are not bridge gaps.
+    bridged_expected = [cmd for cmd in expected_commands if cmd in utility_set]
+
+    missing_expected_tldr = [cmd for cmd in bridged_expected if cmd not in tldr_keys]
     if missing_expected_tldr:
         errors.append(
             "Missing expected commands in "
             f"{config.POSIX_TLDR_FILE.name}: {preview(missing_expected_tldr)}"
         )
 
-    missing_expected_core = [cmd for cmd in expected_commands if not in_core(cmd)]
+    missing_expected_core = [cmd for cmd in bridged_expected if not in_core(cmd)]
     if missing_expected_core:
         errors.append(
             "Missing expected commands in "
