@@ -63,8 +63,8 @@ def extract_discovery_map_utilities(text):
 
 
 def load_ground_truth():
-    """Load the 142 utility names from posix-utilities.txt."""
-    path = REPO / "posix-utilities.txt"
+    """Load the 142 utility names from macOS-posix-utilities.txt."""
+    path = REPO / "macOS-posix-utilities.txt"
     lines = [l.strip().lower() for l in path.read_text().splitlines() if l.strip()]
     return set(lines), lines
 
@@ -76,7 +76,7 @@ def load_ground_truth():
 def check_source_artifacts():
     print("=== Source Artifact Presence ===")
     required = [
-        "posix-utilities.txt",
+        "macOS-posix-utilities.txt",
         "posix-core.md",
         "skill/SKILL.md",
         "skill/posix-lookup",
@@ -119,11 +119,11 @@ def check_utility_consistency():
     print("=== 142-Utility Count Consistency ===")
     truth_set, truth_list = load_ground_truth()
 
-    # 3a: posix-utilities.txt count
+    # 3a: macOS-posix-utilities.txt count
     if len(truth_list) == 142:
-        passed("posix-utilities.txt has 142 utilities")
+        passed("macOS-posix-utilities.txt has 142 utilities")
     else:
-        failed(f"posix-utilities.txt has {len(truth_list)} utilities, expected 142")
+        failed(f"macOS-posix-utilities.txt has {len(truth_list)} utilities, expected 142")
 
     # 3b: posix-tldr.json key count
     tldr = json.loads((REPO / "skill/posix-tldr.json").read_text())
@@ -205,11 +205,11 @@ def check_cli_sanity():
         truth_set, _ = load_ground_truth()
         list_set = set(lines)
         if list_set == truth_set:
-            passed("posix-lookup --list matches posix-utilities.txt")
+            passed("posix-lookup --list matches macOS-posix-utilities.txt")
         else:
             missing = truth_set - list_set
             extra = list_set - truth_set
-            failed("posix-lookup --list does not match posix-utilities.txt")
+            failed("posix-lookup --list does not match macOS-posix-utilities.txt")
             if missing:
                 print(f"    missing: {sorted(missing)}")
             if extra:

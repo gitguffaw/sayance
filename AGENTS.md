@@ -4,13 +4,13 @@
 
 - CLAUDE.md is canonical for benchmark behavior, runtime semantics, provider CLI quirks, and result interpretation.
 - AGENTS.md is canonical for process, code style, validation commands, PR hygiene, and operational workflow.
-- `benchmark_data.json` (`meta.question_rules`) is canonical for question-rule semantics; `posix-utilities.txt` is canonical for POSIX utility scope.
+- `benchmark_data.json` (`meta.question_rules`) is canonical for question-rule semantics; `macOS-posix-utilities.txt` is canonical for POSIX utility scope.
 - Sync rule: when a topic changes in one file that affects the other, update both in the same change.
 - Conflict rule: behavior/runtime conflicts resolve to CLAUDE.md; process/style conflicts resolve to AGENTS.md.
 
 ## Project Structure & Module Organization
 
-This repository is a small, stdlib-only Python benchmark. `run_benchmark.py` is the stable CLI entrypoint and compatibility facade. Internal implementation lives under `benchmark_core/` (`cli`, `runner`, `providers`, `execution`, `reporting`, `models`, `config`). Benchmark inputs live in `benchmark_data.json`, and the POSIX utility source of truth lives in `posix-utilities.txt`. Design rationale and research are under `docs/design-rationale/`. Generated output is written under `results/`, with mode roots at `results/unaided/`, `results/bridge-aided/`, `results/execute/`, and `results/bridge-aided-execute/`. Each benchmark invocation writes to its own run directory using `label-DYYYY-MM-DD-THH-MM-SS`, for example `claude-codex-D2026-04-10-T08-55-15`. Each run directory also includes a `run.json` manifest so context is not encoded only in the folder name. Generated output is ignored by Git.
+This repository is a small, stdlib-only Python benchmark. `run_benchmark.py` is the stable CLI entrypoint and compatibility facade. Internal implementation lives under `benchmark_core/` (`cli`, `runner`, `providers`, `execution`, `reporting`, `models`, `config`). Benchmark inputs live in `benchmark_data.json`, and the POSIX utility source of truth lives in `macOS-posix-utilities.txt`. Design rationale and research are under `docs/design-rationale/`. Generated output is written under `results/`, with mode roots at `results/unaided/`, `results/bridge-aided/`, `results/execute/`, and `results/bridge-aided-execute/`. Each benchmark invocation writes to its own run directory using `label-DYYYY-MM-DD-THH-MM-SS`, for example `claude-codex-D2026-04-10-T08-55-15`. Each run directory also includes a `run.json` manifest so context is not encoded only in the folder name. Generated output is ignored by Git.
 
 ## Build, Test, and Development Commands
 

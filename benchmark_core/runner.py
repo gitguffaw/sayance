@@ -229,7 +229,7 @@ def validate_posix_bridge(
         if isinstance(command, str) and command.strip()
     })
 
-    # Only flag expected commands that are in the bridge scope (posix-utilities.txt).
+    # Only flag expected commands that are in the bridge scope (macOS-posix-utilities.txt).
     # Benchmark questions may test utilities excluded from the bridge (e.g. timeout
     # on macOS); those are not bridge gaps.
     bridged_expected = [cmd for cmd in expected_commands if cmd in utility_set]

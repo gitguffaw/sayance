@@ -92,7 +92,7 @@ Results are saved under `results/` as JSON/HTML, with mode roots at `results/una
 - `skill/posix-tldr.json` — Syntax lookup database (shared by CLI and benchmark)
 - `posix-core.md` — Discovery Map (also embedded in SKILL.md)
 - `Makefile` — `make test`, `make test-product`, `make test-product-negative`, `make test-product-live-claude`, `make test-product-live-codex`, `make install`, `make uninstall`
-- `posix-utilities.txt` — All 142 macOS-available POSIX Issue 8 utilities (source of truth)
+- `macOS-posix-utilities.txt` — All 142 macOS-available POSIX Issue 8 utilities (source of truth)
 - `benchmark_data.json` — Structured questions with expected answers and required concepts
 - `run_benchmark.py` — Stable facade + CLI entrypoint
 - `benchmark_core/` — Internal benchmark implementation modules
