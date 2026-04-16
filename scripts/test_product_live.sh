@@ -37,6 +37,42 @@ ts_iso() {
   date -u +"%Y-%m-%dT%H:%M:%SZ"
 }
 
+# run_with_timeout SECONDS CMD [ARGS...]
+# Prefers GNU `timeout`, falls back to `gtimeout` (homebrew coreutils),
+# and finally to a Perl alarm-based fallback so default-PATH macOS
+# (no coreutils installed) still enforces the canary timeout instead of
+# exiting 127. Preserves GNU timeout's exit-code-124-on-timeout convention.
+run_with_timeout() {
+  local secs="$1"; shift
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "${secs}" "$@"
+  elif command -v gtimeout >/dev/null 2>&1; then
+    gtimeout "${secs}" "$@"
+  else
+    perl -e '
+      use strict; use warnings;
+      my $timeout = shift @ARGV;
+      my $pid = fork();
+      die "fork: $!" unless defined $pid;
+      if ($pid == 0) { exec { $ARGV[0] } @ARGV; exit 127; }
+      eval {
+        local $SIG{ALRM} = sub { die "__timeout__\n" };
+        alarm $timeout;
+        waitpid($pid, 0);
+        alarm 0;
+      };
+      if ($@ && $@ eq "__timeout__\n") {
+        kill "TERM", $pid;
+        sleep 1;
+        kill "KILL", $pid;
+        waitpid($pid, 0);
+        exit 124;
+      }
+      exit $? >> 8;
+    ' "$secs" "$@"
+  fi
+}
+
 # emit_telemetry canary provider expected trap pass response latency_s
 emit_telemetry() {
   local canary="$1" provider="$2" expected="$3" trap_util="$4"
@@ -97,11 +133,13 @@ run_canary() {
   rc=0
   case "$provider" in
     claude)
-      response="$(HOME="${tmp_home}" timeout "${TIMEOUT_S}" \
+      response="$(HOME="${tmp_home}" \
+        run_with_timeout "${TIMEOUT_S}" \
         claude -p "$prompt" --output-format json 2>/dev/null)" || rc=$?
       ;;
     codex)
-      response="$(HOME="${tmp_home}" timeout "${TIMEOUT_S}" \
+      response="$(HOME="${tmp_home}" \
+        run_with_timeout "${TIMEOUT_S}" \
         codex exec --json --skip-git-repo-check "$prompt" 2>/dev/null)" || rc=$?
       ;;
   esac
