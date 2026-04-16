@@ -40,8 +40,18 @@
       "question": "I need to swap every occurrence of the word 'foo' with 'bar' throughout a text file. The change needs to be saved back to disk.",
       "expected_commands": ["sed"],
       "expected_answer": "sed 's/foo/bar/g' file > tmp && mv tmp file",
-      "posix_traps": ["sed -i is NOT POSIX", "must use redirect + mv pattern"],
-      "required_concepts": ["sed s///g", "no -i flag", "redirect and mv"]
+      "posix_traps": ["sed -i is NOT POSIX"],
+      "required_concepts": ["sed s///g", "no -i flag", "redirect and mv"],
+      "required_concept_groups": [
+        {
+          "label": "no -i flag",
+          "patterns": ["no -i flag", "do not use sed -i", "avoid sed -i", "sed -i is not posix"]
+        },
+        {
+          "label": "redirect and mv",
+          "patterns": ["redirect and mv", "> tmp && mv", "temporary file and mv", "redirect output and move it back"]
+        }
+      ]
     },
     {
       "id": "T04",
@@ -70,8 +80,14 @@
       "question": "I need to bundle a directory into a single archive file. It has to work reliably across different Unix systems — Linux, macOS, the BSDs.",
       "expected_commands": ["pax"],
       "expected_answer": "pax -w -f archive.pax directory/",
-      "posix_traps": ["tar is NOT a POSIX utility", "pax is the POSIX archiver"],
-      "required_concepts": ["pax", "not tar"]
+      "posix_traps": ["tar is NOT a POSIX utility"],
+      "required_concepts": ["pax", "not tar"],
+      "required_concept_groups": [
+        {
+          "label": "not tar",
+          "patterns": ["not tar", "avoid tar", "do not use tar", "tar is not a posix", "tar is not posix", "rather than tar", "instead of tar"]
+        }
+      ]
     },
     {
       "id": "T07",
@@ -260,8 +276,18 @@
       "question": "I need to generate a fingerprint of a file so I can verify it hasn't been corrupted after transferring it to another machine.",
       "expected_commands": ["cksum"],
       "expected_answer": "cksum file",
-      "posix_traps": ["md5sum and sha256sum are NOT POSIX", "cksum is the POSIX checksum utility"],
-      "required_concepts": ["cksum", "not md5sum", "not sha256sum"]
+      "posix_traps": ["md5sum and sha256sum are NOT POSIX"],
+      "required_concepts": ["cksum", "not md5sum", "not sha256sum"],
+      "required_concept_groups": [
+        {
+          "label": "not md5sum",
+          "patterns": ["not md5sum", "avoid md5sum", "do not use md5sum", "md5sum[^.\\n;]{0,48}not posix"]
+        },
+        {
+          "label": "not sha256sum",
+          "patterns": ["not sha256sum", "avoid sha256sum", "do not use sha256sum", "sha256sum[^.\\n;]{0,48}not posix"]
+        }
+      ]
     },
     {
       "id": "T26",
@@ -299,9 +325,29 @@
       "category": "scripting",
       "question": "In a shell script, I need to do the calculation (3 + 5) * 2 and get the result. It should work on any machine, not just ones running a specific shell.",
       "expected_commands": ["expr"],
-      "expected_answer": "expr '(' 3 + 5 ')' '*' 2  — or use $(( )) which is POSIX sh arithmetic",
-      "posix_traps": ["$(( )) is POSIX sh, not bashism", "expr needs quoting for * and parens", "let is bashism"],
-      "required_concepts": ["expr or $(())", "quoting", "no let"]
+      "expected_answer": "expr '(' 3 + 5 ')' '*' 2  — or use $(( (3 + 5) * 2 )) which is POSIX sh arithmetic",
+      "posix_traps": ["let is bashism"],
+      "required_concepts": ["expr or $(())", "quoting", "no let"],
+      "acceptable_answer_patterns": [
+        {
+          "label": "$(( ))",
+          "pattern": "\\$\\(\\("
+        }
+      ],
+      "required_concept_groups": [
+        {
+          "label": "expr or $(())",
+          "patterns": ["\\bexpr\\b", "\\$\\(\\("]
+        },
+        {
+          "label": "quoting",
+          "patterns": ["quoting", "quote the \\*", "quote the parens", "'\\('", "'\\*'"]
+        },
+        {
+          "label": "no let",
+          "patterns": ["no let", "avoid let", "do not use let", "\\blet\\b[^.\\n;]{0,48}bashism"]
+        }
+      ]
     },
     {
       "id": "T30",

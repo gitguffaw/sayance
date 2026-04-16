@@ -80,6 +80,12 @@ _ISSUE8_REFUSAL_PATTERNS: list[re.Pattern] = [
 ]
 
 ISSUE8_COMMANDS = {"readlink", "realpath", "timeout"}
+_SENTENCE_DELIMITERS = ".!?\n;"
+_TRAP_NEGATION_PATTERNS = (
+    r"(?:do\s+not|don't|avoid|never)[^.!\n;]{{0,48}}{term}",
+    r"(?:rather\s+than|instead\s+of)[^.!\n;]{{0,48}}{term}",
+    r"{term}[^.!\n;]{{0,96}}(?:is|are|was|were)?\s*(?:not\s+posix(?:-compliant)?|not\s+a\s+posix\b[^.!\n;]*|not\s+portable|not\s+in\s+the\s+posix\s+standard|gnu(?:-|\s+)only|(?:a\s+)?bashism|text-oriented|unsuitable|wrong\s+tool|should\s+not\s+be\s+used|must\s+not\s+be\s+used)",
+)
 
 _posix_core_cache: str | None = None
 _posix_tldr_cache: dict | None = None
@@ -1050,6 +1056,106 @@ def detect_issue8_refusal(question: dict, response_lower: str) -> bool:
     return False
 
 
+def _extract_sentence(text: str, start: int, end: int) -> str:
+    sentence_start = -1
+    for delimiter in _SENTENCE_DELIMITERS:
+        sentence_start = max(sentence_start, text.rfind(delimiter, 0, start))
+
+    sentence_end = len(text)
+    for delimiter in _SENTENCE_DELIMITERS:
+        candidate = text.find(delimiter, end)
+        if candidate != -1:
+            sentence_end = min(sentence_end, candidate)
+
+    return text[sentence_start + 1:sentence_end]
+
+
+def _trap_match_is_negated(response_lower: str, match: re.Match[str]) -> bool:
+    matched_text = response_lower[match.start():match.end()].strip()
+    if not matched_text:
+        return False
+
+    sentence = _extract_sentence(response_lower, match.start(), match.end())
+    escaped_match = re.escape(matched_text)
+    return any(
+        re.search(pattern.format(term=escaped_match), sentence)
+        for pattern in _TRAP_NEGATION_PATTERNS
+    )
+
+
+def _schema_regex_entries(entries: object) -> list[tuple[str, str]]:
+    normalized: list[tuple[str, str]] = []
+    if not isinstance(entries, list):
+        return normalized
+
+    for entry in entries:
+        if isinstance(entry, str):
+            normalized.append((entry, entry))
+            continue
+        if not isinstance(entry, dict):
+            continue
+
+        label = entry.get("label")
+        pattern = entry.get("pattern")
+        if isinstance(pattern, str):
+            normalized.append((str(label or pattern), pattern))
+    return normalized
+
+
+def _required_concept_groups(question: dict) -> dict[str, list[str]]:
+    raw_groups = question.get("required_concept_groups")
+    groups: dict[str, list[str]] = {}
+    if not isinstance(raw_groups, list):
+        return groups
+
+    for group in raw_groups:
+        if isinstance(group, str):
+            groups[group] = [group]
+            continue
+        if not isinstance(group, dict):
+            continue
+
+        label = group.get("label")
+        patterns = group.get("patterns")
+        if not isinstance(label, str) or not isinstance(patterns, list):
+            continue
+        normalized_patterns = [pattern for pattern in patterns if isinstance(pattern, str)]
+        if normalized_patterns:
+            groups[label] = normalized_patterns
+    return groups
+
+
+def _matches_pattern(response_text: str, pattern: str) -> bool:
+    return re.search(pattern, response_text, re.IGNORECASE) is not None
+
+
+def _collect_expected_hits(question: dict, response_lower: str, response_for_grading: str) -> list[str]:
+    hits: list[str] = []
+    for command in question.get("expected_commands", []):
+        if re.search(rf"(?<![\w-]){re.escape(command.lower())}(?![\w-])", response_lower):
+            hits.append(command)
+
+    for label, pattern in _schema_regex_entries(question.get("acceptable_answer_patterns")):
+        if label not in hits and _matches_pattern(response_for_grading, pattern):
+            hits.append(label)
+
+    return hits
+
+
+def _missing_required_concepts(question: dict, response_lower: str, response_for_grading: str) -> list[str]:
+    missing: list[str] = []
+    concept_groups = _required_concept_groups(question)
+    for concept in question.get("required_concepts", []):
+        grouped_patterns = concept_groups.get(concept)
+        if grouped_patterns is not None:
+            if not any(_matches_pattern(response_for_grading, pattern) for pattern in grouped_patterns):
+                missing.append(concept)
+            continue
+        if concept.lower() not in response_lower:
+            missing.append(concept)
+    return missing
+
+
 def analyze_response(
     question: dict,
     response: str,
@@ -1063,20 +1169,17 @@ def analyze_response(
     response_for_grading = re.sub(r"\[TOOL RESULT\]:.*?(?=\n\n|\Z)", "", response, flags=re.DOTALL)
     response_lower = response_for_grading.lower()
 
-    expected_hits = [
-        command for command in question.get("expected_commands", [])
-        if re.search(rf"(?<![\\w-]){re.escape(command.lower())}(?![\\w-])", response_lower)
-    ]
+    expected_hits = _collect_expected_hits(question, response_lower, response_for_grading)
 
     trap_hits = []
     for compiled_re in TRAP_PATTERNS_BY_ID.get(question["id"], []):
-        if compiled_re.search(response_for_grading):
+        for match in compiled_re.finditer(response_for_grading):
+            if _trap_match_is_negated(response_lower, match):
+                continue
             trap_hits.append(compiled_re.pattern)
+            break
 
-    missing_concepts = [
-        concept for concept in question.get("required_concepts", [])
-        if concept.lower() not in response_lower
-    ]
+    missing_concepts = _missing_required_concepts(question, response_lower, response_for_grading)
     issue8_refusal = detect_issue8_refusal(question, response_lower)
     posix_compliant = bool(expected_hits) and not trap_hits and not issue8_refusal
 

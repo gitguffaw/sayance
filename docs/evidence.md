@@ -4,6 +4,10 @@ This page documents the benchmark results currently cited in the README.
 
 Raw result directories are gitignored. This page records the specific artifacts, caveats, and interpretation needed to review the numbers without pretending the benchmark is stronger than it is.
 
+Two artifact classes now exist in this repo:
+- **Legacy artifacts** predate provenance hardening and may lack explicit corpus hashes, prompt hashes, and planned-result denominators.
+- **Provenance-hardened artifacts** include a top-level `provenance` block plus `planned_results`, `provider_error_results`, `dropped_results`, and `planned_posix_compliance_rate`.
+
 ## Current Snapshot (40 Questions, k=1)
 
 **Run date:** 2026-04-15  
@@ -16,6 +20,7 @@ Raw result directories are gitignored. This page records the specific artifacts,
 - Bridge-Aided summary: [results/bridge-aided/claude-codex-gemini-D2026-04-15-T15-19-11/summary-claude-codex-gemini-D2026-04-15-T15-19-11.json](</Users/jeremyneal/Library/Mobile Documents/com~apple~CloudDocs/Fermenting/posix/results/bridge-aided/claude-codex-gemini-D2026-04-15-T15-19-11/summary-claude-codex-gemini-D2026-04-15-T15-19-11.json>)
 
 These runs are useful for regression tracking and product direction. They are not publication-grade statistical claims.
+They are also **legacy artifacts** relative to the current hardened schema: they do not carry the new provenance and planned-denominator fields yet.
 
 ### POSIX Compliance
 
@@ -26,6 +31,8 @@ These runs are useful for regression tracking and product direction. They are no
 | Gemini | 60.7%* | 85.0% | +24.3 pts |
 
 \* Gemini's unaided rate is computed over `28` visible results. That run had `12` provider errors.
+
+These are **visible-row** compliance rates. In provenance-hardened summaries, the planned-row denominator is exposed separately as `planned_posix_compliance_rate`.
 
 ### Snapshot Table
 
@@ -56,6 +63,18 @@ Bridge-Aided mode does not guarantee that every provider will actually use the e
 | Gemini | 37/40 | Lookup path engaged heavily |
 
 This matters when interpreting the results. The current bridge is a mix of injected context and optional lookup behavior, not a fully enforced tool gate.
+
+## Hardened Summary Semantics
+
+New summaries now distinguish:
+
+- `posix_compliance_rate`: compliance over report-visible rows only.
+- `planned_posix_compliance_rate`: compliance over all planned rows, including explicit provider-error rows.
+- `planned_results`: intended result count for that provider/run.
+- `provider_error_results`: explicit provider-error rows kept in the denominator-safe summary.
+- `dropped_results`: planned minus materialized rows. In a healthy hardened run, this should stay at `0`.
+
+This makes denominator drift visible instead of forcing readers to infer it from missing rows.
 
 ### Token-Cost Read
 
@@ -92,6 +111,7 @@ Interpretation:
 ## Known Confounds
 
 - **k=1 only.** These runs are directional, not publication-grade.
+- **Current cited snapshot is legacy.** The April 15 artifacts predate provenance hardening, so they do not expose the new corpus/prompt fingerprint fields or planned-result metrics.
 - **Raw bridge cost is an upper bound.** The harness replays prompt context during simulated lookup, so raw billable cost overstates the eventual value of correct-first-time behavior.
 - **Prompt injection and lookup usage are not the same thing.** Claude mostly benefited from injected context without taking the explicit lookup path.
 - **Gemini unaided is denominator-unstable.** The `12` provider errors in the unaided run mean part of the bridge delta may reflect reliability, not just tool selection.
@@ -111,6 +131,7 @@ Command Verification (`--execute`) is the next layer for that. It extracts comma
 ## Historical Baseline (30 Questions, k=1)
 
 The original 30-question comparison is preserved for historical continuity.
+It is also a legacy artifact set and should not be treated as provenance-hardened.
 
 **Run date:** 2026-03-28  
 **Corpus:** 30 intent-based questions  

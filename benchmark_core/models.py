@@ -105,6 +105,11 @@ class QuestionResult:
     execution_record: ExecutionRecord | None  # Command Verification: populated when --execute is used
     cache_state: str             # "cold" or "warm"
     timestamp: str
+    question_snapshot: dict | None = None
+    question_sha256: str = ""
+    benchmark_data_sha256: str = ""
+    effective_prompt_sha256: str = ""
+    prompt_template_version: str = ""
 
 
 @dataclass(frozen=True)
@@ -115,6 +120,17 @@ class CLIInvocation:
 
 def result_is_error(result: QuestionResult) -> bool:
     return result.response.startswith("[ERROR]")
+
+
+def result_error_kind(result: QuestionResult) -> str:
+    if not result_is_error(result):
+        return ""
+    raw = result.tokens.raw
+    if isinstance(raw, dict):
+        error_kind = raw.get("error_kind")
+        if isinstance(error_kind, str) and error_kind:
+            return error_kind
+    return "provider_error"
 
 
 def result_is_usage_valid(result: QuestionResult) -> bool:
@@ -141,8 +157,36 @@ def error_results(results: list[QuestionResult]) -> list[QuestionResult]:
     return [result for result in results if result_is_error(result)]
 
 
+def provider_error_results(results: list[QuestionResult]) -> list[QuestionResult]:
+    return error_results(results)
+
+
 def usage_invalid_results(results: list[QuestionResult]) -> list[QuestionResult]:
     return [result for result in results if result_is_usage_invalid(result)]
+
+
+def planned_results_count(results: list[QuestionResult], planned_total: int | None = None) -> int:
+    if planned_total is not None:
+        return max(planned_total, 0)
+    return len(results)
+
+
+def provider_error_results_count(results: list[QuestionResult]) -> int:
+    return len(provider_error_results(results))
+
+
+def dropped_results_count(results: list[QuestionResult], planned_total: int | None = None) -> int:
+    if planned_total is None:
+        return 0
+    return max(planned_total - len(results), 0)
+
+
+def planned_posix_compliance_rate(results: list[QuestionResult], planned_total: int | None = None) -> float:
+    planned = planned_results_count(results, planned_total)
+    if planned <= 0:
+        return 0.0
+    compliant = sum(1 for result in report_visible_results(results) if result.analysis.posix_compliant)
+    return compliant / planned
 
 
 def invalid_usage_reason_counts(results: list[QuestionResult]) -> Counter:
@@ -168,6 +212,7 @@ def summary_error_entries(results: list[QuestionResult]) -> list[dict]:
                     "error": result.response.removeprefix("[ERROR] "),
                     "latency_ms": result.execution.latency_ms,
                     "kind": "provider_error",
+                    "error_kind": result_error_kind(result),
                 }
             )
         elif result_is_usage_invalid(result):
@@ -180,4 +225,3 @@ def summary_error_entries(results: list[QuestionResult]) -> list[dict]:
                 }
             )
     return entries
-

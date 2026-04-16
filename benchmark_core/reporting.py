@@ -10,11 +10,16 @@ from benchmark_core.models import (
     error_results,
     first_result_model,
     invalid_usage_reason_counts,
+    planned_posix_compliance_rate,
+    planned_results_count,
+    provider_error_results_count,
     report_visible_results,
+    result_error_kind,
     result_is_error,
     result_is_report_visible,
     result_is_usage_invalid,
     result_is_usage_valid,
+    dropped_results_count,
     summary_error_entries,
     usage_invalid_results,
     usage_valid_results,
@@ -46,6 +51,9 @@ def generate_report(all_results: dict[str, list[QuestionResult]], questions: lis
         token_results = usage_valid_results(results)
         visible_results = report_visible_results(results)
         provider_errors = error_results(results)
+        provider_error_count = provider_error_results_count(results)
+        planned_total = planned_results_count(results)
+        dropped_count = dropped_results_count(results, planned_total)
         invalid_usage = usage_invalid_results(results)
         if not token_results and not visible_results and not provider_errors:
             print(f"  {llm.upper()}: No reportable results\n")
@@ -104,19 +112,31 @@ def generate_report(all_results: dict[str, list[QuestionResult]], questions: lis
         print(f"    Excess output:  {stats(excess)}")
 
         if visible_results:
+            visible_rate = len(compliant) / len(visible_results)
+            planned_rate = planned_posix_compliance_rate(results, planned_total)
             print(
-                "    POSIX compliant:"
-                f" {len(compliant)}/{len(visible_results)} ({len(compliant)/len(visible_results)*100:.1f}%)"
+                "    POSIX compliant (visible):"
+                f" {len(compliant)}/{len(visible_results)} ({visible_rate*100:.1f}%)"
+            )
+            print(
+                "    POSIX compliant (planned):"
+                f" {len(compliant)}/{planned_total} ({planned_rate*100:.1f}%)"
             )
             print(f"    Issue 8 refusals: {len(issue8_refusals)}")
             mode_str = ", ".join(f"{k}={v}" for k, v in inefficiency_modes.most_common())
             print(f"    Modes: {mode_str}")
         else:
-            print("    POSIX compliant: n/a")
+            print("    POSIX compliant (visible): n/a")
+            print("    POSIX compliant (planned): n/a")
             print("    Issue 8 refusals: n/a")
             print("    Modes: n/a")
 
         total_results = len(results)
+        print(
+            f"    Planned results: {planned_total}  "
+            f"Visible: {len(visible_results)}  "
+            f"Dropped: {dropped_count}"
+        )
         if invalid_usage:
             print(
                 f"    Usage invalid: {len(invalid_usage)}/{total_results} "
@@ -129,13 +149,13 @@ def generate_report(all_results: dict[str, list[QuestionResult]], questions: lis
             print(f"    Usage invalid reasons: {reason_str}")
         if provider_errors:
             print(
-                f"    Provider errors: {len(provider_errors)}/{total_results} "
+                f"    Provider errors: {provider_error_count}/{planned_total} "
                 f"(excluded from report-visible metrics)"
             )
             for error in provider_errors:
                 print(
                     f"      - {error.id}: {error.response.removeprefix('[ERROR] ')} "
-                    f"({error.execution.latency_ms}ms)"
+                    f"({result_error_kind(error)},{error.execution.latency_ms}ms)"
                 )
         print()
 
@@ -174,22 +194,32 @@ def save_summary(
     config.RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     ts = config.current_run_slug()
     summary_path = config.RESULTS_DIR / f"summary-{ts}.json"
+    normalized_run_metadata = config.enrich_run_metadata(run_metadata)
+    provenance = normalized_run_metadata[config.PROVENANCE_BLOCK_KEY]
+    bridge_utilities_count = config.bridge_utilities_count()
 
     summary = {
-        "version": "0.4",
+        "version": "0.5",
         "timestamp": ts,
-        "spec": "POSIX.1-2024 (Issue 8)",
-        "utilities_count": 142,
+        "spec": config.BENCHMARK_SPEC,
+        "spec_utilities_count": config.SPEC_UTILITIES_COUNT,
+        "bridge_utilities_count": bridge_utilities_count,
+        # Back-compat alias for older consumers that expect the macOS bridge count here.
+        "utilities_count": bridge_utilities_count,
         "requested_models": requested_models or {},
+        "provenance": provenance,
         "llms": {},
     }
     if run_metadata:
-        summary["run_metadata"] = run_metadata
+        summary["run_metadata"] = normalized_run_metadata
 
     for llm, results in all_results.items():
         token_results = usage_valid_results(results)
         visible_results = report_visible_results(results)
         invalid_usage = usage_invalid_results(results)
+        planned_total = planned_results_count(results)
+        provider_error_count = provider_error_results_count(results)
+        dropped_count = dropped_results_count(results, planned_total)
         model = first_result_model(token_results or visible_results or error_results(results))
         inefficiency_modes = Counter(r.analysis.inefficiency_mode for r in visible_results)
         adjustments = [tool_simulation_adjustment(r.tokens) for r in token_results]
@@ -208,6 +238,9 @@ def save_summary(
             "model": model,
             "requested_model": (requested_models or {}).get(llm),
             "total_results": len(results),
+            "planned_results": planned_total,
+            "provider_error_results": provider_error_count,
+            "dropped_results": dropped_count,
             "valid_results": len(token_results),
             "usage_valid_results": len(token_results),
             "report_visible_results": len(visible_results),
@@ -261,6 +294,7 @@ def save_summary(
                 sum(1 for r in visible_results if r.analysis.posix_compliant) / len(visible_results)
                 if visible_results else 0
             ),
+            "planned_posix_compliance_rate": planned_posix_compliance_rate(results, planned_total),
             "issue8_refusal_count": sum(1 for r in visible_results if r.analysis.issue8_refusal),
             "inefficiency_modes": dict(inefficiency_modes),
             # Back-compat for older compare/report tooling.
@@ -279,7 +313,7 @@ def save_summary(
     summary_path.write_text(json.dumps(summary, indent=2))
     if run_metadata:
         manifest_path = config.RESULTS_DIR / "run.json"
-        manifest_path.write_text(json.dumps(run_metadata, indent=2) + "\n")
+        manifest_path.write_text(json.dumps(normalized_run_metadata, indent=2) + "\n")
     if retain_latest_only:
         prune_timestamped_artifacts(config.RESULTS_DIR, "summary-*.json", summary_path)
     print(f"  Summary saved: {summary_path}")
@@ -316,6 +350,7 @@ def save_visual_report(
         for result in results
         if result_is_error(result)
     ]
+    all_planned = sum(planned_results_count(results) for results in all_results.values())
     all_flat = [
         result
         for results in all_results.values()
@@ -339,6 +374,9 @@ def save_visual_report(
         visible_results = report_visible_results(results)
         errors = error_results(results)
         invalid_usage = usage_invalid_results(results)
+        planned_total = planned_results_count(results)
+        provider_error_count = provider_error_results_count(results)
+        dropped_count = dropped_results_count(results, planned_total)
         if not visible_results and not errors:
             continue
         inefficiency_modes = Counter(r.analysis.inefficiency_mode for r in visible_results)
@@ -346,14 +384,17 @@ def save_visual_report(
             "llm": llm,
             "model": first_result_model(token_results or visible_results or errors),
             "count": len(visible_results),
+            "planned_count": planned_total,
             "usage_valid_count": len(token_results),
             "invalid_usage_count": len(invalid_usage),
             "total": len(results),
-            "error_count": len(errors),
+            "error_count": provider_error_count,
+            "dropped_count": dropped_count,
             "compliance_rate": (
                 sum(1 for r in visible_results if r.analysis.posix_compliant) / len(visible_results)
                 if visible_results else 0
             ),
+            "planned_compliance_rate": planned_posix_compliance_rate(results, planned_total),
             "issue8_refusal_count": sum(1 for r in visible_results if r.analysis.issue8_refusal),
             "mean_output": mean([r.tokens.output for r in token_results]),
             "mean_excess": mean([r.analysis.estimated_excess_output_tokens for r in token_results]),
@@ -518,14 +559,15 @@ def save_visual_report(
               <p class="eyebrow">{escape(card["llm"].upper())}</p>
               <h2>{escape(card["model"])}</h2>
             </div>
-            <div class="compliance-badge">{pct(card["compliance_rate"])}</div>
+            <div class="compliance-badge">{pct(card["compliance_rate"])} visible</div>
           </div>
-          <p class="caption">{card["count"]}/{card["total"]} tasks visible · {card["usage_valid_count"]} usage-valid · {card["issue8_refusal_count"]} Issue 8 refusals · {card["tool_calls"]} tool calls</p>
+          <p class="caption">{card["count"]}/{card["planned_count"]} tasks visible · {card["usage_valid_count"]} usage-valid · {card["error_count"]} provider errors · {card["dropped_count"]} dropped · {card["issue8_refusal_count"]} Issue 8 refusals · {card["tool_calls"]} tool calls</p>
           {metric_bar(card["mean_output"], max(max_output, 1), "Mean output tokens")}
           {metric_bar(card["mean_excess"], max(max_excess, 1), "Mean excess output")}
           {metric_bar(card["mean_latency"], max(max_latency_seconds, 1.0), "Mean latency", " s", ".2f")}
           <div class="micro-stats">
             <div><span>Mean steps</span><strong>{card["mean_steps"]:.1f}</strong></div>
+            <div><span>Compliance (planned)</span><strong>{pct(card["planned_compliance_rate"])}</strong></div>
             <div><span>Inefficiency modes</span><strong>{escape(inefficiency_summary or 'none')}</strong></div>
           </div>
           {error_html}
@@ -1014,6 +1056,7 @@ def save_visual_report(
       <div class="hero-grid">
         <div class="hero-stat"><span>Models</span><strong>{len(model_cards)}</strong></div>
         <div class="hero-stat"><span>Questions</span><strong>{len(questions)}</strong></div>
+        <div class="hero-stat"><span>Planned Results</span><strong>{all_planned}</strong></div>
         <div class="hero-stat"><span>Visible Results</span><strong>{len(all_visible)}</strong></div>
         <div class="hero-stat"><span>Usage Valid</span><strong>{len(all_usage_valid)}</strong></div>
         <div class="hero-stat"><span>Provider Errors</span><strong>{len(all_errors)}</strong></div>
@@ -1026,7 +1069,7 @@ def save_visual_report(
           <p class="eyebrow">Model Summary</p>
           <h2>Performance profile by provider</h2>
         </div>
-        <p>Compliance and efficiency are measured on report-visible records. Token metrics use usage-valid records.</p>
+        <p>Visible compliance uses report-visible rows, planned compliance keeps explicit provider-error rows in the denominator, and token metrics use usage-valid rows.</p>
       </div>
       <div class="model-grid">
         {''.join(model_sections) if model_sections else "<p class='empty-state'>No model data available.</p>"}
@@ -1257,7 +1300,11 @@ def save_comparison_report(named_summaries: list[tuple[str, dict]]) -> Path:
             ("Model", "model", "s", "", False),
             ("Valid Results", "valid_results", "d", "", False),
             ("Total Results", "total_results", "d", "", False),
+            ("Planned Results", "planned_results", "d", "", False),
+            ("Provider Error Results", "provider_error_results", "d", "", False),
+            ("Dropped Results", "dropped_results", "d", "", False),
             ("Compliance Rate", "posix_compliance_rate", ".1%", "", True),
+            ("Compliance Rate (planned)", "planned_posix_compliance_rate", ".1%", "", True),
             ("Mean Output Tokens", "mean_output_tokens", ".0f", "", False),
             ("Mean Latency (s)", "mean_latency_seconds", ".2f", "", False),
             ("Mean Steps", "mean_step_count", ".1f", "", False),

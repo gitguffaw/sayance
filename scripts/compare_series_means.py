@@ -26,6 +26,24 @@ METRICS = [
 ]
 
 
+def summary_benchmark_hash(summary: dict) -> str | None:
+    provenance = summary.get("provenance")
+    if isinstance(provenance, dict):
+        value = provenance.get("benchmark_data_sha256")
+        if isinstance(value, str) and value:
+            return value
+
+    run_metadata = summary.get("run_metadata")
+    if isinstance(run_metadata, dict):
+        nested = run_metadata.get("provenance")
+        if isinstance(nested, dict):
+            value = nested.get("benchmark_data_sha256")
+            if isinstance(value, str) and value:
+                return value
+
+    return None
+
+
 def find_latest_summary(run_dir: Path, *, allow_ambiguous_summaries: bool = False) -> Path | None:
     summaries = sorted(run_dir.glob("summary-*.json"))
     if not summaries:
@@ -38,8 +56,14 @@ def find_latest_summary(run_dir: Path, *, allow_ambiguous_summaries: bool = Fals
     return summaries[-1]
 
 
-def collect_series(series_dir: Path, *, allow_ambiguous_summaries: bool = False) -> dict:
+def collect_series(
+    series_dir: Path,
+    *,
+    allow_ambiguous_summaries: bool = False,
+    allow_provenance_mismatch: bool = False,
+) -> dict:
     run_summaries: list[dict] = []
+    benchmark_hashes: set[str] = set()
     for run_dir in sorted(series_dir.glob("run*")):
         if not run_dir.is_dir():
             continue
@@ -49,7 +73,19 @@ def collect_series(series_dir: Path, *, allow_ambiguous_summaries: bool = False)
         )
         if summary_path is None:
             continue
-        run_summaries.append(json.loads(summary_path.read_text()))
+        summary = json.loads(summary_path.read_text())
+        benchmark_hash = summary_benchmark_hash(summary)
+        if not benchmark_hash and not allow_provenance_mismatch:
+            raise ValueError(f"Missing benchmark_data_sha256 in {summary_path}")
+        if benchmark_hash:
+            benchmark_hashes.add(benchmark_hash)
+        run_summaries.append(summary)
+
+    if len(benchmark_hashes) > 1 and not allow_provenance_mismatch:
+        raise ValueError(
+            f"Mismatched benchmark_data_sha256 values in {series_dir}: "
+            + ", ".join(sorted(benchmark_hashes))
+        )
 
     llm_data: dict[str, dict[str, list[float]]] = {}
     llm_runs_count: dict[str, int] = {}
@@ -81,6 +117,7 @@ def collect_series(series_dir: Path, *, allow_ambiguous_summaries: bool = False)
     return {
         "series_dir": str(series_dir.resolve()),
         "runs_found": len(run_summaries),
+        "benchmark_data_sha256": next(iter(benchmark_hashes), None),
         "llms": aggregated,
     }
 
@@ -114,16 +151,33 @@ def main() -> None:
         action="store_true",
         help="Use the latest summary in run directories that contain multiple summary-*.json files",
     )
+    parser.add_argument(
+        "--allow-provenance-mismatch",
+        action="store_true",
+        help="Allow comparisons when summaries are missing or disagree on benchmark_data_sha256",
+    )
     args = parser.parse_args()
 
     bridge_aided = collect_series(
         Path(args.bridge_aided),
         allow_ambiguous_summaries=args.allow_ambiguous_summaries,
+        allow_provenance_mismatch=args.allow_provenance_mismatch,
     )
     unaided = collect_series(
         Path(args.unaided),
         allow_ambiguous_summaries=args.allow_ambiguous_summaries,
+        allow_provenance_mismatch=args.allow_provenance_mismatch,
     )
+    if (
+        not args.allow_provenance_mismatch
+        and bridge_aided.get("benchmark_data_sha256")
+        and unaided.get("benchmark_data_sha256")
+        and bridge_aided["benchmark_data_sha256"] != unaided["benchmark_data_sha256"]
+    ):
+        parser.error(
+            "Mismatched benchmark_data_sha256 between series: "
+            f"{bridge_aided['benchmark_data_sha256']} vs {unaided['benchmark_data_sha256']}"
+        )
     delta = build_delta(bridge_aided, unaided)
 
     report = {

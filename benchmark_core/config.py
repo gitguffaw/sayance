@@ -1,6 +1,9 @@
 from datetime import datetime
+import hashlib
+import json
 from pathlib import Path
 import re
+import subprocess
 
 SCRIPT_DIR = Path(__file__).resolve().parents[1]
 DATA_FILE = SCRIPT_DIR / "benchmark_data.json"
@@ -9,6 +12,36 @@ POSIX_TLDR_FILE = SCRIPT_DIR / "skill" / "posix-tldr.json"
 POSIX_UTILITIES_FILE = SCRIPT_DIR / "macOS-posix-utilities.txt"
 POSIX_SKILL_FILE = SCRIPT_DIR / "skill" / "SKILL.md"
 FIXTURES_DIR = SCRIPT_DIR / "fixtures"
+FIXTURES_MANIFEST_FILE = FIXTURES_DIR / "manifest.json"
+
+BENCHMARK_SPEC = "POSIX.1-2024 (Issue 8)"
+SPEC_UTILITIES_COUNT = 155
+PROMPT_TEMPLATE_VERSION = "1"
+PROVENANCE_BLOCK_KEY = "provenance"
+RUN_PROVENANCE_FIELDS = (
+    "benchmark_data_sha256",
+    "benchmark_meta_version",
+    "benchmark_meta_date",
+    "benchmark_question_count",
+    "git_commit",
+    "prompt_template_version",
+    "posix_core_sha256",
+    "posix_tldr_sha256",
+    "fixtures_manifest_sha256",
+)
+RESULT_PROVENANCE_FIELDS = (
+    "question_snapshot",
+    "question_sha256",
+    "benchmark_data_sha256",
+    "effective_prompt_sha256",
+    "prompt_template_version",
+)
+CACHE_PROVENANCE_FIELDS = (
+    "benchmark_data_sha256",
+    "question_sha256",
+    "prompt_template_version",
+    "effective_prompt_sha256",
+)
 
 # Result directories map to benchmark modes:
 #   unaided/              → Unaided (no bridge)
@@ -23,10 +56,85 @@ RESULTS_DIR_BRIDGE_AIDED_EXECUTE = RESULTS_ROOT / "bridge-aided-execute"
 
 RESULTS_DIR = RESULTS_DIR_BASE
 
+_benchmark_payload_cache: dict | None = None
+
 
 def set_results_dir(path: Path) -> None:
     global RESULTS_DIR
     RESULTS_DIR = path
+
+
+def sha256_file(path: Path) -> str | None:
+    if not path.exists() or not path.is_file():
+        return None
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(65536), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def current_git_commit() -> str | None:
+    try:
+        proc = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=SCRIPT_DIR,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return None
+    return proc.stdout.strip() or None
+
+
+def load_benchmark_payload() -> dict:
+    global _benchmark_payload_cache
+    if _benchmark_payload_cache is None:
+        _benchmark_payload_cache = json.loads(DATA_FILE.read_text())
+    return _benchmark_payload_cache
+
+
+def bridge_utilities_count() -> int:
+    return sum(
+        1
+        for line in POSIX_UTILITIES_FILE.read_text().splitlines()
+        if line.strip()
+    )
+
+
+def default_run_provenance() -> dict[str, str | int | None]:
+    payload = load_benchmark_payload()
+    meta = payload.get("meta", {})
+    questions = payload.get("questions", [])
+    return {
+        "benchmark_data_sha256": sha256_file(DATA_FILE),
+        "benchmark_meta_version": meta.get("version"),
+        "benchmark_meta_date": meta.get("date"),
+        "benchmark_question_count": len(questions),
+        "git_commit": current_git_commit(),
+        "prompt_template_version": PROMPT_TEMPLATE_VERSION,
+        "posix_core_sha256": sha256_file(POSIX_CORE_FILE),
+        "posix_tldr_sha256": sha256_file(POSIX_TLDR_FILE),
+        "fixtures_manifest_sha256": sha256_file(FIXTURES_MANIFEST_FILE),
+    }
+
+
+def enrich_run_metadata(run_metadata: dict | None = None) -> dict:
+    normalized = dict(run_metadata or {})
+    provenance = default_run_provenance()
+
+    nested = normalized.get(PROVENANCE_BLOCK_KEY)
+    if isinstance(nested, dict):
+        provenance.update({key: value for key, value in nested.items() if value is not None})
+
+    for key in RUN_PROVENANCE_FIELDS:
+        value = normalized.pop(key, None)
+        if value is not None:
+            provenance[key] = value
+
+    normalized[PROVENANCE_BLOCK_KEY] = provenance
+    return normalized
 
 
 def slugify_label(raw: str) -> str:

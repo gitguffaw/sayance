@@ -3,10 +3,17 @@ import json
 import io
 import tempfile
 import unittest
+from dataclasses import asdict
 from pathlib import Path
 from unittest import mock
 
 import run_benchmark as benchmark
+from benchmark_core.models import (
+    dropped_results_count,
+    planned_posix_compliance_rate,
+    planned_results_count,
+    provider_error_results_count,
+)
 from run_benchmark import (
     ExecutionMetrics,
     QuestionResult,
@@ -985,6 +992,280 @@ class ValidityReportingTests(unittest.TestCase):
 
         self.assertIn("Tool-sim integrity violations: 1", rendered)
         self.assertIn("Tool-sim adjustment sources: captured_estimate=1", rendered)
+
+
+class ResultPreservationTests(unittest.TestCase):
+    def test_run_provider_batch_emits_error_row_for_question_exception(self) -> None:
+        questions = [
+            {
+                "id": "T01",
+                "question": "Question T01",
+                "expected_commands": ["od"],
+                "required_concepts": [],
+                "minimal_answer": "od file",
+                "tier": 1,
+            },
+            {
+                "id": "T02",
+                "question": "Question T02",
+                "expected_commands": ["cksum"],
+                "required_concepts": [],
+                "minimal_answer": "cksum file",
+                "tier": 1,
+            },
+        ]
+        written: list[QuestionResult] = []
+
+        def fake_run_single(
+            llm: str,
+            question: dict,
+            run_k: int,
+            judge: str | None,
+            delay: float,
+            timeout_seconds: int,
+            inject_posix: bool = False,
+            execute: bool = False,
+            claude_model: str | None = None,
+            codex_model: str | None = None,
+        ) -> QuestionResult:
+            del llm, judge, delay, timeout_seconds, inject_posix, execute, claude_model, codex_model
+            if question["id"] == "T02":
+                raise RuntimeError("boom")
+            return make_result(
+                question["id"],
+                response="od file",
+                tokens=TokenUsage(
+                    input=10,
+                    input_cached=0,
+                    output=3,
+                    thoughts=0,
+                    billable=13,
+                    raw={},
+                ),
+                latency_ms=100,
+                posix_compliant=True,
+            )
+
+        def fake_write_incremental(result: QuestionResult) -> None:
+            written.append(result)
+
+        results = benchmark.runner.run_provider_batch(
+            llm="claude",
+            questions=questions,
+            k=1,
+            judge=None,
+            delay=0.0,
+            timeout_seconds=30,
+            max_workers=1,
+            seed=123,
+            run_single_fn=fake_run_single,
+            already_completed_fn=lambda *_args, **_kwargs: False,
+            load_existing_result_fn=lambda *_args, **_kwargs: None,
+            write_incremental_fn=fake_write_incremental,
+        )
+
+        self.assertEqual(len(results), 2)
+        self.assertEqual(len(written), 2)
+        self.assertEqual({result.id for result in results}, {"T01", "T02"})
+        error = next(result for result in results if result.id == "T02")
+        self.assertTrue(error.response.startswith("[ERROR] RuntimeError: boom"))
+        self.assertEqual(error.tokens.raw["error_kind"], "question_exception")
+        self.assertEqual(error.execution.latency_ms, 0)
+        self.assertEqual(error.analysis.inefficiency_mode, "provider_error")
+
+    def test_run_benchmark_emits_provider_error_rows_instead_of_empty_bucket(self) -> None:
+        questions = [
+            {
+                "id": "T01",
+                "question": "Question T01",
+                "expected_commands": ["od"],
+                "required_concepts": [],
+                "minimal_answer": "od file",
+                "tier": 1,
+            },
+            {
+                "id": "T02",
+                "question": "Question T02",
+                "expected_commands": ["cksum"],
+                "required_concepts": [],
+                "minimal_answer": "cksum file",
+                "tier": 1,
+            },
+        ]
+
+        def raising_batch(*_args, **_kwargs) -> list[QuestionResult]:
+            raise RuntimeError("provider offline")
+
+        with mock.patch.object(benchmark.runner, "already_completed", return_value=False), \
+                mock.patch.object(benchmark.runner, "load_existing_result", return_value=None), \
+                mock.patch.object(benchmark.runner, "write_incremental") as write_incremental_mock:
+            results = benchmark.runner.run_benchmark(
+                llms=["claude"],
+                questions=questions,
+                k=2,
+                judge=None,
+                delay=0.0,
+                timeout_seconds=30,
+                max_workers=1,
+                dry_run=False,
+                seed=123,
+                inject_posix=False,
+                execute=False,
+                claude_model="claude-opus-4-6",
+                run_provider_batch_fn=raising_batch,
+            )
+
+        self.assertIn("claude", results)
+        self.assertEqual(len(results["claude"]), 4)
+        self.assertTrue(all(result.response.startswith("[ERROR] provider batch failed: RuntimeError: provider offline") for result in results["claude"]))
+        self.assertTrue(all(result.tokens.raw["error_kind"] == "provider_batch_failure" for result in results["claude"]))
+        self.assertEqual({result.id for result in results["claude"]}, {"T01", "T02"})
+        self.assertEqual({result.run_k for result in results["claude"]}, {0, 1})
+        self.assertEqual(write_incremental_mock.call_count, 4)
+
+    def test_planned_result_helpers_support_denominator_metrics(self) -> None:
+        valid = make_result(
+            "T01",
+            response="od file",
+            tokens=TokenUsage(
+                input=10,
+                input_cached=0,
+                output=4,
+                thoughts=0,
+                billable=14,
+                raw={},
+            ),
+            latency_ms=100,
+            posix_compliant=True,
+        )
+        provider_error = make_result(
+            "T02",
+            response="[ERROR] timeout",
+            tokens=TokenUsage(
+                input=0,
+                input_cached=0,
+                output=0,
+                thoughts=0,
+                billable=0,
+                raw={"error_kind": "provider_batch_failure"},
+            ),
+            latency_ms=500,
+        )
+        results = [valid, provider_error]
+
+        self.assertEqual(planned_results_count(results, planned_total=3), 3)
+        self.assertEqual(provider_error_results_count(results), 1)
+        self.assertEqual(dropped_results_count(results, planned_total=3), 1)
+        self.assertAlmostEqual(planned_posix_compliance_rate(results, planned_total=3), 1 / 3)
+
+    def test_load_existing_result_rejects_missing_or_mismatched_provenance(self) -> None:
+        question = {
+            "id": "T29",
+            "question": "Portable arithmetic",
+            "expected_commands": ["expr"],
+            "required_concepts": ["expr or $(())"],
+            "minimal_answer": "expr '(' 3 + 5 ')' '*' 2",
+            "acceptable_answer_patterns": [{"label": "$(( ))", "pattern": r"\$\(\("}],
+            "required_concept_groups": [{"label": "expr or $(())", "patterns": [r"\bexpr\b", r"\$\(\("]}],
+            "tier": 1,
+        }
+        prompt = benchmark.runner._build_effective_prompt(question, inject_posix=False)
+        expected_provenance = benchmark.runner._result_provenance(question, prompt=prompt)
+
+        result = make_result(
+            "T29",
+            response="$(( (3 + 5) * 2 ))",
+            tokens=TokenUsage(
+                input=10,
+                input_cached=0,
+                output=4,
+                thoughts=0,
+                billable=14,
+                raw={},
+            ),
+            latency_ms=100,
+            posix_compliant=True,
+        )
+        payload = asdict(result)
+        payload.update(expected_provenance)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            original_results_dir = benchmark.config.RESULTS_DIR
+            benchmark.config.set_results_dir(Path(tmpdir))
+            try:
+                path = benchmark.runner.result_path("claude", "T29", 0)
+                path.parent.mkdir(parents=True, exist_ok=True)
+
+                path.write_text(json.dumps(payload, indent=2))
+                loaded = benchmark.runner.load_existing_result(
+                    "claude",
+                    question,
+                    0,
+                    expected_provenance=expected_provenance,
+                )
+                self.assertIsNotNone(loaded)
+
+                stale_payload = dict(payload)
+                stale_payload.pop("benchmark_data_sha256")
+                path.write_text(json.dumps(stale_payload, indent=2))
+                self.assertIsNone(
+                    benchmark.runner.load_existing_result(
+                        "claude",
+                        question,
+                        0,
+                        expected_provenance=expected_provenance,
+                    )
+                )
+
+                mismatch_payload = dict(payload)
+                mismatch_payload["question_sha256"] = "deadbeef"
+                path.write_text(json.dumps(mismatch_payload, indent=2))
+                self.assertIsNone(
+                    benchmark.runner.load_existing_result(
+                        "claude",
+                        question,
+                        0,
+                        expected_provenance=expected_provenance,
+                    )
+                )
+            finally:
+                benchmark.config.set_results_dir(original_results_dir)
+
+
+class GradeResponsePromptTests(unittest.TestCase):
+    def test_grade_response_prompt_includes_alternates_and_warning_guidance(self) -> None:
+        payload = json.loads(benchmark.DATA_FILE.read_text())
+        question = next(item for item in payload["questions"] if item["id"] == "T29")
+        captured: dict[str, str] = {}
+
+        def fake_invoke_cli(
+            judge: str,
+            prompt: str,
+            *,
+            timeout_seconds: int,
+            claude_model: str | None = None,
+            codex_model: str | None = None,
+        ) -> benchmark.CLIInvocation:
+            del judge, timeout_seconds, claude_model, codex_model
+            captured["prompt"] = prompt
+            return benchmark.CLIInvocation(
+                stdout='{"score": 2, "reason": "ok", "used_posix": true, "traps_hit": []}',
+                latency_ms=1,
+            )
+
+        with mock.patch.object(benchmark.runner.providers, "invoke_cli", side_effect=fake_invoke_cli):
+            grade = benchmark.runner.grade_response(
+                "claude",
+                question,
+                "$(( (3 + 5) * 2 ))",
+                timeout_seconds=30,
+            )
+
+        self.assertEqual(grade.score, 2)
+        self.assertIn("Acceptable alternate POSIX answers/patterns", captured["prompt"])
+        self.assertIn("$(( ))", captured["prompt"])
+        self.assertIn("Required concept groups", captured["prompt"])
+        self.assertIn("warnings or rejections do NOT count as suggesting them", captured["prompt"])
 
 
 if __name__ == "__main__":

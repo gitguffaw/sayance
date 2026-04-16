@@ -42,7 +42,7 @@ class ResponseAnalysisTests(unittest.TestCase):
         cls.questions = {
             question["id"]: question
             for question in payload["questions"]
-            if question["id"] in {"T03", "T06", "T15"}
+            if question["id"] in {"T03", "T06", "T15", "T25", "T29"}
         }
 
     def analyze(
@@ -92,6 +92,16 @@ class ResponseAnalysisTests(unittest.TestCase):
                 "Use sed -i 's/foo/bar/g' file",
                 benchmark.TRAP_PATTERNS_BY_ID["T03"][0].pattern,
             ),
+            (
+                "T25",
+                "Use md5sum file",
+                benchmark.TRAP_PATTERNS_BY_ID["T25"][0].pattern,
+            ),
+            (
+                "T29",
+                "Use let result=(3 + 5) * 2",
+                benchmark.TRAP_PATTERNS_BY_ID["T29"][0].pattern,
+            ),
         ]
 
         for question_id, response, expected_pattern in cases:
@@ -107,6 +117,68 @@ class ResponseAnalysisTests(unittest.TestCase):
 
         self.assertEqual(analysis.expected_command_hits, ["pax"])
         self.assertEqual(analysis.missing_required_concepts, ["not tar"])
+
+    def test_analyze_response_ignores_warning_only_trap_mentions(self) -> None:
+        cases = [
+            (
+                "T03",
+                (
+                    "Use sed s///g with no -i flag and redirect and mv: "
+                    "sed 's/foo/bar/g' file > tmp && mv tmp file. "
+                    "Do not use sed -i because it is not POSIX."
+                ),
+                [],
+                [],
+                ["sed"],
+            ),
+            (
+                "T06",
+                "Use pax -w -f archive.pax directory/. Avoid tar because it is not POSIX.",
+                [],
+                [],
+                ["pax"],
+            ),
+            (
+                "T25",
+                "Use cksum file. md5sum and sha256sum are not POSIX utilities.",
+                [],
+                [],
+                ["cksum"],
+            ),
+            (
+                "T29",
+                "$(( (3 + 5) * 2 )) is POSIX sh arithmetic. Avoid let because it is a bashism.",
+                ["quoting"],
+                [],
+                ["$(( ))"],
+            ),
+        ]
+
+        for question_id, response, expected_missing, forbidden_missing, expected_hits in cases:
+            with self.subTest(question_id=question_id):
+                analysis = self.analyze(question_id, response, output=24)
+
+                self.assertTrue(analysis.posix_compliant)
+                self.assertEqual(analysis.trap_hits, [])
+                for concept in expected_missing:
+                    self.assertIn(concept, analysis.missing_required_concepts)
+                for concept in forbidden_missing:
+                    self.assertNotIn(concept, analysis.missing_required_concepts)
+                for hit in expected_hits:
+                    self.assertIn(hit, analysis.expected_command_hits)
+
+    def test_analyze_response_accepts_t29_posix_arithmetic_without_expr(self) -> None:
+        response = (
+            "$(( (3 + 5) * 2 )) is POSIX sh arithmetic. "
+            "Do not use let because it is a bashism."
+        )
+
+        analysis = self.analyze("T29", response, output=16)
+
+        self.assertTrue(analysis.posix_compliant)
+        self.assertIn("$(( ))", analysis.expected_command_hits)
+        self.assertNotIn("expr or $(())", analysis.missing_required_concepts)
+        self.assertNotIn("no let", analysis.missing_required_concepts)
 
     def test_analyze_response_marks_issue8_refusal(self) -> None:
         response = (

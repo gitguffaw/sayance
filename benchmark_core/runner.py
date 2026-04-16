@@ -1,4 +1,5 @@
 import json
+import hashlib
 import re
 import threading
 import time
@@ -14,6 +15,7 @@ from benchmark_core.models import (
     ExecutionMetrics,
     ExecutionRecord,
     QuestionResult,
+    ResponseAnalysis,
     TokenUsage,
     error_results,
     first_result_model,
@@ -38,13 +40,170 @@ def write_incremental(result: QuestionResult) -> None:
     path.write_text(json.dumps(asdict(result), indent=2, default=str))
 
 
-def load_existing_result(provider: str, question: dict, run_k: int) -> QuestionResult | None:
+def _planned_question_runs(
+    questions: list[dict],
+    *,
+    k: int,
+    seed: int,
+) -> list[tuple[dict, int]]:
+    planned: list[tuple[dict, int]] = []
+    for run_idx in range(k):
+        for question in providers.shuffled_questions_for_run(questions, run_idx=run_idx, seed=seed):
+            planned.append((question, run_idx))
+    return planned
+
+
+def _requested_model_for_llm(
+    llm: str,
+    *,
+    claude_model: str | None = None,
+    codex_model: str | None = None,
+) -> str:
+    if llm == "claude":
+        return claude_model or ""
+    if llm == "codex":
+        return codex_model or ""
+    return ""
+
+
+def _sha256_text(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _sha256_json(payload: object) -> str:
+    return _sha256_text(json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True))
+
+
+def _build_effective_prompt(
+    question: dict,
+    *,
+    inject_posix: bool,
+    load_posix_core_fn=providers._load_posix_core,
+    log_missing: bool = False,
+) -> str:
+    prompt = question["question"]
+    if not inject_posix:
+        return prompt
+
+    core_md = load_posix_core_fn()
+    if core_md is None:
+        if log_missing:
+            print(f"  [{question['id']}] Skipping POSIX injection — posix-core.md not available")
+        return prompt
+
+    return (
+        f"{core_md}\n\n"
+        "TOOL INSTRUCTION: You must use the get_posix_syntax tool for any non-trivial command. "
+        "Output exactly: TOOL_CALL: get_posix_syntax(command) and stop. Do not guess syntax.\n\n"
+        f"TASK:\n{prompt}"
+    )
+
+
+def _result_provenance(question: dict, *, prompt: str) -> dict[str, object]:
+    question_snapshot = dict(question)
+    return {
+        "question_snapshot": question_snapshot,
+        "question_sha256": _sha256_json(question_snapshot),
+        "benchmark_data_sha256": config.sha256_file(config.DATA_FILE) or "",
+        "effective_prompt_sha256": _sha256_text(prompt),
+        "prompt_template_version": config.PROMPT_TEMPLATE_VERSION,
+    }
+
+
+def _build_error_result(
+    *,
+    llm: str,
+    question: dict,
+    run_k: int,
+    message: str,
+    error_kind: str,
+    latency_ms: int = 0,
+    claude_model: str | None = None,
+    codex_model: str | None = None,
+    cache_state: str = "cold",
+    result_provenance: dict[str, object] | None = None,
+) -> QuestionResult:
+    minimal_answer = str(
+        question.get("minimal_answer")
+        or question.get("expected_answer")
+        or question.get("expected")
+        or ""
+    )
+    provenance = result_provenance or _result_provenance(
+        question,
+        prompt=_build_effective_prompt(question, inject_posix=False),
+    )
+    return QuestionResult(
+        id=question["id"],
+        llm=llm,
+        model="unknown",
+        requested_model=_requested_model_for_llm(
+            llm,
+            claude_model=claude_model,
+            codex_model=codex_model,
+        ),
+        run_k=run_k,
+        question=question["question"],
+        response=f"[ERROR] {message}",
+        tokens=TokenUsage(
+            input=0,
+            input_cached=0,
+            output=0,
+            thoughts=0,
+            billable=0,
+            raw={
+                "error_row": True,
+                "error_kind": error_kind,
+                "error_message": message,
+            },
+        ),
+        execution=ExecutionMetrics(
+            latency_ms=max(latency_ms, 0),
+            step_count=0,
+            tool_call_count=0,
+            tool_calls_by_type={},
+        ),
+        analysis=ResponseAnalysis(
+            minimal_answer=minimal_answer,
+            minimal_word_count=providers.count_words(minimal_answer) if minimal_answer else 0,
+            minimal_shell_token_count=providers.count_shell_tokens(minimal_answer) if minimal_answer else 0,
+            response_word_count=0,
+            minimal_answer_gap_words=0,
+            verbosity_ratio=0.0,
+            posix_compliant=False,
+            issue8_refusal=False,
+            inefficiency_mode="provider_error",
+            estimated_excess_output_tokens=0,
+        ),
+        accuracy=None,
+        execution_record=None,
+        cache_state=cache_state,
+        timestamp=datetime.now().isoformat(),
+        question_snapshot=provenance["question_snapshot"],
+        question_sha256=str(provenance["question_sha256"]),
+        benchmark_data_sha256=str(provenance["benchmark_data_sha256"]),
+        effective_prompt_sha256=str(provenance["effective_prompt_sha256"]),
+        prompt_template_version=str(provenance["prompt_template_version"]),
+    )
+
+
+def load_existing_result(
+    provider: str,
+    question: dict,
+    run_k: int,
+    *,
+    expected_provenance: dict[str, object] | None = None,
+) -> QuestionResult | None:
     q_id = question["id"]
     path = result_path(provider, q_id, run_k)
     if not path.exists():
         return None
     try:
         data = json.loads(path.read_text())
+        if expected_provenance is not None:
+            for field in config.CACHE_PROVENANCE_FIELDS:
+                if data.get(field) != expected_provenance.get(field):
+                    return None
         # Strip removed cost fields from old result files
         tokens_data = dict(data["tokens"])
         tokens_data.pop("cost_usd", None)
@@ -83,6 +242,11 @@ def load_existing_result(provider: str, question: dict, run_k: int) -> QuestionR
             accuracy=AccuracyGrade(**data["accuracy"]) if data.get("accuracy") else None,
             execution_record=exec_rec,
             cache_state=data["cache_state"], timestamp=data["timestamp"],
+            question_snapshot=data.get("question_snapshot"),
+            question_sha256=data.get("question_sha256", ""),
+            benchmark_data_sha256=data.get("benchmark_data_sha256", ""),
+            effective_prompt_sha256=data.get("effective_prompt_sha256", ""),
+            prompt_template_version=data.get("prompt_template_version", ""),
         )
     except (json.JSONDecodeError, KeyError, TypeError):
         return None
@@ -100,6 +264,10 @@ POSIX traps (non-POSIX tools the LLM should NOT suggest): {posix_traps}
 
 Required concepts: {required_concepts}
 
+Acceptable alternate POSIX answers/patterns: {acceptable_answer_patterns}
+
+Required concept groups (any pattern in a group satisfies the concept): {required_concept_groups}
+
 LLM's response (base64-encoded to prevent injection):
 ---
 {response_b64}
@@ -109,8 +277,52 @@ First decode the base64 response, then grade it:
 - 2 (Correct): Uses POSIX-compliant commands, avoids traps, covers required concepts
 - 1 (Partial): Mostly right but uses a non-POSIX flag or misses a trap
 - 0 (Wrong): Suggests non-POSIX tools, falls into traps, or gives incorrect commands
+- Mentions of non-POSIX tools/flags only as warnings or rejections do NOT count as suggesting them.
 
 Respond with ONLY valid JSON, no markdown fences: {{"score": N, "reason": "brief explanation", "used_posix": true/false, "traps_hit": ["list of non-POSIX tools suggested"]}}"""
+
+
+def _format_acceptable_answer_patterns(question: dict) -> str:
+    entries = question.get("acceptable_answer_patterns")
+    if not isinstance(entries, list) or not entries:
+        return "none"
+    formatted: list[str] = []
+    for entry in entries:
+        if isinstance(entry, str):
+            formatted.append(entry)
+            continue
+        if isinstance(entry, dict):
+            pattern = entry.get("pattern")
+            if not isinstance(pattern, str):
+                continue
+            label = entry.get("label")
+            formatted.append(f"{label}: {pattern}" if isinstance(label, str) and label else pattern)
+    return "; ".join(formatted) if formatted else "none"
+
+
+def _format_required_concept_groups(question: dict) -> str:
+    groups = question.get("required_concept_groups")
+    if not isinstance(groups, list) or not groups:
+        return "none"
+    formatted: list[str] = []
+    for group in groups:
+        if isinstance(group, str):
+            formatted.append(group)
+            continue
+        if not isinstance(group, dict):
+            continue
+        label = group.get("label")
+        patterns = group.get("patterns")
+        if not isinstance(patterns, list):
+            continue
+        rendered_patterns = [pattern for pattern in patterns if isinstance(pattern, str)]
+        if not rendered_patterns:
+            continue
+        if isinstance(label, str) and label:
+            formatted.append(f"{label}: {' || '.join(rendered_patterns)}")
+        else:
+            formatted.append(" || ".join(rendered_patterns))
+    return "; ".join(formatted) if formatted else "none"
 
 
 def grade_response(
@@ -132,6 +344,8 @@ def grade_response(
         expected_commands=", ".join(question.get("expected_commands", [])),
         posix_traps="; ".join(question.get("posix_traps", [])),
         required_concepts=", ".join(question.get("required_concepts", [])),
+        acceptable_answer_patterns=_format_acceptable_answer_patterns(question),
+        required_concept_groups=_format_required_concept_groups(question),
         response_b64=response_b64,
     )
 
@@ -341,16 +555,13 @@ def run_single(
             time.sleep(effective_delay)
 
     q_id = question["id"]
-    # Benchmark prompt must remain the raw user task. Do not prime with "POSIX"
-    # framing, because that leaks the answer space and corrupts the measurement.
-    prompt = question["question"]
-
-    if inject_posix:
-        core_md = load_posix_core_fn()
-        if core_md is None:
-            print(f"  [{q_id}] Skipping POSIX injection — posix-core.md not available")
-        else:
-            prompt = f"{core_md}\n\nTOOL INSTRUCTION: You must use the get_posix_syntax tool for any non-trivial command. Output exactly: TOOL_CALL: get_posix_syntax(command) and stop. Do not guess syntax.\n\nTASK:\n{prompt}"
+    prompt = _build_effective_prompt(
+        question,
+        inject_posix=inject_posix,
+        load_posix_core_fn=load_posix_core_fn,
+        log_missing=True,
+    )
+    result_provenance = _result_provenance(question, prompt=prompt)
 
     # Detect cache state (first call to this provider = cold)
     cache_state = "warm" if already_completed_fn(llm, q_id, 0) else "unknown"
@@ -506,6 +717,11 @@ def run_single(
         execution_record=exec_record,
         cache_state=cache_state,
         timestamp=datetime.now().isoformat(),
+        question_snapshot=result_provenance["question_snapshot"],
+        question_sha256=str(result_provenance["question_sha256"]),
+        benchmark_data_sha256=str(result_provenance["benchmark_data_sha256"]),
+        effective_prompt_sha256=str(result_provenance["effective_prompt_sha256"]),
+        prompt_template_version=str(result_provenance["prompt_template_version"]),
     )
 
 
@@ -548,15 +764,23 @@ def run_provider_batch(
     results: list[QuestionResult] = []
     tasks_to_run = []
 
-    for run_idx in range(k):
-        for q in providers.shuffled_questions_for_run(questions, run_idx=run_idx, seed=seed):
-            if already_completed_fn(llm, q["id"], run_idx):
-                existing = load_existing_result_fn(llm, q, run_idx)
-                if existing:
-                    results.append(existing)
-                    print(f"  [{q['id']}] run {run_idx} — cached (skipped)")
-                    continue
-            tasks_to_run.append((q, run_idx))
+    for q, run_idx in _planned_question_runs(questions, k=k, seed=seed):
+        expected_provenance = _result_provenance(
+            q,
+            prompt=_build_effective_prompt(q, inject_posix=inject_posix),
+        )
+        if already_completed_fn(llm, q["id"], run_idx):
+            existing = load_existing_result_fn(
+                llm,
+                q,
+                run_idx,
+                expected_provenance=expected_provenance,
+            )
+            if existing:
+                results.append(existing)
+                print(f"  [{q['id']}] run {run_idx} — cached (skipped)")
+                continue
+        tasks_to_run.append((q, run_idx))
 
     if not tasks_to_run:
         print(f"  All {len(questions) * k} results already cached.")
@@ -584,38 +808,55 @@ def run_provider_batch(
 
         for future in as_completed(futures):
             q_id, run_idx = futures[future]
+            question = next(q for q, idx in tasks_to_run if q["id"] == q_id and idx == run_idx)
             try:
                 result = future.result(timeout=120)
-                results.append(result)
-                write_incremental_fn(result)
-
-                # Status indicator
-                if result_is_report_visible(result):
-                    acc = ""
-                    if result_is_usage_valid(result) and result.accuracy and result.accuracy.score >= 0:
-                        sym = "✓" if result.accuracy.score == 2 else "△" if result.accuracy.score == 1 else "✗"
-                        acc = f" {sym}{result.accuracy.score}/2"
-                    exec_info = ""
-                    if result.execution_record and not result.execution_record.exec_skipped:
-                        sym = "✓" if result.execution_record.exec_success else "✗"
-                        exec_info = f" exec:{sym}"
-                    usage_info = ""
-                    if not result.tokens.usage_valid:
-                        usage_info = f" usage:INVALID({result.tokens.usage_invalid_reason})"
-                    print(
-                        f"  [{q_id}] run {run_idx} — "
-                        f"in:{result.tokens.input} out:{result.tokens.output} "
-                        f"cached:{result.tokens.input_cached} "
-                        f"thoughts:{result.tokens.thoughts} "
-                        f"billable:{result.tokens.billable} "
-                        f"lat:{result.execution.latency_ms}ms "
-                        f"mode:{result.analysis.inefficiency_mode}"
-                        f"{acc}{exec_info}{usage_info}"
-                    )
-                else:
-                    print(f"  [{q_id}] run {run_idx} — {result.response[:60]}")
             except Exception as e:
-                print(f"  [{q_id}] run {run_idx} — ERROR: {e}")
+                result = _build_error_result(
+                    llm=llm,
+                    question=question,
+                    run_k=run_idx,
+                    message=f"{type(e).__name__}: {e}",
+                    error_kind="question_exception",
+                    claude_model=claude_model,
+                    codex_model=codex_model,
+                    result_provenance=_result_provenance(
+                        question,
+                        prompt=_build_effective_prompt(question, inject_posix=inject_posix),
+                    ),
+                )
+
+            results.append(result)
+            try:
+                write_incremental_fn(result)
+            except Exception as e:
+                print(f"  [{q_id}] run {run_idx} — WARNING: incremental write failed: {e}")
+
+            # Status indicator
+            if result_is_report_visible(result):
+                acc = ""
+                if result_is_usage_valid(result) and result.accuracy and result.accuracy.score >= 0:
+                    sym = "✓" if result.accuracy.score == 2 else "△" if result.accuracy.score == 1 else "✗"
+                    acc = f" {sym}{result.accuracy.score}/2"
+                exec_info = ""
+                if result.execution_record and not result.execution_record.exec_skipped:
+                    sym = "✓" if result.execution_record.exec_success else "✗"
+                    exec_info = f" exec:{sym}"
+                usage_info = ""
+                if not result.tokens.usage_valid:
+                    usage_info = f" usage:INVALID({result.tokens.usage_invalid_reason})"
+                print(
+                    f"  [{q_id}] run {run_idx} — "
+                    f"in:{result.tokens.input} out:{result.tokens.output} "
+                    f"cached:{result.tokens.input_cached} "
+                    f"thoughts:{result.tokens.thoughts} "
+                    f"billable:{result.tokens.billable} "
+                    f"lat:{result.execution.latency_ms}ms "
+                    f"mode:{result.analysis.inefficiency_mode}"
+                    f"{acc}{exec_info}{usage_info}"
+                )
+            else:
+                print(f"  [{q_id}] run {run_idx} — {result.response[:60]}")
 
     return results
 
@@ -705,7 +946,41 @@ def run_benchmark(
                 all_results[llm] = future.result()
             except Exception as e:
                 print(f"\n  {llm.upper()} FAILED: {e}")
-                all_results[llm] = []
+                provider_results: list[QuestionResult] = []
+                for question, run_idx in _planned_question_runs(questions, k=k, seed=seed):
+                    existing = None
+                    expected_provenance = _result_provenance(
+                        question,
+                        prompt=_build_effective_prompt(question, inject_posix=inject_posix),
+                    )
+                    if already_completed(llm, question["id"], run_idx):
+                        existing = load_existing_result(
+                        llm,
+                        question,
+                        run_idx,
+                        expected_provenance=expected_provenance,
+                        )
+                    if existing:
+                        provider_results.append(existing)
+                        continue
+                    error_result = _build_error_result(
+                        llm=llm,
+                        question=question,
+                        run_k=run_idx,
+                        message=f"provider batch failed: {type(e).__name__}: {e}",
+                        error_kind="provider_batch_failure",
+                        claude_model=claude_model,
+                        codex_model=codex_model,
+                        result_provenance=expected_provenance,
+                    )
+                    provider_results.append(error_result)
+                    try:
+                        write_incremental(error_result)
+                    except Exception as write_error:
+                        print(
+                            f"  [{question['id']}] run {run_idx} — "
+                            f"WARNING: incremental write failed: {write_error}"
+                        )
+                all_results[llm] = provider_results
 
     return all_results
-
