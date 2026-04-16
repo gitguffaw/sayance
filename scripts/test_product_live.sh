@@ -5,6 +5,15 @@ set -euo pipefail
 # runs prompts through Claude/Codex CLI, and asserts the response
 # recommends the correct POSIX utility (pax not tar, od not xxd).
 #
+# The assertion requires a word-boundary hit on the expected utility
+# AND no non-negated mention of the trap utility. Phrases like "Use pax.
+# Avoid tar." count as correct — see scripts/canary_assert.py.
+#
+# Canary failures are emitted as WARN, not hard failures, because LLM
+# responses are nondeterministic. Only infrastructure errors set a
+# non-zero exit code. Gate on WARN-in-stderr if you need stricter
+# enforcement.
+#
 # Gated on SAYANCE_LIVE_CANARY=1.  Usage:
 #   SAYANCE_LIVE_CANARY=1 ./scripts/test_product_live.sh [claude|codex|all]
 
@@ -157,19 +166,24 @@ run_canary() {
     return 1
   fi
 
-  # Assertion: lowercase substring match
-  lower="$(echo "$response" | tr '[:upper:]' '[:lower:]')"
-  pass="true"
-  if ! echo "$lower" | grep -q "$expected"; then
+  # Assertion: word-boundary match on expected utility AND no non-negated
+  # trap mention. Delegates to scripts/canary_assert.py, which reuses
+  # benchmark_core.providers._trap_match_is_negated so phrases like
+  # "Use pax. Avoid tar." count as correct.
+  local assert_reason
+  if assert_reason="$(printf '%s' "$response" | python3 "${REPO_DIR}/scripts/canary_assert.py" --expected "$expected" --trap "$trap_util" 2>&1 >/dev/null)"; then
+    pass="true"
+  else
     pass="false"
   fi
 
   # Emit telemetry
   emit_telemetry "$canary" "$provider" "$expected" "$trap_util" "$pass" "$response" "$latency_s"
 
-  # Report result — failures are WARN (informational), not hard failures
+  # Report result — failures are WARN (informational), not hard failures.
+  # Callers that want to gate on canary outcome should grep stderr for WARN.
   if [[ "$pass" == "false" ]]; then
-    echo "WARN: ${provider} canary '${canary}' — expected '${expected}' not found in response" >&2
+    echo "WARN: ${provider} canary '${canary}' — ${assert_reason#FAIL: }" >&2
     triage_failure "$response"
   else
     echo "PASS: ${provider} canary '${canary}' — found '${expected}'" >&2
