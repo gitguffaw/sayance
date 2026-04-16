@@ -1,6 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+check_old_brand_artifacts() {
+  local found_old_brand="0"
+
+  if [[ -d "${HOME}/.claude/skills/posix" ]]; then
+    found_old_brand="1"
+  fi
+
+  if [[ -d "${HOME}/.codex/skills/posix" ]]; then
+    found_old_brand="1"
+  fi
+
+  if [[ "${found_old_brand}" == "1" ]]; then
+    echo "Notice: detected old-brand skill artifacts under ~/.claude/skills/posix and/or ~/.codex/skills/posix."
+    echo "Notice: to remove them safely, run scripts/uninstall-old-brand.sh from a local checkout."
+    echo ""
+  fi
+}
+
 # POSIX Semantic Bridge — one-line installer
 # Usage: curl -fsSL https://raw.githubusercontent.com/gitguffaw/posix/main/install.sh | bash
 #
@@ -9,6 +27,8 @@ set -euo pipefail
 
 readonly REPO_RAW="https://raw.githubusercontent.com/gitguffaw/posix/main"
 readonly TARGET="${1:-all}"
+
+check_old_brand_artifacts
 
 install_for() {
   local agent="$1"
