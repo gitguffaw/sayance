@@ -20,12 +20,12 @@ check_old_brand_artifacts() {
 }
 
 # Sayance — one-line installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/gitguffaw/posix/main/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/main/install.sh | bash
 #
 # Installs the Sayance skill for Claude Code and/or Codex CLI.
 # Pass "claude", "codex", or "all" (default) as an argument.
 
-readonly REPO_RAW="https://raw.githubusercontent.com/gitguffaw/posix/main"
+readonly REPO_RAW="https://raw.githubusercontent.com/gitguffaw/sayance/main"
 readonly TARGET="${1:-all}"
 
 check_old_brand_artifacts

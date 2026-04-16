@@ -126,13 +126,13 @@ No virtualenv needed. Pure stdlib Python 3.
 
 ```bash
 # Claude Code + Codex
-curl -fsSL https://raw.githubusercontent.com/gitguffaw/posix/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/main/install.sh | bash
 
 # Claude Code only
-curl -fsSL https://raw.githubusercontent.com/gitguffaw/posix/main/install.sh | bash -s claude
+curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/main/install.sh | bash -s claude
 
 # Codex only
-curl -fsSL https://raw.githubusercontent.com/gitguffaw/posix/main/install.sh | bash -s codex
+curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/main/install.sh | bash -s codex
 ```
 
 ### Codex native installer
@@ -140,13 +140,13 @@ curl -fsSL https://raw.githubusercontent.com/gitguffaw/posix/main/install.sh | b
 From inside a Codex session:
 
 ```
-$skill-installer install https://github.com/gitguffaw/posix/tree/main/skill
+$skill-installer install https://github.com/gitguffaw/sayance/tree/main/skill
 ```
 
 ### From source
 
 ```bash
-git clone https://github.com/gitguffaw/posix.git
+git clone https://github.com/gitguffaw/sayance.git
 cd posix
 make install         # both Claude + Codex
 make install-claude  # Claude Code only
