@@ -5,7 +5,7 @@ Thanks for your interest. Sayance is a small, focused two-layer reference inject
 ## Quick Start
 
 ```bash
-git clone https://github.com/gitguffaw/sayance.git
+git clone https://github.com/gitguffaw/posix.git
 cd posix
 make verify        # runs all validation checks
 sayance-lookup pax   # confirm the CLI works
