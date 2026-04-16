@@ -1,6 +1,6 @@
-# Contributing to POSIX Semantic Bridge
+# Contributing to Sayance
 
-Thanks for your interest. This project is small and focused — a two-layer reference injection system that helps LLMs discover and correctly use the 142 macOS-available POSIX.1-2024 utilities. Contributions that improve coverage, fix incorrect syntax entries, or strengthen the benchmark are welcome.
+Thanks for your interest. Sayance is a small, focused two-layer reference injection system that helps LLMs discover and correctly use the 142 macOS-available POSIX.1-2024 utilities. Contributions that improve coverage, fix incorrect syntax entries, or strengthen the benchmark are welcome.
 
 ## Quick Start
 

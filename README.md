@@ -1,4 +1,6 @@
-# posix
+# Sayance
+
+*Semantic AnalYsis And Natural Command Engine*
 
 In 1986, Jon Bentley challenged Donald Knuth — the legendary author of *The Art of Computer Programming* — to demonstrate his new literate-programming system (WEB) in the "Programming Pearls" column of *Communications of the ACM*. The task was simple: read a text file and output the N most frequently occurring words along with their counts, sorted by frequency.
 
@@ -21,13 +23,13 @@ That was 1986. Today, LLMs have the same blind spot Knuth had — they reach for
 
 **LLMs don't know the shell tools that already exist.** They reach for `tar` when `pax` is right there. They write Python scripts to hex-dump a file instead of calling `od`. They reject `readlink` as "not POSIX" even though it's been standard since 2024. Every wrong tool is wasted tokens, wasted time, and a fragile non-portable script you now have to maintain.
 
-This project fixes that with a two-layer reference injection system — and proves it works across Claude, Codex, and Gemini.
+**Sayance** fixes that with a two-layer reference injection system — and proves it works across Claude, Codex, and Gemini.
 
 ## How It Works
 
 The fix isn't more training data. LLMs already *know* what `comm`, `paste`, `tsort`, and `csplit` do — they just don't reach for them. Training data is dominated by GNU/Linux blog posts and Stack Overflow answers, so the model's prior overwhelmingly favors `tar` over `pax` even when it knows both exist ([Patil et al., "Gorilla," 2023](https://arxiv.org/abs/2305.15334) — name familiarity bias is the #1 cause of wrong tool selection in LLM function-calling benchmarks).
 
-The bridge doesn't teach. It *activates recall*. Two layers, each doing one job:
+Sayance doesn't teach. It *activates recall*. Two layers, each doing one job:
 
 ### Layer 1: Discovery Map — "What exists"
 
@@ -114,7 +116,7 @@ Current benchmark artifacts use two denominator styles:
 
 Pre-hardening runs may only expose the visible-row denominator and may not include a provenance block or planned-result counts.
 
-The `--execute` flag enables Command Verification, which runs extracted commands against fixtures and validates output. `30/40` questions currently have execution fixtures; `T31`-`T40` remain unverified. The working hypothesis is that the bridge's upfront cost can still be worthwhile if it reduces retry loops and wrong-tool detours downstream.
+The `--execute` flag enables Command Verification, which runs extracted commands against fixtures and validates output. `30/40` questions currently have execution fixtures; `T31`-`T40` remain unverified. The working hypothesis is that Sayance's upfront cost can still be worthwhile if it reduces retry loops and wrong-tool detours downstream.
 
 ## Install the Skill
 

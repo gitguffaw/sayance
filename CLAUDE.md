@@ -16,12 +16,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 LLMs are blind to most POSIX utilities. They reach for `tar` instead of `pax`, write Python scripts instead of calling `od`, and reject `readlink` as "not POSIX." Every wrong tool wastes tokens, wastes time, and produces fragile non-portable code.
 
-**This project builds the semantic bridge that fixes that.** A two-layer reference injection system gives LLMs just enough context to discover and correctly use the 142 POSIX.1-2024 (Issue 8) utilities available on macOS — saving both time and tokens. (POSIX defines 155; 13 are excluded because Apple has never shipped them. See `docs/macos-excluded-utilities.md`.)
+**Sayance is the semantic bridge that fixes that.** A two-layer reference injection system gives LLMs just enough context to discover and correctly use the 142 POSIX.1-2024 (Issue 8) utilities available on macOS — saving both time and tokens. (POSIX defines 155; 13 are excluded because Apple has never shipped them. See `docs/macos-excluded-utilities.md`.)
 
 - **Discovery Map (`posix-core.md` / `skill/SKILL.md`):** ~925-token semantic map injected into agent context via Claude Code skill. Tells the LLM what exists.
 - **Syntax Lookup (`posix-lookup` CLI):** Zero-dependency executable Python 3 CLI backed by `posix-tldr.json`, called via bash. Tells the LLM how to use it correctly. No MCP — zero schema token overhead.
 
-The benchmark (`run_benchmark.py`) is a utility for proving the solution works — it is not the product. The product is the bridge.
+The benchmark (`run_benchmark.py`) is a utility for proving the solution works — it is not the product. The product is Sayance.
 
 Validation uses two paths:
 - Simulation Testing (legacy, unchanged): benchmark simulation path for comparability.
