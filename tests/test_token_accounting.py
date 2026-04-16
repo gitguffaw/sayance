@@ -1268,5 +1268,42 @@ class GradeResponsePromptTests(unittest.TestCase):
         self.assertIn("warnings or rejections do NOT count as suggesting them", captured["prompt"])
 
 
+class InvokeCliBytesRegressionTests(unittest.TestCase):
+    """Regression: subprocess.TimeoutExpired.stderr can be bytes even when
+    text=True was passed, which previously caused json.dumps to raise
+    'Object of type bytes is not JSON serializable' inside invoke_cli."""
+
+    def test_invoke_cli_handles_bytes_stderr_from_timeout(self) -> None:
+        import subprocess
+        from benchmark_core import providers as providers_module
+
+        timeout_exc = subprocess.TimeoutExpired(cmd=["codex"], timeout=1)
+        timeout_exc.stderr = b"partial stderr \xff\xfe bytes"
+        timeout_exc.stdout = None
+
+        with mock.patch.object(providers_module.subprocess, "run", side_effect=timeout_exc):
+            invocation = benchmark.invoke_cli("codex", "prompt", timeout_seconds=1)
+
+        # Must not raise, and stdout must be valid JSON parseable text.
+        payload = json.loads(invocation.stdout)
+        self.assertEqual(payload["error"], "timeout")
+        self.assertIsInstance(payload["stderr"], str)
+
+    def test_invoke_cli_handles_str_stderr_from_timeout(self) -> None:
+        import subprocess
+        from benchmark_core import providers as providers_module
+
+        timeout_exc = subprocess.TimeoutExpired(cmd=["codex"], timeout=1)
+        timeout_exc.stderr = "normal text stderr"
+        timeout_exc.stdout = None
+
+        with mock.patch.object(providers_module.subprocess, "run", side_effect=timeout_exc):
+            invocation = benchmark.invoke_cli("codex", "prompt", timeout_seconds=1)
+
+        payload = json.loads(invocation.stdout)
+        self.assertEqual(payload["error"], "timeout")
+        self.assertEqual(payload["stderr"], "normal text stderr")
+
+
 if __name__ == "__main__":
     unittest.main()

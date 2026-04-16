@@ -267,7 +267,14 @@ def invoke_cli(
         return CLIInvocation(stdout=strip_cli_noise(result.stdout), latency_ms=latency_ms)
     except subprocess.TimeoutExpired as exc:
         latency_ms = int((time.perf_counter() - started) * 1000)
-        stderr_hint = exc.stderr.strip()[:200] if exc.stderr else ""
+        # TimeoutExpired.stderr can be bytes even when text=True was passed if the
+        # process is killed before stdio decoding completes (documented Python
+        # behavior). Normalize to str so downstream JSON serialization never sees
+        # bytes, and use errors="replace" so invalid UTF-8 cannot surface as bytes.
+        raw_stderr = exc.stderr
+        if isinstance(raw_stderr, bytes):
+            raw_stderr = raw_stderr.decode("utf-8", errors="replace")
+        stderr_hint = raw_stderr.strip()[:200] if raw_stderr else ""
         return CLIInvocation(
             stdout=f'{{"error": "timeout", "stderr": {json.dumps(stderr_hint)}}}',
             latency_ms=latency_ms,
