@@ -212,7 +212,7 @@ Before finalizing, count tokens with tiktoken `o200k_base` (the cross-model refe
 ```python
 import tiktoken
 enc = tiktoken.get_encoding("o200k_base")
-with open("posix-core.md") as f:
+with open("sayance-core.md") as f:
     tokens = enc.encode(f.read())
 print(f"Token count: {len(tokens)}")
 ```

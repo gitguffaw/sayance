@@ -213,7 +213,7 @@ Session 2: Bridge-Aided, all models, k=5
 ```
 
 **4. Control for the injection cost**
-Bridge-Aided prepends `posix-core.md` (~800 tokens) to every prompt. This increases input tokens by a fixed amount. When comparing total billable tokens, **subtract the injection overhead** to isolate the actual efficiency gain:
+Bridge-Aided prepends `sayance-core.md` (~800 tokens) to every prompt. This increases input tokens by a fixed amount. When comparing total billable tokens, **subtract the injection overhead** to isolate the actual efficiency gain:
 
 ```
 net_savings = (track1_billable - track2_billable) + injection_overhead_per_question

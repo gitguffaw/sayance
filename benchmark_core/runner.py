@@ -88,7 +88,7 @@ def _build_effective_prompt(
     core_md = load_posix_core_fn()
     if core_md is None:
         if log_missing:
-            print(f"  [{question['id']}] Skipping POSIX injection — posix-core.md not available")
+            print(f"  [{question['id']}] Skipping POSIX injection — sayance-core.md not available")
         return prompt
 
     return (
@@ -415,7 +415,7 @@ def validate_posix_bridge(
     try:
         tldr = providers._load_posix_tldr()
     except (FileNotFoundError, json.JSONDecodeError) as e:
-        return [f"Could not load {config.POSIX_TLDR_FILE.name}: {e}"]
+        return [f"Could not load {config.SAYANCE_TLDR_FILE.name}: {e}"]
 
     try:
         utilities = providers._load_posix_utilities()
@@ -424,7 +424,7 @@ def validate_posix_bridge(
 
     core_text = providers._load_posix_core()
     if core_text is None:
-        errors.append(f"Could not load {config.POSIX_CORE_FILE.name}.")
+        errors.append(f"Could not load {config.SAYANCE_CORE_FILE.name}.")
         core_text = ""
     core_lower = core_text.lower()
 
@@ -457,14 +457,14 @@ def validate_posix_bridge(
     if missing_expected_tldr:
         errors.append(
             "Missing expected commands in "
-            f"{config.POSIX_TLDR_FILE.name}: {preview(missing_expected_tldr)}"
+            f"{config.SAYANCE_TLDR_FILE.name}: {preview(missing_expected_tldr)}"
         )
 
     missing_expected_core = [cmd for cmd in bridged_expected if not in_core(cmd)]
     if missing_expected_core:
         errors.append(
             "Missing expected commands in "
-            f"{config.POSIX_CORE_FILE.name}: {preview(missing_expected_core)}"
+            f"{config.SAYANCE_CORE_FILE.name}: {preview(missing_expected_core)}"
         )
 
     empty_tldr_entries = sorted(
@@ -473,21 +473,21 @@ def validate_posix_bridge(
         if not isinstance(value, list) or not any(isinstance(item, str) and item.strip() for item in value)
     )
     if empty_tldr_entries:
-        errors.append(f"Empty or invalid entries in {config.POSIX_TLDR_FILE.name}: {preview(empty_tldr_entries)}")
+        errors.append(f"Empty or invalid entries in {config.SAYANCE_TLDR_FILE.name}: {preview(empty_tldr_entries)}")
 
     if require_full_coverage:
         missing_tldr_utility = [name for name in utilities if name not in tldr_keys]
         if missing_tldr_utility:
             errors.append(
                 "Missing POSIX utilities in "
-                f"{config.POSIX_TLDR_FILE.name}: {preview(missing_tldr_utility)}"
+                f"{config.SAYANCE_TLDR_FILE.name}: {preview(missing_tldr_utility)}"
             )
 
         missing_core_utility = [name for name in utilities if not in_core(name)]
         if missing_core_utility:
             errors.append(
                 "Missing POSIX utilities in "
-                f"{config.POSIX_CORE_FILE.name}: {preview(missing_core_utility)}"
+                f"{config.SAYANCE_CORE_FILE.name}: {preview(missing_core_utility)}"
             )
 
         # SKILL.md coverage: every POSIX utility must appear in the skill file.
@@ -515,7 +515,7 @@ def validate_posix_bridge(
         if unknown_tldr_entries:
             errors.append(
                 "Unknown utility keys in "
-                f"{config.POSIX_TLDR_FILE.name}: {preview(unknown_tldr_entries)}"
+                f"{config.SAYANCE_TLDR_FILE.name}: {preview(unknown_tldr_entries)}"
             )
 
     return errors
@@ -609,7 +609,7 @@ def run_single(
                     ],
                 )
             except (FileNotFoundError, json.JSONDecodeError):
-                syntax = ["Error reading posix-tldr.json"]
+                syntax = ["Error reading sayance-tldr.json"]
 
             tool_call = f"TOOL_CALL: get_posix_syntax({cmd})"
             run1_response_text = response_text

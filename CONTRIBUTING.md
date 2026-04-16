@@ -1,6 +1,6 @@
-# Contributing to POSIX Semantic Bridge
+# Contributing to Sayance
 
-Thanks for your interest. This project is small and focused — a two-layer reference injection system that helps LLMs discover and correctly use the 142 macOS-available POSIX.1-2024 utilities. Contributions that improve coverage, fix incorrect syntax entries, or strengthen the benchmark are welcome.
+Thanks for your interest. Sayance is a small, focused two-layer reference injection system that helps LLMs discover and correctly use the 142 macOS-available POSIX.1-2024 utilities. Contributions that improve coverage, fix incorrect syntax entries, or strengthen the benchmark are welcome.
 
 ## Quick Start
 
@@ -8,7 +8,7 @@ Thanks for your interest. This project is small and focused — a two-layer refe
 git clone https://github.com/gitguffaw/posix.git
 cd posix
 make verify        # runs all validation checks
-posix-lookup pax   # confirm the CLI works
+sayance-lookup pax   # confirm the CLI works
 ```
 
 No virtualenv or external dependencies needed — pure stdlib Python 3.
@@ -27,9 +27,9 @@ All five must pass before proposing any change.
 
 ## What You Can Contribute
 
-**Syntax entries (`posix-tldr.json`):** Fix incorrect flags, add missing traps, improve examples. Every entry must reflect POSIX.1-2024 (Issue 8) — not GNU extensions, not BSD-specific behavior.
+**Syntax entries (`sayance-tldr.json`):** Fix incorrect flags, add missing traps, improve examples. Every entry must reflect POSIX.1-2024 (Issue 8) — not GNU extensions, not BSD-specific behavior.
 
-**Discovery Map (`posix-core.md`, `skill/SKILL.md`):** Improve the 2-5 word semantic hooks that help LLMs find the right utility. Both files must stay in sync and cover all 142 macOS-available utilities.
+**Discovery Map (`sayance-core.md`, `skill/SKILL.md`):** Improve the 2-5 word semantic hooks that help LLMs find the right utility. Both files must stay in sync and cover all 142 macOS-available utilities.
 
 **Benchmark questions (`benchmark_data.json`):** New questions must follow the Taboo rules defined in `benchmark_data.json` under `meta.question_rules`. The question text must never contain the expected utility name, the word "POSIX", or standards-specific language.
 
@@ -38,7 +38,7 @@ All five must pass before proposing any change.
 ## What Not to Change Without Discussion
 
 - The 142-utility macOS scope (see `docs/macos-excluded-utilities.md` for the 13 excluded from POSIX.1-2024's 155)
-- Frozen benchmark datasets (`benchmark_data.json`, `fixtures/`, `posix-tldr.json`) unless creating a new baseline
+- Frozen benchmark datasets (`benchmark_data.json`, `fixtures/`, `sayance-tldr.json`) unless creating a new baseline
 - The two-layer architecture (Discovery Map + Syntax Lookup)
 
 Open an issue first if your change touches any of these.

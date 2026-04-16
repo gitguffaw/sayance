@@ -1,4 +1,4 @@
-# Architecture: The POSIX Step-Up System
+# Architecture: Sayance
 
 ## What Problem This Solves
 
@@ -8,13 +8,13 @@ When you ask an LLM to do a CLI task, it typically does one of three bad things:
 2. **Uses a GNU extension** — flags like `sed -i`, `grep -r`, or `find -mmin` that break on non-GNU systems.
 3. **Ignores a native utility entirely** — using `tar` when `pax` is the correct POSIX archiver, or `md5sum` when `cksum` is the spec-compliant tool.
 
-The root cause is not that the LLM "can't do it" — it's that it doesn't know the tool exists or doesn't trust itself to know the exact syntax. The Step-Up architecture fixes this by giving the LLM progressively more specific information, on demand, in the cheapest way possible.
+The root cause is not that the LLM "can't do it" — it's that it doesn't know the tool exists or doesn't trust itself to know the exact syntax. Sayance fixes this by giving the LLM progressively more specific information, on demand, in the cheapest way possible.
 
 ---
 
 ## The Two Layers
 
-### The Discovery Map (`posix-core.md`)
+### The Discovery Map (`sayance-core.md`)
 
 A single file injected into the agent's context at the start of every session. It lists all 142 macOS-available POSIX Issue 8 utilities with a 2–5 word hook that tells the agent what the tool *does* and, crucially, what it is *not*.
 
@@ -28,20 +28,20 @@ comm: compare two sorted lists
 
 This file is capped at ~800 tokens. Its only job is to make sure the agent knows the tool exists so it doesn't reach for a non-POSIX substitute. It does not contain full syntax.
 
-### The Syntax Lookup CLI (`posix-lookup`)
+### The Syntax Lookup CLI (`sayance-lookup`)
 
 An executable Python 3 CLI the LLM calls via bash before executing a utility from the Discovery Map. It accepts a utility name and returns the exact, pure-POSIX syntax strings — no GNU extensions, no BSD variants.
 
 ```bash
-$ posix-lookup pax
+$ sayance-lookup pax
   Create portable archive: pax -w -f archive.pax directory/
   Copy directory tree: pax -rw src/ dest/
   DO NOT USE tar (not guaranteed POSIX).
 ```
 
-The agent is instructed to always call `posix-lookup <utility>` before using any utility it found in the Discovery Map. This prevents the "Rebellious Agent" failure mode: the LLM sees `pax` in the Discovery Map, decides it already knows the syntax, and confidently writes `pax -z` (which doesn't exist).
+The agent is instructed to always call `sayance-lookup <utility>` before using any utility it found in the Discovery Map. This prevents the "Rebellious Agent" failure mode: the LLM sees `pax` in the Discovery Map, decides it already knows the syntax, and confidently writes `pax -z` (which doesn't exist).
 
-The CLI is backed by `posix-tldr.json`, a local structured file. The LLM never reads that file directly — it always goes through the CLI, which prevents token flooding from a naive `cat posix-tldr.json`.
+The CLI is backed by `sayance-tldr.json`, a local structured file. The LLM never reads that file directly — it always goes through the CLI, which prevents token flooding from a naive `cat sayance-tldr.json`.
 
 **Why a CLI instead of an MCP tool?** The LLM's bash tool is always registered in its schema — zero additional context tokens. An MCP tool would add ~79-120 tokens of schema overhead per session for a capability bash already provides. The CLI also works in any agent environment with shell access, not just MCP-compatible clients.
 
@@ -53,8 +53,8 @@ The CLI is backed by `posix-tldr.json`, a local structured file. The LLM never r
 User prompt
     |
     v
-[Discovery Map] Does posix-core.md tell me a native tool exists for this?
-    |-- YES --> Run: posix-lookup <utility>
+[Discovery Map] Does sayance-core.md tell me a native tool exists for this?
+    |-- YES --> Run: sayance-lookup <utility>
     |               |
     |           [Syntax Lookup] Returns exact POSIX syntax via bash
     |               |-- Use it, answer the question
@@ -70,7 +70,7 @@ User prompt
 The LLM's bash tool is always registered in its schema — zero additional context tokens. An MCP tool would add ~79-120 tokens of permanent schema overhead. The CLI also works in any agent environment with shell access (Claude Code, Cursor, Codex, Gemini CLI), not just MCP-compatible clients. MCP remains a future option if multi-client structured tool access becomes a priority.
 
 **Why a CLI instead of a raw file?**  
-If we expose `posix-tldr.json` directly to the shell, the agent will run `cat posix-tldr.json`, flooding its context with thousands of tokens. Wrapping it behind a CLI forces single-utility lookups.
+If we expose `sayance-tldr.json` directly to the shell, the agent will run `cat sayance-tldr.json`, flooding its context with thousands of tokens. Wrapping it behind a CLI forces single-utility lookups.
 
 **Why not just inject the full POSIX man pages?**  
 Context tax. A single `sed` man page is ~4,000 tokens. Injecting even our 142 macOS-available utilities as man pages would consume the entire context window before the user's question is even answered.

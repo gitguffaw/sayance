@@ -66,7 +66,7 @@ def main():
     )
     parser.add_argument(
         "--validate-bridge", action="store_true",
-        help="Validate POSIX bridge completeness (core + tldr) and exit",
+        help="Validate Sayance bridge completeness (core + tldr) and exit",
     )
     parser.add_argument(
         "--no-grade", action="store_true",
@@ -126,11 +126,11 @@ def main():
     if args.validate_bridge or args.inject_posix:
         bridge_errors = runner.validate_posix_bridge(questions, require_full_coverage=True)
         if bridge_errors:
-            print("  ERROR: POSIX bridge validation failed:")
+            print("  ERROR: Sayance bridge validation failed:")
             for error in bridge_errors:
                 print(f"    - {error}")
             raise SystemExit(1)
-        print("  POSIX bridge validation passed: core + tldr cover all 142 macOS-available utilities.")
+        print("  Sayance bridge validation passed: core + tldr cover all 142 macOS-available utilities.")
         if args.validate_bridge:
             return
 
