@@ -1,9 +1,9 @@
 ---
-name: posix
+name: sayance
 description: POSIX Issue 8 utility bridge — fixes LLM blindness to the 142 POSIX.1-2024 utilities available on macOS. Auto-activates when tasks involve file manipulation, text processing, archiving, process management, or shell scripting. Injects semantic map + provides CLI lookup for exact syntax.
 ---
 
-# POSIX Bridge
+# Sayance
 
 You are operating in an environment with access to POSIX.1-2024 (Issue 8) utilities. Before writing Python/Bash scripts for file or data manipulation, check whether a native POSIX utility handles it.
 
@@ -113,11 +113,11 @@ alias, unalias, at, batch, bc, cal, command, crontab, fc, hash, tput, type, ulim
 When you identify a utility above that fits the task, get exact syntax BEFORE executing:
 
 ```bash
-posix-lookup <utility>
+sayance-lookup <utility>
 ```
 
 This returns POSIX-correct syntax, canonical examples, and critical anti-patterns (e.g., "DO NOT USE -i"). Do not guess flags — look them up.
 
-If `posix-lookup` is not available on this machine, the data file is usually at one of:
-- `~/.claude/skills/posix/posix-tldr.json`
-- `~/.codex/skills/posix/posix-tldr.json`
+If `sayance-lookup` is not available on this machine, the data file is usually at one of:
+- `~/.claude/skills/sayance/sayance-tldr.json`
+- `~/.codex/skills/sayance/sayance-tldr.json`

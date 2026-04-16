@@ -39,8 +39,8 @@ from benchmark_core.models import (
 # Public path/constants compatibility
 SCRIPT_DIR = config.SCRIPT_DIR
 DATA_FILE = config.DATA_FILE
-POSIX_CORE_FILE = config.POSIX_CORE_FILE
-POSIX_TLDR_FILE = config.POSIX_TLDR_FILE
+SAYANCE_CORE_FILE = config.SAYANCE_CORE_FILE
+SAYANCE_TLDR_FILE = config.SAYANCE_TLDR_FILE
 POSIX_UTILITIES_FILE = config.POSIX_UTILITIES_FILE
 FIXTURES_DIR = config.FIXTURES_DIR
 RESULTS_DIR_BRIDGE_AIDED = config.RESULTS_DIR_BRIDGE_AIDED
@@ -286,4 +286,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

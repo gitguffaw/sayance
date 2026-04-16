@@ -96,9 +96,9 @@ def _load_posix_core() -> str | None:
     global _posix_core_cache
     if _posix_core_cache is None:
         try:
-            _posix_core_cache = config.POSIX_CORE_FILE.read_text()
+            _posix_core_cache = config.SAYANCE_CORE_FILE.read_text()
         except (FileNotFoundError, OSError) as e:
-            print(f"  WARNING: Could not load posix-core.md: {e}")
+            print(f"  WARNING: Could not load sayance-core.md: {e}")
             return None
     return _posix_core_cache
 
@@ -106,7 +106,7 @@ def _load_posix_core() -> str | None:
 def _load_posix_tldr() -> dict:
     global _posix_tldr_cache
     if _posix_tldr_cache is None:
-        _posix_tldr_cache = json.loads(config.POSIX_TLDR_FILE.read_text())
+        _posix_tldr_cache = json.loads(config.SAYANCE_TLDR_FILE.read_text())
     return dict(_posix_tldr_cache)
 
 

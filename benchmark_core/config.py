@@ -7,8 +7,8 @@ import subprocess
 
 SCRIPT_DIR = Path(__file__).resolve().parents[1]
 DATA_FILE = SCRIPT_DIR / "benchmark_data.json"
-POSIX_CORE_FILE = SCRIPT_DIR / "posix-core.md"
-POSIX_TLDR_FILE = SCRIPT_DIR / "skill" / "posix-tldr.json"
+SAYANCE_CORE_FILE = SCRIPT_DIR / "sayance-core.md"
+SAYANCE_TLDR_FILE = SCRIPT_DIR / "skill" / "sayance-tldr.json"
 POSIX_UTILITIES_FILE = SCRIPT_DIR / "macOS-posix-utilities.txt"
 POSIX_SKILL_FILE = SCRIPT_DIR / "skill" / "SKILL.md"
 FIXTURES_DIR = SCRIPT_DIR / "fixtures"
@@ -114,8 +114,8 @@ def default_run_provenance() -> dict[str, str | int | None]:
         "benchmark_question_count": len(questions),
         "git_commit": current_git_commit(),
         "prompt_template_version": PROMPT_TEMPLATE_VERSION,
-        "posix_core_sha256": sha256_file(POSIX_CORE_FILE),
-        "posix_tldr_sha256": sha256_file(POSIX_TLDR_FILE),
+        "posix_core_sha256": sha256_file(SAYANCE_CORE_FILE),
+        "posix_tldr_sha256": sha256_file(SAYANCE_TLDR_FILE),
         "fixtures_manifest_sha256": sha256_file(FIXTURES_MANIFEST_FILE),
     }
 

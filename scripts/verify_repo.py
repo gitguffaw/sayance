@@ -77,10 +77,10 @@ def check_source_artifacts():
     print("=== Source Artifact Presence ===")
     required = [
         "macOS-posix-utilities.txt",
-        "posix-core.md",
+        "sayance-core.md",
         "skill/SKILL.md",
-        "skill/posix-lookup",
-        "skill/posix-tldr.json",
+        "skill/sayance-lookup",
+        "skill/sayance-tldr.json",
         "install.sh",
     ]
     for rel in required:
@@ -100,7 +100,7 @@ def check_json_validity():
     json_files = [
         "benchmark_data.json",
         "fixtures/manifest.json",
-        "skill/posix-tldr.json",
+        "skill/sayance-tldr.json",
     ]
     for rel in json_files:
         p = REPO / rel
@@ -125,13 +125,13 @@ def check_utility_consistency():
     else:
         failed(f"macOS-posix-utilities.txt has {len(truth_list)} utilities, expected 142")
 
-    # 3b: posix-tldr.json key count
-    tldr = json.loads((REPO / "skill/posix-tldr.json").read_text())
+    # 3b: sayance-tldr.json key count
+    tldr = json.loads((REPO / "skill/sayance-tldr.json").read_text())
     tldr_keys = set(k.lower() for k in tldr.keys())
     if len(tldr_keys) == 142:
-        passed("posix-tldr.json has 142 keys")
+        passed("sayance-tldr.json has 142 keys")
     else:
-        failed(f"posix-tldr.json has {len(tldr_keys)} keys, expected 142")
+        failed(f"sayance-tldr.json has {len(tldr_keys)} keys, expected 142")
     diff = truth_set - tldr_keys
     if diff:
         print(f"    missing from tldr: {sorted(diff)}")
@@ -139,23 +139,23 @@ def check_utility_consistency():
     if extra:
         print(f"    extra in tldr: {sorted(extra)}")
 
-    # 3c: posix-core.md
-    core_text = (REPO / "posix-core.md").read_text()
+    # 3c: sayance-core.md
+    core_text = (REPO / "sayance-core.md").read_text()
     core_match = re.search(r"### \[CORE_TRIVIAL\].*", core_text, re.DOTALL)
     if core_match:
         core_names = extract_discovery_map_utilities(core_match.group(0))
         if core_names == truth_set:
-            passed("posix-core.md contains all 142 utilities")
+            passed("sayance-core.md contains all 142 utilities")
         else:
             missing = truth_set - core_names
             extra = core_names - truth_set
-            failed(f"posix-core.md utility mismatch ({len(core_names)} found)")
+            failed(f"sayance-core.md utility mismatch ({len(core_names)} found)")
             if missing:
                 print(f"    missing: {sorted(missing)}")
             if extra:
                 print(f"    extra: {sorted(extra)}")
     else:
-        failed("posix-core.md: could not find CORE_TRIVIAL section")
+        failed("sayance-core.md: could not find CORE_TRIVIAL section")
 
     # 3d: skill/SKILL.md Discovery Map
     skill_text = (REPO / "skill/SKILL.md").read_text()
@@ -184,12 +184,12 @@ def check_utility_consistency():
 
 def check_cli_sanity():
     print("=== CLI Executable Sanity ===")
-    cli = REPO / "skill/posix-lookup"
+    cli = REPO / "skill/sayance-lookup"
 
     if os.access(cli, os.X_OK):
-        passed("skill/posix-lookup is executable")
+        passed("skill/sayance-lookup is executable")
     else:
-        failed("skill/posix-lookup is not executable")
+        failed("skill/sayance-lookup is not executable")
 
     try:
         result = subprocess.run(
@@ -198,24 +198,24 @@ def check_cli_sanity():
         )
         lines = [l.strip().lower() for l in result.stdout.splitlines() if l.strip()]
         if len(lines) == 142:
-            passed("posix-lookup --list produces 142 lines")
+            passed("sayance-lookup --list produces 142 lines")
         else:
-            failed(f"posix-lookup --list produces {len(lines)} lines, expected 142")
+            failed(f"sayance-lookup --list produces {len(lines)} lines, expected 142")
 
         truth_set, _ = load_ground_truth()
         list_set = set(lines)
         if list_set == truth_set:
-            passed("posix-lookup --list matches macOS-posix-utilities.txt")
+            passed("sayance-lookup --list matches macOS-posix-utilities.txt")
         else:
             missing = truth_set - list_set
             extra = list_set - truth_set
-            failed("posix-lookup --list does not match macOS-posix-utilities.txt")
+            failed("sayance-lookup --list does not match macOS-posix-utilities.txt")
             if missing:
                 print(f"    missing: {sorted(missing)}")
             if extra:
                 print(f"    extra: {sorted(extra)}")
     except Exception as e:
-        failed(f"posix-lookup --list failed: {e}")
+        failed(f"sayance-lookup --list failed: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -225,7 +225,7 @@ def check_cli_sanity():
 def check_installer_sanity():
     print("=== Installer Sanity ===")
     installer = (REPO / "install.sh").read_text()
-    expected_refs = ["SKILL.md", "posix-lookup", "posix-tldr.json"]
+    expected_refs = ["SKILL.md", "sayance-lookup", "sayance-tldr.json"]
     all_found = True
     for ref in expected_refs:
         if ref not in installer:
