@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Live canary test: installs the POSIX bridge into an isolated HOME,
+# Live canary test: installs Sayance into an isolated HOME,
 # runs prompts through Claude/Codex CLI, and asserts the response
 # recommends the correct POSIX utility (pax not tar, od not xxd).
 #
-# Gated on POSIX_LIVE_CANARY=1.  Usage:
-#   POSIX_LIVE_CANARY=1 ./scripts/test_product_live.sh [claude|codex|all]
+# Gated on SAYANCE_LIVE_CANARY=1.  Usage:
+#   SAYANCE_LIVE_CANARY=1 ./scripts/test_product_live.sh [claude|codex|all]
 
 # ---------------------------------------------------------------------------
 # Gate: skip unless explicitly opted in
 # ---------------------------------------------------------------------------
-if [[ "${POSIX_LIVE_CANARY:-}" != "1" ]]; then
-  echo "Skipping live canary (POSIX_LIVE_CANARY not set)"
+if [[ "${SAYANCE_LIVE_CANARY:-}" != "1" ]]; then
+  echo "Skipping live canary (SAYANCE_LIVE_CANARY not set)"
   exit 0
 fi
 
@@ -51,7 +51,7 @@ emit_telemetry() {
 # triage_failure response — print diagnostic when a canary fails
 triage_failure() {
   local response="$1"
-  if echo "$response" | grep -qi "posix-lookup\|posix-tldr"; then
+  if echo "$response" | grep -qi "sayance-lookup\|sayance-tldr"; then
     echo "  TRIAGE: Bridge was discovered but model chose wrong utility." >&2
   else
     echo "  TRIAGE: Bridge was NOT discovered — skill may not be installed or loaded." >&2
@@ -79,8 +79,8 @@ run_canary() {
 
   # Verify CLI is on the expected path
   local lane_bin="${tmp_home}/.local/bin"
-  if [[ ! -x "${lane_bin}/posix-lookup" ]]; then
-    echo "FAIL [infra]: posix-lookup not found after install" >&2
+  if [[ ! -x "${lane_bin}/sayance-lookup" ]]; then
+    echo "FAIL [infra]: sayance-lookup not found after install" >&2
     exit_code=1
     return 1
   fi
