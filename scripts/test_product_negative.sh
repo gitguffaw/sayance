@@ -15,21 +15,21 @@ run_case() {
 
   case "${mode}" in
     broken_symlink)
-      rm -f "${tmp_home}/.codex/skills/posix/posix-lookup"
+      rm -f "${tmp_home}/.codex/skills/sayance/sayance-lookup"
       ;;
     malformed_json)
-      printf '{broken\n' > "${tmp_home}/.codex/skills/posix/posix-tldr.json"
+      printf '{broken\n' > "${tmp_home}/.codex/skills/sayance/sayance-tldr.json"
       ;;
     missing_data)
-      rm -f "${tmp_home}/.codex/skills/posix/posix-tldr.json" "${tmp_home}/.claude/skills/posix/posix-tldr.json"
+      rm -f "${tmp_home}/.codex/skills/sayance/sayance-tldr.json" "${tmp_home}/.claude/skills/sayance/sayance-tldr.json"
       ;;
     drift_skill)
       # Remove one utility (pax) from the installed SKILL.md to simulate drift
       # sed -i differs between macOS (BSD) and Linux (GNU)
       if sed --version >/dev/null 2>&1; then
-        sed -i '/pax/d' "${tmp_home}/.claude/skills/posix/SKILL.md"
+        sed -i '/pax/d' "${tmp_home}/.claude/skills/sayance/SKILL.md"
       else
-        sed -i '' '/pax/d' "${tmp_home}/.claude/skills/posix/SKILL.md"
+        sed -i '' '/pax/d' "${tmp_home}/.claude/skills/sayance/SKILL.md"
       fi
       ;;
     *)
@@ -44,9 +44,9 @@ run_case() {
 
   if [ "${mode}" = "drift_skill" ]; then
     # For drift detection, we check that the installed SKILL.md utility count
-    # no longer matches posix-lookup --list count (142 vs 141).
+    # no longer matches sayance-lookup --list count (142 vs 141).
     local skill_count list_count
-    skill_count="$(python3 - "${tmp_home}/.claude/skills/posix/SKILL.md" <<'PY'
+    skill_count="$(python3 - "${tmp_home}/.claude/skills/sayance/SKILL.md" <<'PY'
 import re, sys
 text = open(sys.argv[1]).read()
 names = set()
@@ -58,7 +58,7 @@ for line in text.splitlines():
     if m:
         names.add(m.group(1).lower())
         continue
-    if ',' in line and not line.startswith('posix') and not line.startswith('If'):
+    if ',' in line and not line.startswith('sayance') and not line.startswith('If'):
         parts = re.split(r':', line)[0]
         for part in re.split(r'[,\s]+', parts):
             word = part.strip().lower()
@@ -67,7 +67,7 @@ for line in text.splitlines():
 print(len(names))
 PY
     )"
-    list_count="$(PATH="${lane_path}" posix-lookup --list | wc -l | tr -d ' ')"
+    list_count="$(PATH="${lane_path}" sayance-lookup --list | wc -l | tr -d ' ')"
 
     if [ "${skill_count}" -ne "${list_count}" ]; then
       # Drift detected — counts differ, which is what we want
@@ -79,8 +79,8 @@ PY
       exit 1
     fi
   else
-    # Standard negative test: posix-lookup pax should fail
-    if HOME="${tmp_home}" PATH="${lane_path}" posix-lookup pax >/dev/null 2>&1; then
+    # Standard negative test: sayance-lookup pax should fail
+    if HOME="${tmp_home}" PATH="${lane_path}" sayance-lookup pax >/dev/null 2>&1; then
       echo "FAIL: ${case_name} did not fail as expected."
       HOME="${tmp_home}" make -C "${repo_dir}" uninstall >/dev/null || true
       rm -rf "${tmp_home}"
