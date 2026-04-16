@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Live canary test: installs the POSIX bridge into an isolated HOME,
+# Live canary test: installs Sayance into an isolated HOME,
 # runs prompts through Claude/Codex CLI, and asserts the response
 # recommends the correct POSIX utility (pax not tar, od not xxd).
 #
-# Gated on POSIX_LIVE_CANARY=1.  Usage:
-#   POSIX_LIVE_CANARY=1 ./scripts/test_product_live.sh [claude|codex|all]
+# Gated on SAYANCE_LIVE_CANARY=1.  Usage:
+#   SAYANCE_LIVE_CANARY=1 ./scripts/test_product_live.sh [claude|codex|all]
 
 # ---------------------------------------------------------------------------
 # Gate: skip unless explicitly opted in
 # ---------------------------------------------------------------------------
-if [[ "${POSIX_LIVE_CANARY:-}" != "1" ]]; then
-  echo "Skipping live canary (POSIX_LIVE_CANARY not set)"
+if [[ "${SAYANCE_LIVE_CANARY:-}" != "1" ]]; then
+  echo "Skipping live canary (SAYANCE_LIVE_CANARY not set)"
   exit 0
 fi
 
@@ -37,6 +37,42 @@ ts_iso() {
   date -u +"%Y-%m-%dT%H:%M:%SZ"
 }
 
+# run_with_timeout SECONDS CMD [ARGS...]
+# Prefers GNU `timeout`, falls back to `gtimeout` (homebrew coreutils),
+# and finally to a Perl alarm-based fallback so default-PATH macOS
+# (no coreutils installed) still enforces the canary timeout instead of
+# exiting 127. Preserves GNU timeout's exit-code-124-on-timeout convention.
+run_with_timeout() {
+  local secs="$1"; shift
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "${secs}" "$@"
+  elif command -v gtimeout >/dev/null 2>&1; then
+    gtimeout "${secs}" "$@"
+  else
+    perl -e '
+      use strict; use warnings;
+      my $timeout = shift @ARGV;
+      my $pid = fork();
+      die "fork: $!" unless defined $pid;
+      if ($pid == 0) { exec { $ARGV[0] } @ARGV; exit 127; }
+      eval {
+        local $SIG{ALRM} = sub { die "__timeout__\n" };
+        alarm $timeout;
+        waitpid($pid, 0);
+        alarm 0;
+      };
+      if ($@ && $@ eq "__timeout__\n") {
+        kill "TERM", $pid;
+        sleep 1;
+        kill "KILL", $pid;
+        waitpid($pid, 0);
+        exit 124;
+      }
+      exit $? >> 8;
+    ' "$secs" "$@"
+  fi
+}
+
 # emit_telemetry canary provider expected trap pass response latency_s
 emit_telemetry() {
   local canary="$1" provider="$2" expected="$3" trap_util="$4"
@@ -51,7 +87,7 @@ emit_telemetry() {
 # triage_failure response — print diagnostic when a canary fails
 triage_failure() {
   local response="$1"
-  if echo "$response" | grep -qi "posix-lookup\|posix-tldr"; then
+  if echo "$response" | grep -qi "sayance-lookup\|sayance-tldr"; then
     echo "  TRIAGE: Bridge was discovered but model chose wrong utility." >&2
   else
     echo "  TRIAGE: Bridge was NOT discovered — skill may not be installed or loaded." >&2
@@ -79,8 +115,8 @@ run_canary() {
 
   # Verify CLI is on the expected path
   local lane_bin="${tmp_home}/.local/bin"
-  if [[ ! -x "${lane_bin}/posix-lookup" ]]; then
-    echo "FAIL [infra]: posix-lookup not found after install" >&2
+  if [[ ! -x "${lane_bin}/sayance-lookup" ]]; then
+    echo "FAIL [infra]: sayance-lookup not found after install" >&2
     exit_code=1
     return 1
   fi
@@ -97,11 +133,13 @@ run_canary() {
   rc=0
   case "$provider" in
     claude)
-      response="$(HOME="${tmp_home}" timeout "${TIMEOUT_S}" \
+      response="$(HOME="${tmp_home}" \
+        run_with_timeout "${TIMEOUT_S}" \
         claude -p "$prompt" --output-format json 2>/dev/null)" || rc=$?
       ;;
     codex)
-      response="$(HOME="${tmp_home}" timeout "${TIMEOUT_S}" \
+      response="$(HOME="${tmp_home}" \
+        run_with_timeout "${TIMEOUT_S}" \
         codex exec --json --skip-git-repo-check "$prompt" 2>/dev/null)" || rc=$?
       ;;
   esac

@@ -1,4 +1,6 @@
-# posix
+# Sayance
+
+*Semantic AnalYsis And Natural Command Engine*
 
 In 1986, Jon Bentley challenged Donald Knuth — the legendary author of *The Art of Computer Programming* — to demonstrate his new literate-programming system (WEB) in the "Programming Pearls" column of *Communications of the ACM*. The task was simple: read a text file and output the N most frequently occurring words along with their counts, sorted by frequency.
 
@@ -21,13 +23,13 @@ That was 1986. Today, LLMs have the same blind spot Knuth had — they reach for
 
 **LLMs don't know the shell tools that already exist.** They reach for `tar` when `pax` is right there. They write Python scripts to hex-dump a file instead of calling `od`. They reject `readlink` as "not POSIX" even though it's been standard since 2024. Every wrong tool is wasted tokens, wasted time, and a fragile non-portable script you now have to maintain.
 
-This project fixes that with a two-layer reference injection system — and proves it works across Claude, Codex, and Gemini.
+**Sayance** fixes that with a two-layer reference injection system — and proves it works across Claude, Codex, and Gemini.
 
 ## How It Works
 
 The fix isn't more training data. LLMs already *know* what `comm`, `paste`, `tsort`, and `csplit` do — they just don't reach for them. Training data is dominated by GNU/Linux blog posts and Stack Overflow answers, so the model's prior overwhelmingly favors `tar` over `pax` even when it knows both exist ([Patil et al., "Gorilla," 2023](https://arxiv.org/abs/2305.15334) — name familiarity bias is the #1 cause of wrong tool selection in LLM function-calling benchmarks).
 
-The bridge doesn't teach. It *activates recall*. Two layers, each doing one job:
+Sayance doesn't teach. It *activates recall*. Two layers, each doing one job:
 
 ### Layer 1: Discovery Map — "What exists"
 
@@ -52,12 +54,12 @@ The design is research-informed, not ad hoc:
 A zero-dependency CLI the LLM calls via bash. No MCP server, no schema tokens, no persistent process. The LLM's bash tool is always registered — zero additional context overhead. An MCP tool would add 79-120 tokens of schema per session for no benefit. ([docs/architecture](docs/architecture.md))
 
 ```bash
-$ posix-lookup pax
+$ sayance-lookup pax
   Create portable archive: pax -w -f archive.pax directory/
   Copy directory tree: pax -rw src/ dest/
   DO NOT USE tar (not guaranteed POSIX).
 
-$ posix-lookup sed
+$ sayance-lookup sed
   Replace all occurrences: sed 's/foo/bar/g' file > tmp && mv tmp file
   DO NOT USE -i (not POSIX). Always use redirect and mv.
 ```
@@ -114,7 +116,7 @@ Current benchmark artifacts use two denominator styles:
 
 Pre-hardening runs may only expose the visible-row denominator and may not include a provenance block or planned-result counts.
 
-The `--execute` flag enables Command Verification, which runs extracted commands against fixtures and validates output. `30/40` questions currently have execution fixtures; `T31`-`T40` remain unverified. The working hypothesis is that the bridge's upfront cost can still be worthwhile if it reduces retry loops and wrong-tool detours downstream.
+The `--execute` flag enables Command Verification, which runs extracted commands against fixtures and validates output. `30/40` questions currently have execution fixtures; `T31`-`T40` remain unverified. The working hypothesis is that Sayance's upfront cost can still be worthwhile if it reduces retry loops and wrong-tool detours downstream.
 
 ## Install the Skill
 
@@ -154,11 +156,11 @@ make install-codex   # Codex only
 ### Verify
 
 ```bash
-posix-lookup pax
-posix-lookup --list
+sayance-lookup pax
+sayance-lookup --list
 ```
 
-After install, restart Claude Code or Codex. The skill auto-loads the semantic map into each session. The LLM calls `posix-lookup <utility>` via bash whenever it needs exact syntax.
+After install, restart Claude Code or Codex. The skill auto-loads the semantic map into each session. The LLM calls `sayance-lookup <utility>` via bash whenever it needs exact syntax.
 
 ```bash
 # Dev workflow — edit and iterate
@@ -184,7 +186,7 @@ python3 run_benchmark.py --llms claude codex
 python3 run_benchmark.py --llms claude codex --inject-posix
 ```
 
-`--inject-posix` now fails fast if `posix-core.md` or `posix-tldr.json` do not fully cover all 155 POSIX Issue 8 utilities.
+`--inject-posix` now fails fast if `sayance-core.md` or `sayance-tldr.json` do not fully cover all 155 POSIX Issue 8 utilities.
 
 Model selection defaults:
 - Claude is pinned by default to `claude-opus-4-6`.
@@ -220,7 +222,7 @@ Summary validity semantics:
 This repo uses three complementary validation paths:
 
 - **Simulation Testing:** benchmark simulation path (`run_benchmark.py` in Unaided / Bridge-Aided / Command Verification modes). Preserves historical comparability and benchmark metrics.
-- **Install Testing:** shipped-product conformance for installed `SKILL.md` + `posix-lookup`. Includes single-target install tests, drift detection, and partial-uninstall verification.
+- **Install Testing:** shipped-product conformance for installed `SKILL.md` + `sayance-lookup`. Includes single-target install tests, drift detection, and partial-uninstall verification.
 - **Repo Integrity:** structural coherence checks for source-of-truth artifacts. Validates 142-utility (macOS subset) count consistency across all four sources, JSON validity, CLI sanity, and fixture coverage.
 
 The canonical single command for all validation:
@@ -251,9 +253,9 @@ GitHub Actions CI runs `make verify` on every push and pull request to `main`.
 | File | Purpose |
 |------|---------|
 | `skill/SKILL.md` | **The Product** — Claude Code skill combining Discovery Map + Syntax Lookup instruction |
-| `skill/posix-lookup` | **Syntax Lookup CLI** — executable Python 3 CLI, zero deps, called via bash |
-| `skill/posix-tldr.json` | Syntax lookup database (shared by CLI and benchmark) |
-| `posix-core.md` | **Discovery Map** — semantic map of all 142 macOS-available POSIX utilities (~925 tokens) |
+| `skill/sayance-lookup` | **Syntax Lookup CLI** — executable Python 3 CLI, zero deps, called via bash |
+| `skill/sayance-tldr.json` | Syntax lookup database (shared by CLI and benchmark) |
+| `sayance-core.md` | **Discovery Map** — semantic map of all 142 macOS-available POSIX utilities (~925 tokens) |
 | `Makefile` | Build, test, and install pipeline |
 | `run_benchmark.py` | Stable benchmark CLI entrypoint + compatibility facade |
 | `benchmark_core/` | Internal benchmark implementation (`cli`, `runner`, `providers`, `execution`, `reporting`, `models`, `config`) |
