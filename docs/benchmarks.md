@@ -32,7 +32,7 @@ Every question in the set must follow these rules. If a question violates any of
 
 **Purpose:** Establish the LLM's true, unassisted POSIX baseline.
 
-**What changes:** Nothing is injected. The LLM receives only the question. No `posix-core.md`, no syntax tool, no spec access.
+**What changes:** Nothing is injected. The LLM receives only the question. No `sayance-core.md`, no syntax tool, no spec access.
 
 **How to run:**
 ```bash
@@ -57,11 +57,11 @@ Codex burns 4× more output tokens than Claude or Gemini due to multi-step agent
 
 ---
 
-### Bridge-Aided (With Our Changes)
+### Bridge-Aided (With Sayance)
 
-**Purpose:** Prove that the bridge architecture reduces token cost and improves POSIX compliance.
+**Purpose:** Prove that Sayance reduces token cost and improves POSIX compliance.
 
-**What changes:** `posix-core.md` is prepended to every prompt. The `get_posix_syntax` tool is available to the LLM during the run.
+**What changes:** `sayance-core.md` is prepended to every prompt. The `get_posix_syntax` tool is available to the LLM during the run.
 
 **How to run:**
 ```bash
@@ -94,7 +94,7 @@ Run Unaided first, then Bridge-Aided. Compare the summary files side by side.
 # Unaided — baseline, no help
 python3 run_benchmark.py --llms claude codex
 
-# Bridge-Aided — with bridge architecture
+# Bridge-Aided — with Sayance
 python3 run_benchmark.py --llms claude codex --inject-posix
 ```
 
@@ -133,7 +133,7 @@ Use a conservative Gemini run profile unless your active account limits clearly 
 - Assume no more than `50` model calls per day.
 - Run Gemini alone, with `--max-workers 1`, so the benchmark never fans out concurrent Gemini calls.
 - Unaided baseline fits in one day: `40` questions = `40` Gemini calls.
-- Bridge-Aided does **not** reliably fit in one day: the bridge simulation can trigger a second Gemini call when the model emits `TOOL_CALL: get_posix_syntax(...)`, so a 40-question run can exceed `50` calls.
+- Bridge-Aided does **not** reliably fit in one day: the Sayance simulation can trigger a second Gemini call when the model emits `TOOL_CALL: get_posix_syntax(...)`, so a 40-question run can exceed `50` calls.
 - Do not use Gemini as the judge if you are trying to stay within the daily quota.
 
 Safe Unaided baseline command:

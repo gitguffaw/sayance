@@ -25,7 +25,7 @@ The `research/` folder contains the source documents that informed the canonical
 
 ## What Has Not Been Built Yet
 
-- The actual skill file (posix-core.md)
+- The actual skill file (sayance-core.md)
 - The companion binary (posix-ref)
 - The eval harness and task set
 - Bare-LLM baseline measurements

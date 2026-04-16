@@ -62,7 +62,7 @@ Bridge-Aided mode does not guarantee that every provider will actually use the e
 | Codex | 35/39 | Lookup path engaged heavily |
 | Gemini | 37/40 | Lookup path engaged heavily |
 
-This matters when interpreting the results. The current bridge is a mix of injected context and optional lookup behavior, not a fully enforced tool gate.
+This matters when interpreting the results. Sayance is currently a mix of injected context and optional lookup behavior, not a fully enforced tool gate.
 
 ## Hardened Summary Semantics
 
@@ -88,7 +88,7 @@ Raw billable tokens increased in Bridge-Aided mode for all three providers:
 
 That is expected in the current simulation path. Bridge-Aided mode prepends the Discovery Map and may trigger a second model turn for tool replay.
 
-The benchmark therefore also records **simulation-adjusted** bridge billable totals:
+The benchmark therefore also records **simulation-adjusted** Sayance billable totals:
 
 | Provider | Unaided billable | Bridge-Aided simulation-adjusted billable |
 |---|---:|---:|
@@ -98,13 +98,13 @@ The benchmark therefore also records **simulation-adjusted** bridge billable tot
 
 Interpretation:
 - Claude improved on POSIX compliance, but did not show a token-efficiency win in this rerun.
-- Codex improved strongly on compliance, and its adjusted bridge cost improved despite verbose answers.
-- Gemini improved on both visible compliance and adjusted bridge cost, and its answers got much shorter.
+- Codex improved strongly on compliance, and its adjusted Sayance cost improved despite verbose answers.
+- Gemini improved on both visible compliance and adjusted Sayance cost, and its answers got much shorter.
 
 ## What This Snapshot Supports
 
 - All three providers improved POSIX compliance in Bridge-Aided mode.
-- Gemini showed the cleanest visible gain: better compliance, shorter answers, and no provider errors in bridge mode.
+- Gemini showed the cleanest visible gain: better compliance, shorter answers, and no provider errors with Sayance enabled.
 - Codex improved the most on POSIX-target selection, but remained verbose and tool-heavy.
 - Claude improved on compliance and trap avoidance, but in this rerun rarely used the explicit lookup path.
 
@@ -112,9 +112,9 @@ Interpretation:
 
 - **k=1 only.** These runs are directional, not publication-grade.
 - **Current cited snapshot is legacy.** The April 15 artifacts predate provenance hardening, so they do not expose the new corpus/prompt fingerprint fields or planned-result metrics.
-- **Raw bridge cost is an upper bound.** The harness replays prompt context during simulated lookup, so raw billable cost overstates the eventual value of correct-first-time behavior.
+- **Raw Sayance cost is an upper bound.** The harness replays prompt context during simulated lookup, so raw billable cost overstates the eventual value of correct-first-time behavior.
 - **Prompt injection and lookup usage are not the same thing.** Claude mostly benefited from injected context without taking the explicit lookup path.
-- **Gemini unaided is denominator-unstable.** The `12` provider errors in the unaided run mean part of the bridge delta may reflect reliability, not just tool selection.
+- **Gemini unaided is denominator-unstable.** The `12` provider errors in the unaided run mean part of the Sayance lift may reflect reliability, not just tool selection.
 - **Codex coverage is incomplete in the latest rerun.** `T02` is missing in both fresh Codex tracks, so the current Codex table is based on a 39-question subset.
 
 ## What the Benchmark Measures

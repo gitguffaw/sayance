@@ -117,7 +117,7 @@ This is the highest-value work. It improves both rigor and external credibility.
 2. **Add repo structural integrity checks**
    - `make test-repo` or `scripts/verify_repo.py`
    - Validate:
-     - `posix-core.md`, `skill/SKILL.md`, and `skill/posix-tldr.json` stay in sync where expected
+     - `sayance-core.md`, `skill/SKILL.md`, and `skill/sayance-tldr.json` stay in sync where expected
      - JSON artifacts parse
      - shipped CLI is executable
      - installer paths are sane
