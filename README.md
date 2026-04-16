@@ -69,6 +69,7 @@ The Discovery Map tells the agent *what exists*. Syntax Lookup tells it *how to 
 Latest snapshot: 40-question corpus, `k=1`, rerun on `2026-04-15`. Models: `claude-opus-4-6`, `gpt-5.4`, and `gemini-3.1-pro-preview`.
 
 These numbers are useful for regression tracking and product direction. They are not publication-grade statistical claims.
+They also predate the provenance-hardening work in this repo, so treat them as **legacy artifacts** rather than fully self-authenticating benchmark records.
 
 ### POSIX Compliance: Unaided vs Bridge-Aided
 
@@ -106,6 +107,12 @@ These numbers are useful for regression tracking and product direction. They are
 ### What These Numbers Mean
 
 Unaided and Bridge-Aided runs measure POSIX-target selection, verbosity, and latency on a fixed text-only benchmark. They do not, by themselves, prove end-to-end command correctness or real-world time savings.
+
+Current benchmark artifacts use two denominator styles:
+- `posix_compliance_rate` uses only report-visible rows.
+- `planned_posix_compliance_rate` keeps explicit provider-error rows in the denominator.
+
+Pre-hardening runs may only expose the visible-row denominator and may not include a provenance block or planned-result counts.
 
 The `--execute` flag enables Command Verification, which runs extracted commands against fixtures and validates output. `30/40` questions currently have execution fixtures; `T31`-`T40` remain unverified. The working hypothesis is that the bridge's upfront cost can still be worthwhile if it reduces retry loops and wrong-tool detours downstream.
 
@@ -201,7 +208,9 @@ python3 run_benchmark.py --llms gemini --max-workers 1 --delay 30 --results-dir 
 Summary validity semantics:
 - Token metrics use `usage_valid_results`.
 - Visibility metrics use `report_visible_results`.
+- Planned-run metrics use `planned_results` and `planned_posix_compliance_rate` in provenance-hardened summaries.
 - `usage_invalid_results` and `invalid_usage_reasons` explain parser/telemetry issues.
+- `provider_error_results` and `dropped_results` make denominator integrity explicit in hardened summaries.
 - `valid_results` remains as a backward-compatible alias of `usage_valid_results`.
 - In custom `--results-dir` runs, benchmark artifacts are retained as a single latest pair (`summary-*.json` and `report-*.html`) to avoid ambiguous multi-summary directories.
 - In comparison HTML, latency is shown in seconds and token context rows include input/cached/billable-minus-output values.
@@ -231,6 +240,11 @@ make test-product-negative    # failure injection sensitivity
 ```
 
 GitHub Actions CI runs `make verify` on every push and pull request to `main`.
+
+## Artifact Trust Levels
+
+- **Provenance-hardened artifacts** include a top-level `provenance` block plus explicit `planned_results`, `provider_error_results`, and `planned_posix_compliance_rate` fields.
+- **Legacy artifacts** predate that schema. They remain useful for directional history, but they are weaker for audit-grade comparison because corpus/prompt provenance and planned-denominator metrics may be missing.
 
 ## Repository Map
 
