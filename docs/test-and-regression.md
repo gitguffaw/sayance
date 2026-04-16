@@ -126,7 +126,7 @@ Run these for packaging/distribution changes and before releasing skill updates:
 
 ## Install Testing CI Enforcement Constraint (Current Repo)
 
-Observed for `gitguffaw/posix` on 2026-04-03:
+Observed for `gitguffaw/sayance` on 2026-04-03:
 - GitHub Actions is enabled and workflows can run.
 - Required status-check merge gating via branch protection is unavailable for the current private-repo plan.
 
