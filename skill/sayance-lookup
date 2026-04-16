@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""posix-lookup: POSIX Issue 8 utility syntax reference.
+"""sayance-lookup: POSIX Issue 8 utility syntax reference.
 
 Usage:
-    posix-lookup <utility>       Show syntax and examples
-    posix-lookup --list          List all available utilities
-    posix-lookup --json <util>   Output as JSON
+    sayance-lookup <utility>       Show syntax and examples
+    sayance-lookup --list          List all available utilities
+    sayance-lookup --json <util>   Output as JSON
 """
 import json
 import sys
@@ -14,15 +14,15 @@ _HERE = Path(__file__).resolve().parent
 
 
 def resolve_data_path() -> Path | None:
-    """Locate posix-tldr.json across installed and development layouts."""
+    """Locate sayance-tldr.json across installed and development layouts."""
     candidates = [
         # Installed skill layouts
-        _HERE / "posix-tldr.json",
+        _HERE / "sayance-tldr.json",
         # Dev repo layout
-        _HERE.parent / "posix-tldr.json",
+        _HERE.parent / "sayance-tldr.json",
         # Explicit home fallbacks for cross-agent installs
-        Path.home() / ".claude" / "skills" / "posix" / "posix-tldr.json",
-        Path.home() / ".codex" / "skills" / "posix" / "posix-tldr.json",
+        Path.home() / ".claude" / "skills" / "sayance" / "sayance-tldr.json",
+        Path.home() / ".codex" / "skills" / "sayance" / "sayance-tldr.json",
     ]
     for candidate in candidates:
         if candidate.exists():
@@ -32,14 +32,14 @@ def resolve_data_path() -> Path | None:
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: posix-lookup <utility>", file=sys.stderr)
-        print("       posix-lookup --list", file=sys.stderr)
+        print("Usage: sayance-lookup <utility>", file=sys.stderr)
+        print("       sayance-lookup --list", file=sys.stderr)
         sys.exit(1)
 
     data_path = resolve_data_path()
     if data_path is None:
         print(
-            "Could not locate posix-tldr.json. Install with 'make install' "
+            "Could not locate sayance-tldr.json. Install with 'make install' "
             "or place the file next to this script.",
             file=sys.stderr,
         )
@@ -69,7 +69,7 @@ def main():
 
     entry = tldr.get(arg)
     if not entry:
-        print(f"No entry for '{arg}'. Run posix-lookup --list for available utilities.", file=sys.stderr)
+        print(f"No entry for '{arg}'. Run sayance-lookup --list for available utilities.", file=sys.stderr)
         sys.exit(1)
 
     for line in entry:

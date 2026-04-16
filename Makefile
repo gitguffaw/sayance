@@ -1,5 +1,5 @@
-CLAUDE_SKILL_DIR := $(HOME)/.claude/skills/posix
-CODEX_SKILL_DIR  := $(HOME)/.codex/skills/posix
+CLAUDE_SKILL_DIR := $(HOME)/.claude/skills/sayance
+CODEX_SKILL_DIR  := $(HOME)/.codex/skills/sayance
 BIN_DIR          := $(HOME)/.local/bin
 REPO_DIR         := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
@@ -12,41 +12,41 @@ install-all: install-claude install-codex
 	@echo "Installed:"
 	@echo "  Claude -> $(CLAUDE_SKILL_DIR)/"
 	@echo "  Codex  -> $(CODEX_SKILL_DIR)/"
-	@echo "  CLI    -> $(BIN_DIR)/posix-lookup"
+	@echo "  CLI    -> $(BIN_DIR)/sayance-lookup"
 	@echo ""
 	@echo "Restart Claude Code / Codex to load the skill."
 
 install-claude:
 	@mkdir -p $(CLAUDE_SKILL_DIR) $(BIN_DIR)
 	cp skill/SKILL.md $(CLAUDE_SKILL_DIR)/SKILL.md
-	cp skill/posix-lookup $(CLAUDE_SKILL_DIR)/posix-lookup
-	cp skill/posix-tldr.json $(CLAUDE_SKILL_DIR)/posix-tldr.json
-	chmod +x $(CLAUDE_SKILL_DIR)/posix-lookup
-	ln -sf $(CLAUDE_SKILL_DIR)/posix-lookup $(BIN_DIR)/posix-lookup
+	cp skill/sayance-lookup $(CLAUDE_SKILL_DIR)/sayance-lookup
+	cp skill/sayance-tldr.json $(CLAUDE_SKILL_DIR)/sayance-tldr.json
+	chmod +x $(CLAUDE_SKILL_DIR)/sayance-lookup
+	ln -sf $(CLAUDE_SKILL_DIR)/sayance-lookup $(BIN_DIR)/sayance-lookup
 
 install-codex:
 	@mkdir -p $(CODEX_SKILL_DIR) $(BIN_DIR)
 	cp skill/SKILL.md $(CODEX_SKILL_DIR)/SKILL.md
-	cp skill/posix-lookup $(CODEX_SKILL_DIR)/posix-lookup
-	cp skill/posix-tldr.json $(CODEX_SKILL_DIR)/posix-tldr.json
-	chmod +x $(CODEX_SKILL_DIR)/posix-lookup
-	ln -sf $(CODEX_SKILL_DIR)/posix-lookup $(BIN_DIR)/posix-lookup
+	cp skill/sayance-lookup $(CODEX_SKILL_DIR)/sayance-lookup
+	cp skill/sayance-tldr.json $(CODEX_SKILL_DIR)/sayance-tldr.json
+	chmod +x $(CODEX_SKILL_DIR)/sayance-lookup
+	ln -sf $(CODEX_SKILL_DIR)/sayance-lookup $(BIN_DIR)/sayance-lookup
 
 uninstall:
 	rm -rf $(CLAUDE_SKILL_DIR)
 	rm -rf $(CODEX_SKILL_DIR)
-	rm -f $(BIN_DIR)/posix-lookup
+	rm -f $(BIN_DIR)/sayance-lookup
 	@echo "Removed Claude+Codex skill installs and CLI."
 
 uninstall-claude:
 	rm -rf $(CLAUDE_SKILL_DIR)
-	@LINK=$$(readlink $(BIN_DIR)/posix-lookup 2>/dev/null); \
-	if [ "$$LINK" = "$(CLAUDE_SKILL_DIR)/posix-lookup" ]; then \
-		if [ -x $(CODEX_SKILL_DIR)/posix-lookup ]; then \
-			ln -sf $(CODEX_SKILL_DIR)/posix-lookup $(BIN_DIR)/posix-lookup; \
+	@LINK=$$(readlink $(BIN_DIR)/sayance-lookup 2>/dev/null); \
+	if [ "$$LINK" = "$(CLAUDE_SKILL_DIR)/sayance-lookup" ]; then \
+		if [ -x $(CODEX_SKILL_DIR)/sayance-lookup ]; then \
+			ln -sf $(CODEX_SKILL_DIR)/sayance-lookup $(BIN_DIR)/sayance-lookup; \
 			echo "Repointed symlink to Codex copy."; \
 		else \
-			rm -f $(BIN_DIR)/posix-lookup; \
+			rm -f $(BIN_DIR)/sayance-lookup; \
 			echo "Removed dangling symlink."; \
 		fi; \
 	fi
@@ -54,30 +54,30 @@ uninstall-claude:
 
 uninstall-codex:
 	rm -rf $(CODEX_SKILL_DIR)
-	@LINK=$$(readlink $(BIN_DIR)/posix-lookup 2>/dev/null); \
-	if [ "$$LINK" = "$(CODEX_SKILL_DIR)/posix-lookup" ]; then \
-		if [ -x $(CLAUDE_SKILL_DIR)/posix-lookup ]; then \
-			ln -sf $(CLAUDE_SKILL_DIR)/posix-lookup $(BIN_DIR)/posix-lookup; \
+	@LINK=$$(readlink $(BIN_DIR)/sayance-lookup 2>/dev/null); \
+	if [ "$$LINK" = "$(CODEX_SKILL_DIR)/sayance-lookup" ]; then \
+		if [ -x $(CLAUDE_SKILL_DIR)/sayance-lookup ]; then \
+			ln -sf $(CLAUDE_SKILL_DIR)/sayance-lookup $(BIN_DIR)/sayance-lookup; \
 			echo "Repointed symlink to Claude copy."; \
 		else \
-			rm -f $(BIN_DIR)/posix-lookup; \
+			rm -f $(BIN_DIR)/sayance-lookup; \
 			echo "Removed dangling symlink."; \
 		fi; \
 	fi
 	@echo "Removed Codex skill install."
 
 test:
-	@echo "=== posix-lookup pax ==="
-	@python3 skill/posix-lookup pax
+	@echo "=== sayance-lookup pax ==="
+	@python3 skill/sayance-lookup pax
 	@echo ""
-	@echo "=== posix-lookup --list ==="
-	@python3 skill/posix-lookup --list
+	@echo "=== sayance-lookup --list ==="
+	@python3 skill/sayance-lookup --list
 	@echo ""
-	@echo "=== posix-lookup --json od ==="
-	@python3 skill/posix-lookup --json od
+	@echo "=== sayance-lookup --json od ==="
+	@python3 skill/sayance-lookup --json od
 	@echo ""
-	@echo "=== posix-lookup bad-util (expect error) ==="
-	@python3 skill/posix-lookup bad-util 2>&1; true
+	@echo "=== sayance-lookup bad-util (expect error) ==="
+	@python3 skill/sayance-lookup bad-util 2>&1; true
 	@echo ""
 	@echo "All tests passed."
 
@@ -88,10 +88,10 @@ test-product-negative:
 	@./scripts/test_product_negative.sh
 
 test-product-live-claude:
-	@POSIX_LIVE_CANARY=1 ./scripts/test_product_live.sh claude
+	@SAYANCE_LIVE_CANARY=1 ./scripts/test_product_live.sh claude
 
 test-product-live-codex:
-	@POSIX_LIVE_CANARY=1 ./scripts/test_product_live.sh codex
+	@SAYANCE_LIVE_CANARY=1 ./scripts/test_product_live.sh codex
 
 test-repo:
 	@python3 scripts/verify_repo.py
