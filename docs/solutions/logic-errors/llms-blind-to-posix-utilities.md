@@ -3,7 +3,7 @@ title: "LLMs are blind to POSIX utilities and reach for non-POSIX tools"
 category: logic-errors
 date: 2026-03-22
 tags: [posix, llm, token-efficiency, cli, benchmarking]
-module: posix-benchmark
+module: sayance-benchmark
 symptom: "LLMs suggest non-POSIX tools (tar, xxd, base64, sed -i, grep -r) when POSIX equivalents exist"
 root_cause: "Training data heavily weighted toward GNU/Linux tools; POSIX-only utilities underrepresented"
 ---

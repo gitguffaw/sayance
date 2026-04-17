@@ -106,7 +106,7 @@ def setup_fixture(fixture_spec: dict) -> tuple[Path | None, str]:
     if not fixture_path.is_dir():
         return None, f"fixture directory not found: {fixture_path}"
 
-    temp_dir = Path(tempfile.mkdtemp(prefix=f"posix_exec_{fixture_name}_"))
+    temp_dir = Path(tempfile.mkdtemp(prefix=f"sayance_exec_{fixture_name}_"))
 
     # If there's a setup/ subdir, copy its contents; otherwise copy everything
     # except expected_stdout and expected/
@@ -279,4 +279,3 @@ def execute_question(question: dict, response: str) -> ExecutionRecord:
         )
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
-
