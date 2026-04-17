@@ -68,7 +68,7 @@ The Discovery Map tells the agent *what exists*. Syntax Lookup tells it *how to 
 
 ## What the Latest Benchmark Shows
 
-Latest snapshot: 40-question corpus, `k=1`, rerun on `2026-04-15`. Models: `claude-opus-4-6`, `gpt-5.4`, and `gemini-3.1-pro-preview`.
+Latest snapshot: 40-question corpus, `k=1`, with base runs on `2026-04-15` and targeted Codex/Gemini backfills on `2026-04-17`. Models: `claude-opus-4-6`, `gpt-5.4`, and `gemini-3.1-pro-preview`.
 
 These numbers are useful for regression tracking and product direction. They are not publication-grade statistical claims.
 They also predate the provenance-hardening work in this repo, so treat them as **legacy artifacts** rather than fully self-authenticating benchmark records.
@@ -79,32 +79,32 @@ They also predate the provenance-hardening work in this repo, so treat them as *
 |:---------|:--------|:-------------|:------|
 | **Claude** | `███████░░░` 70% | `█████████░` 88% | **+18 pts** |
 | **Codex** | `███████░░░` 69% | `██████████` 95% | **+26 pts** |
-| **Gemini** | `██████░░░░` 61%* | `████████░░` 85% | **+24 pts** |
+| **Gemini** | `███████░░░` 70%* | `████████░░` 85% | **+15 pts** |
 
-\* Gemini's unaided run had `12` provider errors, so the `61%` figure is computed over `28` visible results rather than the full `40`.
+\* Gemini's published unaided row is a composite backfill: `28` rows from the April 15 aggregate plus targeted April 17 reruns for the 12 formerly missing questions. It is not a fresh single-run 40-question Gemini rerun.
 
 ### Snapshot (40 questions, k=1)
 
 | | Claude | Codex | Gemini |
 |:---|:---:|:---:|:---:|
-| **Compliance (unaided)** | 70% | 70% | 61%* |
+| **Compliance (unaided)** | 70% | 70% | 70%* |
 | **Compliance (bridge-aided)** | 88% | 95% | 85% |
 | **Mean output tokens (unaided)** | 314 | 1,040 | 243 |
 | **Mean output tokens (bridge-aided)** | 452 | 1,385 | 92 |
-| **Mean latency (unaided)** | 10.1s | 22.2s | 20.7s |
+| **Mean latency (unaided)** | 10.1s | 22.2s | 19.6s |
 | **Mean latency (bridge-aided)** | 14.4s | 31.9s | 24.4s |
-| **Non-POSIX substitutions (unaided)** | 6 | 6 | 7 |
-| **Non-POSIX substitutions (bridge-aided)** | 1 | 0 | 3 |
-| **Visible results** | 40/40 both | 40/40 both** | 28/40 unaided, 40/40 bridge |
+| **Non-POSIX substitutions (unaided)** | 6 | 6 | 8 |
+| **Non-POSIX substitutions (bridge-aided)** | 1 | 0 | 4 |
+| **Visible results** | 40/40 both | 40/40 both** | 40/40 both* |
 | **Dominant bridge-aided style** | over_explaining | tool_heavy_detour | minimal_or_near_minimal |
 
 \** The Codex row is a composite backfill: `39` rows from the April 15, 2026 aggregate plus targeted April 17, 2026 `T02` reruns in unaided and bridge-aided mode. It is not a fresh single-run 40-question Codex rerun.
 
 - **All three providers improved POSIX compliance** in the bridge-aided run.
-- **Gemini** showed the cleanest visible gain: higher compliance, much shorter answers, and no provider errors in bridge mode.
+- **Gemini** still improved in bridge-aided mode, but the gain narrowed after backfilling the 12 missing unaided rows.
 - **Codex** improved the most on tool selection, but remained verbose and tool-heavy.
 - **Claude** improved on compliance and trap avoidance, but in this rerun it rarely invoked the explicit lookup path.
-- **Raw billable tokens did not decrease** in this simulation path. Bridge mode prepends the Discovery Map and may trigger a second model turn for lookup replay, so raw bridge cost is an upper bound rather than the final efficiency story.
+- **Raw billable tokens remain cache-sensitive** in this simulation path. Bridge mode prepends the Discovery Map and may trigger a second model turn for lookup replay, but targeted backfills also change cache state, so raw bridge-vs-unaided cost is only directional here.
 
 ### What These Numbers Mean
 
