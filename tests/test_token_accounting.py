@@ -1169,7 +1169,7 @@ class ResultPreservationTests(unittest.TestCase):
             "required_concept_groups": [{"label": "expr or $(())", "patterns": [r"\bexpr\b", r"\$\(\("]}],
             "tier": 1,
         }
-        prompt = benchmark.runner._build_effective_prompt(question, inject_posix=False)
+        prompt = benchmark.runner._build_effective_prompt(question, llm="claude", inject_posix=False)
         expected_provenance = benchmark.runner._result_provenance(question, prompt=prompt)
 
         result = make_result(
@@ -1303,6 +1303,85 @@ class InvokeCliBytesRegressionTests(unittest.TestCase):
         payload = json.loads(invocation.stdout)
         self.assertEqual(payload["error"], "timeout")
         self.assertEqual(payload["stderr"], "normal text stderr")
+
+    def test_invoke_cli_closes_stdin_for_subprocess(self) -> None:
+        from benchmark_core import providers as providers_module
+
+        captured_kwargs: dict[str, object] = {}
+
+        def fake_run(*args, **kwargs):
+            del args
+            captured_kwargs.update(kwargs)
+            return providers_module.subprocess.CompletedProcess(
+                args=[],
+                returncode=0,
+                stdout='{"status":"ok"}',
+                stderr="",
+            )
+
+        with mock.patch.object(providers_module.subprocess, "run", side_effect=fake_run):
+            benchmark.invoke_cli("codex", "prompt", timeout_seconds=1)
+
+        self.assertIs(captured_kwargs["stdin"], providers_module.subprocess.DEVNULL)
+
+
+class PromptConstructionTests(unittest.TestCase):
+    def test_build_effective_prompt_wraps_codex_in_benchmark_mode(self) -> None:
+        from benchmark_core import runner as runner_module
+
+        question = {
+            "id": "T02",
+            "question": "I need to know which `.conf` files anywhere on the system have changed since yesterday.",
+        }
+
+        prompt = runner_module._build_effective_prompt(question, llm="codex", inject_posix=False)
+
+        self.assertIn("BENCHMARK MODE", prompt)
+        self.assertIn("Do not inspect the local filesystem", prompt)
+        self.assertIn(question["question"], prompt)
+
+    def test_build_effective_prompt_wraps_codex_bridge_mode_without_direct_answer_instruction(self) -> None:
+        from benchmark_core import runner as runner_module
+
+        question = {"id": "T02", "question": "raw prompt"}
+
+        prompt = runner_module._build_effective_prompt(
+            question,
+            llm="codex",
+            inject_posix=True,
+            load_posix_core_fn=lambda: "CORE",
+        )
+
+        self.assertIn("CORE", prompt)
+        self.assertIn("TOOL INSTRUCTION", prompt)
+        self.assertIn("If this prompt instructs you to emit a TOOL_CALL", prompt)
+        self.assertNotIn("Respond with the POSIX command you would recommend", prompt)
+        self.assertIn("TASK:\nraw prompt", prompt)
+
+    def test_build_effective_prompt_leaves_non_codex_unaided_prompt_raw(self) -> None:
+        from benchmark_core import runner as runner_module
+
+        question = {"id": "T01", "question": "raw prompt"}
+
+        prompt = runner_module._build_effective_prompt(question, llm="claude", inject_posix=False)
+
+        self.assertEqual(prompt, "raw prompt")
+
+    def test_build_effective_prompt_bridge_mode_uses_real_task_newline_for_non_codex(self) -> None:
+        from benchmark_core import runner as runner_module
+
+        question = {"id": "T01", "question": "raw prompt"}
+
+        prompt = runner_module._build_effective_prompt(
+            question,
+            llm="claude",
+            inject_posix=True,
+            load_posix_core_fn=lambda: "CORE",
+        )
+
+        self.assertIn("CORE", prompt)
+        self.assertIn("TASK:\nraw prompt", prompt)
+        self.assertNotIn(r"TASK:\nraw prompt", prompt)
 
 
 if __name__ == "__main__":

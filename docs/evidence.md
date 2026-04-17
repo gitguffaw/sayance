@@ -10,7 +10,7 @@ Two artifact classes now exist in this repo:
 
 ## Current Snapshot (40 Questions, k=1)
 
-**Run date:** 2026-04-15  
+**Run date:** 2026-04-15 base summaries, with Codex `T02` patched from targeted 2026-04-17 reruns  
 **Corpus:** 40 intent-based questions  
 **Mode:** Unaided vs. Bridge-Aided  
 **Models:** `claude-opus-4-6`, `gpt-5.4`, `gemini-3.1-pro-preview`
@@ -18,18 +18,21 @@ Two artifact classes now exist in this repo:
 **Artifacts:**
 - Unaided summary: `results/unaided/claude-codex-gemini-D2026-04-15-T16-23-20/summary-claude-codex-gemini-D2026-04-15-T16-23-20.json`
 - Bridge-Aided summary: `results/bridge-aided/claude-codex-gemini-D2026-04-15-T15-19-11/summary-claude-codex-gemini-D2026-04-15-T15-19-11.json`
+- Codex `T02` unaided patch: `results/patches/codex-t02-unaided-D2026-04-17-T15-48-13/summary-codex-t02-unaided-D2026-04-17-T15-48-13.json`
+- Codex `T02` bridge-aided patch: `results/patches/codex-t02-bridge-aided-D2026-04-17-T15-48-13/summary-codex-t02-bridge-aided-D2026-04-17-T15-48-13.json`
 
-Note: these raw result directories are gitignored; the paths above describe artifacts produced locally when re-running the snapshot. See the "Reproducing the Current Snapshot" section below.
+Note: these raw result directories are gitignored; the paths above describe artifacts produced locally when re-running the snapshot and the targeted Codex `T02` backfill. See the "Reproducing the Current Snapshot" section below.
 
 These runs are useful for regression tracking and product direction. They are not publication-grade statistical claims.
 They are also **legacy artifacts** relative to the current hardened schema: they do not carry the new provenance and planned-denominator fields yet.
+For Codex specifically, the published 40-question row below is a composite: `39` rows from the April 15 aggregate plus targeted April 17 `T02` backfill rows.
 
 ### POSIX Compliance
 
 | Provider | Unaided | Bridge-Aided | Delta |
 |----------|---------|-------------|-------|
 | Claude | 70.0% | 87.5% | +17.5 pts |
-| Codex | 69.2% | 94.9% | +25.6 pts |
+| Codex | 70.0% | 95.0% | +25.0 pts |
 | Gemini | 60.7%* | 85.0% | +24.3 pts |
 
 \* Gemini's unaided rate is computed over `28` visible results. That run had `12` provider errors.
@@ -40,19 +43,19 @@ These are **visible-row** compliance rates. In provenance-hardened summaries, th
 
 | Metric | Claude | Codex | Gemini |
 |---|---|---|---|
-| Visible results (unaided) | 40/40 | 39/39** | 28/40 |
-| Visible results (bridge-aided) | 40/40 | 39/39** | 40/40 |
-| Compliance (unaided) | 70.0% | 69.2% | 60.7%* |
-| Compliance (bridge-aided) | 87.5% | 94.9% | 85.0% |
-| Mean output tokens (unaided) | 314 | 1,052 | 243 |
-| Mean output tokens (bridge-aided) | 452 | 1,392 | 92 |
-| Mean latency (unaided) | 10.1s | 22.3s | 20.7s |
-| Mean latency (bridge-aided) | 14.4s | 32.1s | 24.4s |
+| Visible results (unaided) | 40/40 | 40/40** | 28/40 |
+| Visible results (bridge-aided) | 40/40 | 40/40** | 40/40 |
+| Compliance (unaided) | 70.0% | 70.0% | 60.7%* |
+| Compliance (bridge-aided) | 87.5% | 95.0% | 85.0% |
+| Mean output tokens (unaided) | 314 | 1,040 | 243 |
+| Mean output tokens (bridge-aided) | 452 | 1,385 | 92 |
+| Mean latency (unaided) | 10.1s | 22.2s | 20.7s |
+| Mean latency (bridge-aided) | 14.4s | 31.9s | 24.4s |
 | Non-POSIX substitutions (unaided) | 6 | 6 | 7 |
 | Non-POSIX substitutions (bridge-aided) | 1 | 0 | 3 |
 | Dominant bridge-aided style | `over_explaining` | `tool_heavy_detour` | `minimal_or_near_minimal` |
 
-\** Codex is missing `T02` in both fresh reruns. Treat the current Codex snapshot as a `39`-question comparison until that benchmark-path issue is resolved.
+\** The Codex row is a composite backfill: `39` rows from the April 15, 2026 aggregate plus targeted April 17, 2026 `T02` reruns in unaided and bridge-aided mode. It is not a fresh single-run 40-question Codex rerun.
 
 ### Lookup Engagement
 
@@ -61,7 +64,7 @@ Bridge-Aided mode does not guarantee that every provider will actually use the e
 | Provider | Questions with `get_posix_syntax` calls | Notes |
 |---|---:|---|
 | Claude | 1/40 | Mostly benefited from prompt injection alone |
-| Codex | 35/39 | Lookup path engaged heavily |
+| Codex | 36/40 | Lookup path engaged heavily |
 | Gemini | 37/40 | Lookup path engaged heavily |
 
 This matters when interpreting the results. Sayance is currently a mix of injected context and optional lookup behavior, not a fully enforced tool gate.
@@ -85,7 +88,7 @@ Raw billable tokens increased in Bridge-Aided mode for all three providers:
 | Provider | Raw billable unaided | Raw billable bridge-aided |
 |---|---:|---:|
 | Claude | 1,967,017 | 3,358,750 |
-| Codex | 1,075,623 | 1,579,552 |
+| Codex | 1,115,991** | 1,621,679** |
 | Gemini | 347,609 | 546,811 |
 
 That is expected in the current simulation path. Bridge-Aided mode prepends the Discovery Map and may trigger a second model turn for tool replay.
@@ -95,8 +98,10 @@ The benchmark therefore also records **simulation-adjusted** Sayance billable to
 | Provider | Unaided billable | Bridge-Aided simulation-adjusted billable |
 |---|---:|---:|
 | Claude | 1,967,017 | 3,320,074 |
-| Codex | 1,075,623 | 959,177 |
+| Codex | 1,115,991** | 1,000,590** |
 | Gemini | 347,609 | 225,699 |
+
+\** Codex billable totals are also composite backfills. Because `T02` was rerun separately on April 17, 2026, its cache state may not exactly match the original April 15 full-run cache conditions.
 
 Interpretation:
 - Claude improved on POSIX compliance, but did not show a token-efficiency win in this rerun.
@@ -117,7 +122,7 @@ Interpretation:
 - **Raw Sayance cost is an upper bound.** The harness replays prompt context during simulated lookup, so raw billable cost overstates the eventual value of correct-first-time behavior.
 - **Prompt injection and lookup usage are not the same thing.** Claude mostly benefited from injected context without taking the explicit lookup path.
 - **Gemini unaided is denominator-unstable.** The `12` provider errors in the unaided run mean part of the Sayance lift may reflect reliability, not just tool selection.
-- **Codex coverage is incomplete in the latest rerun.** `T02` is missing in both fresh Codex tracks, so the current Codex table is based on a 39-question subset.
+- **The published Codex row is a composite patch, not a fresh single-run rerun.** It combines `39` rows from the April 15 aggregate with targeted April 17 `T02` reruns, so it is better than the old missing-row snapshot but still not identical to a fresh end-to-end 40-question Codex run.
 
 ## What the Benchmark Measures
 

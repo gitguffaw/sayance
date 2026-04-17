@@ -18,7 +18,7 @@ No virtualenv or external dependencies needed — pure stdlib Python 3.
 Run `make verify`. It chains five stages in fast-to-slow order:
 
 1. **Syntax check** — `python3 -m py_compile` on all Python files
-2. **Unit tests** — `python3 -m unittest`
+2. **Unit tests** — `python3 -m unittest discover -s tests -t .`
 3. **Repo integrity** — source artifact presence, JSON validity, 142-utility (macOS subset) consistency across all four sources
 4. **Product conformance** — install/uninstall in an isolated HOME, CLI behavior, drift detection
 5. **Failure injection** — intentionally broken artifacts are detected correctly
