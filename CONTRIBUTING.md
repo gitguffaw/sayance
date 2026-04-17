@@ -6,7 +6,7 @@ Thanks for your interest. Sayance is a small, focused two-layer reference inject
 
 ```bash
 git clone https://github.com/gitguffaw/sayance.git
-cd posix
+cd sayance
 make verify        # runs all validation checks
 sayance-lookup pax   # confirm the CLI works
 ```
@@ -55,6 +55,28 @@ Open an issue first if your change touches any of these.
    - Whether API-backed or live tests were executed (and if so, which models)
 
 Do not commit `results/` directories, API keys, or cost data.
+
+## Release Process
+
+Sayance has a single public version axis: the product version, tracked in the
+repo-root `VERSION` file. It is mirrored into `skill/VERSION` so
+`sayance-lookup --version` works after install.
+
+Internal fields (`benchmark_data.json.meta.version`, `PROMPT_TEMPLATE_VERSION`
+in `benchmark_core/config.py`, and the `version` field in summary JSON) are
+not user-facing and move on their own cadence — do not bump them to match the
+product version.
+
+To cut a release:
+
+1. Update `VERSION` and `skill/VERSION` to the new SemVer value.
+2. Update `skill/SKILL.md` frontmatter `version` to match.
+3. Add a new entry to `CHANGELOG.md` (Keep-a-Changelog format) dated today.
+4. Run `make verify` — all stages must pass.
+5. Open a PR, get CI green, merge.
+6. Tag the merge commit with an annotated tag: `git tag -a vX.Y.Z -m "vX.Y.Z"`.
+7. Push the tag: `git push origin vX.Y.Z`.
+8. Create a GitHub Release from the tag with the CHANGELOG excerpt as the body.
 
 ## Code Style
 

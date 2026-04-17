@@ -1,5 +1,6 @@
 ---
 name: sayance
+version: 1.0.0
 description: POSIX Issue 8 utility bridge — fixes LLM blindness to the 142 POSIX.1-2024 utilities available on macOS. Auto-activates when tasks involve file manipulation, text processing, archiving, process management, or shell scripting. Injects semantic map + provides CLI lookup for exact syntax.
 ---
 

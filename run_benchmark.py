@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""POSIX Token Efficiency Benchmark v0.4
+"""Sayance Benchmark
 
 Compatibility facade for the benchmark_core package.
 """

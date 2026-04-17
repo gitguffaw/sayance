@@ -20,10 +20,7 @@ venv/
 # Benchmark artifacts and ephemera
 results/**
 state/
-docs/archive/*
-!docs/archive/comparisonReview/
-docs/archive/comparisonReview/*
-!docs/archive/comparisonReview/synthesis.md
+docs/archive/
 docs/solutions/workflow/
 docs/plans/
 todos/
