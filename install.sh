@@ -21,7 +21,7 @@ check_old_brand_artifacts() {
 
 # Sayance — one-line installer
 # Usage (stable, recommended):
-#   curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/v1.0.1/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/v1.0.2/install.sh | bash
 # Usage (bleeding-edge main):
 #   curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/main/install.sh | SAYANCE_REF=main bash
 #
@@ -32,7 +32,7 @@ check_old_brand_artifacts() {
 # release shipped with this script). Override with SAYANCE_REF=main to track
 # the development branch.
 
-readonly SAYANCE_REF="${SAYANCE_REF:-v1.0.1}"
+readonly SAYANCE_REF="${SAYANCE_REF:-v1.0.2}"
 readonly REPO_RAW="https://raw.githubusercontent.com/gitguffaw/sayance/${SAYANCE_REF}"
 readonly TARGET="${1:-all}"
 
