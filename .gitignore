@@ -1,7 +1,23 @@
 .DS_Store
 __pycache__/
 *.py[cod]
+*.log
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+
+# Python virtual envs
+.venv/
+venv/
+
+# Claude Code local state (personal, not shared)
 .claude/worktrees/
+.claude/settings.json
+.claude/settings.local.json
+
+# Benchmark artifacts and ephemera
 results/**
 state/
 docs/archive/*

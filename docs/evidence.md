@@ -16,8 +16,10 @@ Two artifact classes now exist in this repo:
 **Models:** `claude-opus-4-6`, `gpt-5.4`, `gemini-3.1-pro-preview`
 
 **Artifacts:**
-- Unaided summary: [results/unaided/claude-codex-gemini-D2026-04-15-T16-23-20/summary-claude-codex-gemini-D2026-04-15-T16-23-20.json](</Users/jeremyneal/Library/Mobile Documents/com~apple~CloudDocs/Fermenting/posix/results/unaided/claude-codex-gemini-D2026-04-15-T16-23-20/summary-claude-codex-gemini-D2026-04-15-T16-23-20.json>)
-- Bridge-Aided summary: [results/bridge-aided/claude-codex-gemini-D2026-04-15-T15-19-11/summary-claude-codex-gemini-D2026-04-15-T15-19-11.json](</Users/jeremyneal/Library/Mobile Documents/com~apple~CloudDocs/Fermenting/posix/results/bridge-aided/claude-codex-gemini-D2026-04-15-T15-19-11/summary-claude-codex-gemini-D2026-04-15-T15-19-11.json>)
+- Unaided summary: `results/unaided/claude-codex-gemini-D2026-04-15-T16-23-20/summary-claude-codex-gemini-D2026-04-15-T16-23-20.json`
+- Bridge-Aided summary: `results/bridge-aided/claude-codex-gemini-D2026-04-15-T15-19-11/summary-claude-codex-gemini-D2026-04-15-T15-19-11.json`
+
+Note: these raw result directories are gitignored; the paths above describe artifacts produced locally when re-running the snapshot. See the "Reproducing the Current Snapshot" section below.
 
 These runs are useful for regression tracking and product direction. They are not publication-grade statistical claims.
 They are also **legacy artifacts** relative to the current hardened schema: they do not carry the new provenance and planned-denominator fields yet.
