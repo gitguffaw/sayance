@@ -137,13 +137,13 @@ After install, confirm with `command -v sayance-lookup` — it should resolve un
 
 ```bash
 # Claude Code + Codex (stable, recommended)
-curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/v1.0.1/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/v1.0.2/install.sh | bash
 
 # Claude Code only
-curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/v1.0.1/install.sh | bash -s claude
+curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/v1.0.2/install.sh | bash -s claude
 
 # Codex only
-curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/v1.0.1/install.sh | bash -s codex
+curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/v1.0.2/install.sh | bash -s codex
 
 # Bleeding-edge (tracks main, not a release)
 curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/main/install.sh | SAYANCE_REF=main bash
