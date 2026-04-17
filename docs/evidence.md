@@ -55,7 +55,7 @@ These are **visible-row** compliance rates. In provenance-hardened summaries, th
 | Mean latency (unaided) | 10.1s | 22.2s | 19.6s |
 | Mean latency (bridge-aided) | 14.4s | 31.9s | 24.4s |
 | Non-POSIX substitutions (unaided) | 6 | 6 | 8 |
-| Non-POSIX substitutions (bridge-aided) | 1 | 0 | 3 |
+| Non-POSIX substitutions (bridge-aided) | 1 | 0 | 4 |
 | Dominant bridge-aided style | `over_explaining` | `tool_heavy_detour` | `minimal_or_near_minimal` |
 
 \** The Codex row is a composite backfill: `39` rows from the April 15, 2026 aggregate plus targeted April 17, 2026 `T02` reruns in unaided and bridge-aided mode. It is not a fresh single-run 40-question Codex rerun.

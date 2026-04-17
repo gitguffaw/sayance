@@ -94,7 +94,7 @@ They also predate the provenance-hardening work in this repo, so treat them as *
 | **Mean latency (unaided)** | 10.1s | 22.2s | 19.6s |
 | **Mean latency (bridge-aided)** | 14.4s | 31.9s | 24.4s |
 | **Non-POSIX substitutions (unaided)** | 6 | 6 | 8 |
-| **Non-POSIX substitutions (bridge-aided)** | 1 | 0 | 3 |
+| **Non-POSIX substitutions (bridge-aided)** | 1 | 0 | 4 |
 | **Visible results** | 40/40 both | 40/40 both** | 40/40 both* |
 | **Dominant bridge-aided style** | over_explaining | tool_heavy_detour | minimal_or_near_minimal |
 
