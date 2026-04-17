@@ -465,7 +465,7 @@ class ProvenanceReportingTests(unittest.TestCase):
             summary = json.loads(summary_path.read_text())
             manifest = json.loads((Path(tmpdir) / "run.json").read_text())
 
-        self.assertEqual(summary["version"], "0.5")
+        self.assertEqual(summary["summary_schema_version"], "0.5")
         self.assertEqual(summary["spec"], benchmark_config.BENCHMARK_SPEC)
         self.assertEqual(summary["spec_utilities_count"], benchmark_config.SPEC_UTILITIES_COUNT)
         self.assertEqual(summary["utilities_count"], summary["bridge_utilities_count"])

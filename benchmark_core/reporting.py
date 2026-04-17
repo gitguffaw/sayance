@@ -199,7 +199,7 @@ def save_summary(
     bridge_utilities_count = config.bridge_utilities_count()
 
     summary = {
-        "version": "0.5",
+        "summary_schema_version": "0.5",
         "timestamp": ts,
         "spec": config.BENCHMARK_SPEC,
         "spec_utilities_count": config.SPEC_UTILITIES_COUNT,

@@ -200,7 +200,8 @@ python3 run_benchmark.py --llms claude codex
 python3 run_benchmark.py --llms claude codex --inject-posix
 ```
 
-`--inject-posix` now fails fast if `sayance-core.md` or `sayance-tldr.json` do not fully cover all 155 POSIX Issue 8 utilities.
+`--inject-posix` now fails fast if `sayance-core.md` and `sayance-tldr.json` do not fully cover the 142 macOS-available POSIX Issue 8 utilities.
+The excluded utilities are listed in `docs/macos-excluded-utilities.md`.
 
 Model selection defaults:
 - Claude is pinned by default to `claude-opus-4-6`.
