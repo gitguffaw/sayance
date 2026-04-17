@@ -15,3 +15,38 @@ jobs:
         with:
           python-version: '3.x'
       - run: make verify
+
+  public-install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolve commit SHA
+        id: ref
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "sha=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Install via public curl one-liner
+        env:
+          SAYANCE_REF: ${{ steps.ref.outputs.sha }}
+        run: |
+          curl -fsSL "https://raw.githubusercontent.com/${{ github.repository }}/${{ steps.ref.outputs.sha }}/install.sh" \
+            | bash
+      - name: Verify installed CLI matches repo
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          expected="$(cat VERSION)"
+          actual="$(sayance-lookup --version | awk '{print $2}')"
+          if [ "$expected" != "$actual" ]; then
+            echo "VERSION mismatch: repo=$expected installed=$actual"
+            exit 1
+          fi
+          sayance-lookup pax > /dev/null
+          count="$(sayance-lookup --list | wc -l | tr -d ' ')"
+          if [ "$count" != "142" ]; then
+            echo "Expected 142 utilities on CLI, got $count"
+            exit 1
+          fi
+          echo "public install OK: sayance $actual, 142 utilities"
