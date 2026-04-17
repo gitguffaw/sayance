@@ -4,6 +4,26 @@ All notable changes to Sayance are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] — 2026-04-17
+
+### Removed
+- `docs/design-rationale/` — nine files of pre-release internal research that
+  contradicted the shipped product (referred to the CLI as `posix-ref`, cited
+  155 utilities with ~48 bridge candidates instead of the shipped 142, quoted
+  ~800/1,050-token plans instead of the deployed ~925, and listed features
+  as "not yet built" that have since shipped). Deleting rather than rewriting
+  avoids documentation drift.
+
+### Fixed
+- `docs/architecture.md` — corrected the Discovery Map size claim from
+  "~800 tokens" to the actual ~925 tokens deployed.
+- `CLAUDE.md`, `AGENTS.md`, `README.md` — removed references to the deleted
+  `docs/design-rationale/` tree.
+
+### Changed
+- Stable install one-liner and `install.sh` default `SAYANCE_REF` now point at
+  `v1.0.1`.
+
 ## [1.0.0] — 2026-04-17
 
 First public release.
@@ -30,4 +50,5 @@ First public release.
 - Optional live-canary tests (`SAYANCE_LIVE_CANARY=1 make test-product-live-*`)
   that validate fresh-session bridge activation against real providers.
 
+[1.0.1]: https://github.com/gitguffaw/sayance/releases/tag/v1.0.1
 [1.0.0]: https://github.com/gitguffaw/sayance/releases/tag/v1.0.0
