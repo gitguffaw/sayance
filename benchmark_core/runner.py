@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict
 from datetime import datetime
 
+from benchmark_core import __version__
 from benchmark_core import config
 from benchmark_core import execution as execution_module
 from benchmark_core import providers
@@ -893,7 +894,7 @@ def run_benchmark(
     exec_qs = [q for q in questions if q["id"] in manifest] if execute else []
 
     print(f"\n{'=' * 60}")
-    print(f"  POSIX Token Efficiency Benchmark v0.4")
+    print(f"  Sayance Benchmark v{__version__}")
     print(f"  {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     print(f"  Mode: {mode_label}")
     print(f"  LLMs: {', '.join(llms)}")

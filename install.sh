@@ -20,12 +20,20 @@ check_old_brand_artifacts() {
 }
 
 # Sayance — one-line installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/main/install.sh | bash
+# Usage (stable, recommended):
+#   curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/v1.0.0/install.sh | bash
+# Usage (bleeding-edge main):
+#   curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/main/install.sh | SAYANCE_REF=main bash
 #
 # Installs the Sayance skill for Claude Code and/or Codex CLI.
 # Pass "claude", "codex", or "all" (default) as an argument.
+#
+# The installer pulls artifacts from ${SAYANCE_REF} (default: the tagged
+# release shipped with this script). Override with SAYANCE_REF=main to track
+# the development branch.
 
-readonly REPO_RAW="https://raw.githubusercontent.com/gitguffaw/sayance/main"
+readonly SAYANCE_REF="${SAYANCE_REF:-v1.0.0}"
+readonly REPO_RAW="https://raw.githubusercontent.com/gitguffaw/sayance/${SAYANCE_REF}"
 readonly TARGET="${1:-all}"
 
 check_old_brand_artifacts
@@ -48,6 +56,7 @@ install_for() {
   curl -fsSL "${REPO_RAW}/skill/SKILL.md"        -o "${skill_dir}/SKILL.md"
   curl -fsSL "${REPO_RAW}/skill/sayance-lookup"     -o "${skill_dir}/sayance-lookup"
   curl -fsSL "${REPO_RAW}/skill/sayance-tldr.json"  -o "${skill_dir}/sayance-tldr.json"
+  curl -fsSL "${REPO_RAW}/skill/VERSION"           -o "${skill_dir}/VERSION"
 
   chmod +x "${skill_dir}/sayance-lookup"
   ln -sf "${skill_dir}/sayance-lookup" "${bin_dir}/sayance-lookup"

@@ -2,6 +2,7 @@ import argparse
 import json
 from pathlib import Path
 
+from benchmark_core import __version__
 from benchmark_core import config
 from benchmark_core import providers
 from benchmark_core import reporting
@@ -10,7 +11,10 @@ from benchmark_core import runner
 
 def main():
     parser = argparse.ArgumentParser(
-        description="POSIX Token Efficiency Benchmark",
+        description="Sayance Benchmark",
+    )
+    parser.add_argument(
+        "--version", action="version", version=f"sayance {__version__}",
     )
     parser.add_argument(
         "--llms", nargs="+", default=["claude", "codex"],
