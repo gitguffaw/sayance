@@ -54,7 +54,7 @@ make test-repo               # source artifact consistency, JSON validity, 142-u
 `make verify` runs all checks in sequence and fails on the first error:
 
 1. `python3 -m py_compile run_benchmark.py benchmark_core/*.py` (syntax check)
-2. `python3 -m unittest` (unit tests)
+2. `python3 -m unittest discover -s tests -t .` (unit tests)
 3. `make test-repo` (repo structural integrity)
 4. `make test-product` (installed product conformance)
 5. `make test-product-negative` (failure injection sensitivity)

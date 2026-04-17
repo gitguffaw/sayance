@@ -100,7 +100,7 @@ test-repo:
 
 verify:
 	python3 -m py_compile run_benchmark.py benchmark_core/*.py
-	python3 -m unittest
+	python3 -m unittest discover -s tests -t .
 	$(MAKE) test-repo
 	$(MAKE) test-product
 	$(MAKE) test-product-negative

@@ -244,6 +244,7 @@ def invoke_cli(
             cmd,
             capture_output=True,
             text=True,
+            stdin=subprocess.DEVNULL,
             timeout=timeout_seconds,
         )
         latency_ms = int((time.perf_counter() - started) * 1000)

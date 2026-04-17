@@ -75,14 +75,33 @@ def _sha256_json(payload: object) -> str:
     return _sha256_text(json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True))
 
 
+def _codex_benchmark_prompt(question_text: str, *, inject_posix: bool) -> str:
+    instruction = (
+        "BENCHMARK MODE: Treat this as a shell-advice question, not a request to act on the "
+        "current machine. Do not inspect the local filesystem, run commands, or search the "
+        "system state. "
+    )
+    if inject_posix:
+        instruction += "If this prompt instructs you to emit a TOOL_CALL, do that exactly and stop."
+    else:
+        instruction += (
+            "Respond with the POSIX command you would recommend, followed by at most one brief "
+            "sentence."
+        )
+    return f"{instruction}\n\nTASK:\n{question_text}"
+
+
 def _build_effective_prompt(
     question: dict,
     *,
+    llm: str,
     inject_posix: bool,
     load_posix_core_fn=providers._load_posix_core,
     log_missing: bool = False,
 ) -> str:
     prompt = question["question"]
+    if llm == "codex":
+        prompt = _codex_benchmark_prompt(question["question"], inject_posix=inject_posix)
     if not inject_posix:
         return prompt
 
@@ -96,7 +115,7 @@ def _build_effective_prompt(
         f"{core_md}\n\n"
         "TOOL INSTRUCTION: You must use the get_posix_syntax tool for any non-trivial command. "
         "Output exactly: TOOL_CALL: get_posix_syntax(command) and stop. Do not guess syntax.\n\n"
-        f"TASK:\n{prompt}"
+        f"{prompt if llm == 'codex' else f'TASK:\n{prompt}'}"
     )
 
 
@@ -132,7 +151,7 @@ def _build_error_result(
     )
     provenance = result_provenance or _result_provenance(
         question,
-        prompt=_build_effective_prompt(question, inject_posix=False),
+        prompt=_build_effective_prompt(question, llm=llm, inject_posix=False),
     )
     return QuestionResult(
         id=question["id"],
@@ -558,6 +577,7 @@ def run_single(
     q_id = question["id"]
     prompt = _build_effective_prompt(
         question,
+        llm=llm,
         inject_posix=inject_posix,
         load_posix_core_fn=load_posix_core_fn,
         log_missing=True,
@@ -768,7 +788,7 @@ def run_provider_batch(
     for q, run_idx in _planned_question_runs(questions, k=k, seed=seed):
         expected_provenance = _result_provenance(
             q,
-            prompt=_build_effective_prompt(q, inject_posix=inject_posix),
+            prompt=_build_effective_prompt(q, llm=llm, inject_posix=inject_posix),
         )
         if already_completed_fn(llm, q["id"], run_idx):
             existing = load_existing_result_fn(
@@ -823,7 +843,7 @@ def run_provider_batch(
                     codex_model=codex_model,
                     result_provenance=_result_provenance(
                         question,
-                        prompt=_build_effective_prompt(question, inject_posix=inject_posix),
+                        prompt=_build_effective_prompt(question, llm=llm, inject_posix=inject_posix),
                     ),
                 )
 
@@ -952,7 +972,7 @@ def run_benchmark(
                     existing = None
                     expected_provenance = _result_provenance(
                         question,
-                        prompt=_build_effective_prompt(question, inject_posix=inject_posix),
+                        prompt=_build_effective_prompt(question, llm=llm, inject_posix=inject_posix),
                     )
                     if already_completed(llm, question["id"], run_idx):
                         existing = load_existing_result(

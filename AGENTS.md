@@ -41,7 +41,7 @@ Follow the existing Python style across `benchmark_core/` and `run_benchmark.py`
 
 ## Testing Guidelines
 
-Unit tests live in `tests/` (token accounting, reporting integrity) and run via `python3 -m unittest`. Repo integrity checks live in `scripts/verify_repo.py` and run via `make test-repo`. The unified command is `make verify`.
+Unit tests live in `tests/` (token accounting, reporting integrity) and run via `python3 -m unittest discover -s tests -t .`. Repo integrity checks live in `scripts/verify_repo.py` and run via `make test-repo`. The unified command is `make verify`.
 
 Use a three-path validation approach:
 - Simulation Testing (legacy): dry runs and focused benchmark runs.
