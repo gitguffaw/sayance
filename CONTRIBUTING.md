@@ -69,14 +69,20 @@ product version.
 
 To cut a release:
 
-1. Update `VERSION` and `skill/VERSION` to the new SemVer value.
-2. Update `skill/SKILL.md` frontmatter `version` to match.
-3. Add a new entry to `CHANGELOG.md` (Keep-a-Changelog format) dated today.
-4. Run `make verify` — all stages must pass.
-5. Open a PR, get CI green, merge.
-6. Tag the merge commit with an annotated tag: `git tag -a vX.Y.Z -m "vX.Y.Z"`.
-7. Push the tag: `git push origin vX.Y.Z`.
-8. Create a GitHub Release from the tag with the CHANGELOG excerpt as the body.
+1. Bump `VERSION` and `skill/VERSION` to the new SemVer value.
+2. Update the `install.sh` default `SAYANCE_REF` to `v<VERSION>`.
+3. Update README one-liners to the new `v<VERSION>` (for example:
+   `grep -n "raw.githubusercontent.com" README.md`).
+4. Update `skill/SKILL.md` frontmatter `version:` to the new `VERSION`.
+5. Add a new entry to `CHANGELOG.md` (Keep-a-Changelog format) dated today.
+6. Run `make verify` — all stages must pass.
+7. After merge, run the release one-liner from a scratch `HOME` and verify:
+   `curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/v<VERSION>/install.sh | SAYANCE_REF=v<VERSION> bash`  
+   then confirm `sayance-lookup --version` reports `v<VERSION>`.
+8. Open a PR, get CI green, merge.
+9. Tag the merge commit with an annotated tag: `git tag -a vX.Y.Z -m "vX.Y.Z"`.
+10. Push the tag: `git push origin vX.Y.Z`.
+11. Create a GitHub Release from the tag with the CHANGELOG excerpt as the body.
 
 ## Code Style
 

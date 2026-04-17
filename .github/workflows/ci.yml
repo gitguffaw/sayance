@@ -20,6 +20,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Validate installer release references
+        run: |
+          set -euo pipefail
+          expected="v$(cat VERSION)"
+          if ! grep -q "SAYANCE_REF=\"\${SAYANCE_REF:-$expected}\"" install.sh; then
+            echo "SAYANCE_REF default in install.sh does not match $expected"
+            echo "Expected pattern: SAYANCE_REF=\${SAYANCE_REF:-$expected}"
+            exit 1
+          fi
+          if ! grep -q "/$expected/install\\.sh" README.md; then
+            echo "README.md does not contain install.one-liner for $expected"
+            echo "Expected pattern: /$expected/install.sh"
+            exit 1
+          fi
       - name: Resolve commit SHA
         id: ref
         run: |
@@ -50,3 +64,42 @@ jobs:
             exit 1
           fi
           echo "public install OK: sayance $actual, 142 utilities"
+      - name: Verify agent-specific installs
+        run: |
+          set -euo pipefail
+          expected="$(cat VERSION)"
+          script_url="https://raw.githubusercontent.com/${{ github.repository }}/${{ steps.ref.outputs.sha }}/install.sh"
+          for target in claude codex; do
+            tmp_home="$(mktemp -d)"
+            curl -fsSL "$script_url" \
+              | HOME="$tmp_home" SAYANCE_REF="${{ steps.ref.outputs.sha }}" bash -s "$target"
+            case "$target" in
+              claude)
+                expected_dir="$tmp_home/.claude/skills/sayance"
+                absent_dir="$tmp_home/.codex"
+                ;;
+              codex)
+                expected_dir="$tmp_home/.codex/skills/sayance"
+                absent_dir="$tmp_home/.claude"
+                ;;
+              *)
+                echo "Unknown install target: $target"
+                exit 1
+                ;;
+            esac
+            if [ ! -d "$expected_dir" ]; then
+              echo "Missing expected skill dir for $target at $expected_dir"
+              exit 1
+            fi
+            if [ -e "$absent_dir" ]; then
+              echo "Unexpected install target artifact for $target at $absent_dir"
+              exit 1
+            fi
+            actual="$(HOME="$tmp_home" PATH="$tmp_home/.local/bin:$PATH" sayance-lookup --version | awk '{print $2}')"
+            if [ "$expected" != "$actual" ]; then
+              echo "VERSION mismatch for $target install: repo=$expected installed=$actual"
+              exit 1
+            fi
+            rm -rf "$tmp_home"
+          done
+          echo "public install OK: claude and codex targets"

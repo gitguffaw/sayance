@@ -127,12 +127,12 @@ Run these for packaging/distribution changes and before releasing skill updates:
 ## Install Testing CI Enforcement Constraint (Current Repo)
 
 Observed for `gitguffaw/sayance` on 2026-04-03:
-- GitHub Actions is enabled and workflows can run.
-- Required status-check merge gating via branch protection is unavailable for the current private-repo plan.
+- The repo is now public.
+- Required status-check merge gating via branch protection is enforceable.
 
-Until repo plan/visibility changes, use this enforcement model:
+With status checks now enforceable, this is the process:
 1. Run `make verify` locally before merge/release (covers syntax, unit tests, repo integrity, and Install Testing).
-2. GitHub Actions CI runs `make verify` on every push and PR for visibility, but cannot enforce merge gating on the current plan.
+2. Configure branch protection to require successful `verify` and `public-install` runs before merging.
 
 ---
 

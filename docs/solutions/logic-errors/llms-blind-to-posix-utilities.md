@@ -47,7 +47,7 @@ When the LLM gives a non-POSIX answer, the **entire output is wasted tokens** �
 
 ## Prevention
 
-1. **Build a compact POSIX reference** — all 155 utilities in ~8k-16k tokens, injectable as system prompt or MCP tool
+1. **Build a compact POSIX reference** — initial scoping targeted all 155 POSIX Issue 8 utilities; the shipped product covers the 142 macOS-available subset in ~925 tokens via a CLI-backed design (no MCP tool).
 2. **Task-based benchmarking** — test with real user tasks ("archive a directory") not knowledge quizzes ("what is pax?")
 3. **Track POSIX compliance rate** — measure what % of LLM answers use POSIX tools vs non-POSIX alternatives
 4. **Flag Issue 8 changes** — explicitly tell LLMs that readlink, realpath, timeout are now POSIX (2024)
