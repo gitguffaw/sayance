@@ -122,17 +122,31 @@ The `--execute` flag enables Command Verification, which runs extracted commands
 
 No virtualenv needed. Pure stdlib Python 3.
 
+### Prerequisites
+
+The installer places the `sayance-lookup` binary under `~/.local/bin`. Make sure that directory is on your `PATH` before restarting your agent, or the CLI call will fail even though the files are on disk.
+
+```bash
+# Bash (~/.bashrc) or Zsh (~/.zshrc):
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+After install, confirm with `command -v sayance-lookup` — it should resolve under `~/.local/bin`.
+
 ### One-line install (no clone required)
 
 ```bash
-# Claude Code + Codex
-curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/main/install.sh | bash
+# Claude Code + Codex (stable, recommended)
+curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/v1.0.0/install.sh | bash
 
 # Claude Code only
-curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/main/install.sh | bash -s claude
+curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/v1.0.0/install.sh | bash -s claude
 
 # Codex only
-curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/main/install.sh | bash -s codex
+curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/v1.0.0/install.sh | bash -s codex
+
+# Bleeding-edge (tracks main, not a release)
+curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/main/install.sh | SAYANCE_REF=main bash
 ```
 
 ### Codex native installer
@@ -147,7 +161,7 @@ $skill-installer install https://github.com/gitguffaw/sayance/tree/main/skill
 
 ```bash
 git clone https://github.com/gitguffaw/sayance.git
-cd posix
+cd sayance
 make install         # both Claude + Codex
 make install-claude  # Claude Code only
 make install-codex   # Codex only
@@ -282,8 +296,7 @@ Results are gitignored and not committed.
 
 - POSIX.1-2024 Issue 8 is canonical: [pubs.opengroup.org](https://pubs.opengroup.org/onlinepubs/9799919799/idx/utilities.html)
 - `readlink`, `realpath`, and `timeout` are POSIX in Issue 8. Models trained pre-2024 incorrectly reject these — that's a scoreable failure.
-- Gemini is safe at one call every 30 seconds, max 50 calls/day on most accounts. Bridge-Aided runs may exceed the daily limit since the simulation can trigger a second call per question.
-- Codex uses `--skip-git-repo-check` for benchmark execution context.
+- For runtime quirks and provider-specific gotchas (Gemini quota, Codex git-check, CLI noise prefixes), see the "Known Issues" section in [CLAUDE.md](CLAUDE.md).
 
 ## Contributing
 
