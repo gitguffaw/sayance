@@ -36,9 +36,7 @@ For Codex and Gemini, the published 40-question rows below are composites:
 |----------|---------|-------------|-------|
 | Claude | 70.0% | 87.5% | +17.5 pts |
 | Codex | 70.0% | 95.0% | +25.0 pts |
-| Gemini | 70.0%* | 85.0% | +15.0 pts |
-
-\* Gemini's unaided row is a composite backfill, not a fresh single-run 40-question rerun.
+| Gemini | 70.0% | 85.0% | +15.0 pts |
 
 These are **visible-row** compliance rates. In provenance-hardened summaries, the planned-row denominator is exposed separately as `planned_posix_compliance_rate`.
 
@@ -46,9 +44,9 @@ These are **visible-row** compliance rates. In provenance-hardened summaries, th
 
 | Metric | Claude | Codex | Gemini |
 |---|---|---|---|
-| Visible results (unaided) | 40/40 | 40/40** | 40/40 |
-| Visible results (bridge-aided) | 40/40 | 40/40** | 40/40 |
-| Compliance (unaided) | 70.0% | 70.0% | 70.0%* |
+| Visible results (unaided) | 40/40 | 40/40 | 40/40 |
+| Visible results (bridge-aided) | 40/40 | 40/40 | 40/40 |
+| Compliance (unaided) | 70.0% | 70.0% | 70.0% |
 | Compliance (bridge-aided) | 87.5% | 95.0% | 85.0% |
 | Mean output tokens (unaided) | 314 | 1,040 | 243 |
 | Mean output tokens (bridge-aided) | 452 | 1,385 | 92 |
@@ -57,8 +55,6 @@ These are **visible-row** compliance rates. In provenance-hardened summaries, th
 | Non-POSIX substitutions (unaided) | 6 | 6 | 8 |
 | Non-POSIX substitutions (bridge-aided) | 1 | 0 | 4 |
 | Dominant bridge-aided style | `over_explaining` | `tool_heavy_detour` | `minimal_or_near_minimal` |
-
-\** The Codex row is a composite backfill: `39` rows from the April 15, 2026 aggregate plus targeted April 17, 2026 `T02` reruns in unaided and bridge-aided mode. It is not a fresh single-run 40-question Codex rerun.
 
 ### Lookup Engagement
 
