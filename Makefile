@@ -21,6 +21,7 @@ install-claude:
 	cp skill/SKILL.md $(CLAUDE_SKILL_DIR)/SKILL.md
 	cp skill/sayance-lookup $(CLAUDE_SKILL_DIR)/sayance-lookup
 	cp skill/sayance-tldr.json $(CLAUDE_SKILL_DIR)/sayance-tldr.json
+	cp skill/VERSION $(CLAUDE_SKILL_DIR)/VERSION
 	chmod +x $(CLAUDE_SKILL_DIR)/sayance-lookup
 	ln -sf $(CLAUDE_SKILL_DIR)/sayance-lookup $(BIN_DIR)/sayance-lookup
 
@@ -29,6 +30,7 @@ install-codex:
 	cp skill/SKILL.md $(CODEX_SKILL_DIR)/SKILL.md
 	cp skill/sayance-lookup $(CODEX_SKILL_DIR)/sayance-lookup
 	cp skill/sayance-tldr.json $(CODEX_SKILL_DIR)/sayance-tldr.json
+	cp skill/VERSION $(CODEX_SKILL_DIR)/VERSION
 	chmod +x $(CODEX_SKILL_DIR)/sayance-lookup
 	ln -sf $(CODEX_SKILL_DIR)/sayance-lookup $(BIN_DIR)/sayance-lookup
 

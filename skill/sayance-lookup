@@ -5,12 +5,29 @@ Usage:
     sayance-lookup <utility>       Show syntax and examples
     sayance-lookup --list          List all available utilities
     sayance-lookup --json <util>   Output as JSON
+    sayance-lookup --version       Print version and exit
 """
 import json
 import sys
 from pathlib import Path
 
 _HERE = Path(__file__).resolve().parent
+
+
+def resolve_version() -> str:
+    """Read version from the VERSION file shipped alongside the script."""
+    candidates = [
+        _HERE / "VERSION",
+        _HERE.parent / "VERSION",
+        Path.home() / ".claude" / "skills" / "sayance" / "VERSION",
+        Path.home() / ".codex" / "skills" / "sayance" / "VERSION",
+    ]
+    for candidate in candidates:
+        try:
+            return candidate.read_text().strip()
+        except OSError:
+            continue
+    return "unknown"
 
 
 def resolve_data_path() -> Path | None:
@@ -34,7 +51,12 @@ def main():
     if len(sys.argv) < 2:
         print("Usage: sayance-lookup <utility>", file=sys.stderr)
         print("       sayance-lookup --list", file=sys.stderr)
+        print("       sayance-lookup --version", file=sys.stderr)
         sys.exit(1)
+
+    if sys.argv[1] == "--version":
+        print(f"sayance {resolve_version()}")
+        return
 
     data_path = resolve_data_path()
     if data_path is None:
