@@ -22,5 +22,7 @@ results/**
 state/
 docs/archive/
 docs/solutions/workflow/
+docs/solutions/logic-errors/
+docs/design-rationale/
 docs/plans/
 todos/
