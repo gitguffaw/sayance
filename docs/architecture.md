@@ -26,7 +26,7 @@ cksum: file integrity checksum (NOT md5sum)
 comm: compare two sorted lists
 ```
 
-This file is capped at ~800 tokens. Its only job is to make sure the agent knows the tool exists so it doesn't reach for a non-POSIX substitute. It does not contain full syntax.
+This file runs ~925 tokens in its shipped form, under a 2,000-token hard ceiling. Its only job is to make sure the agent knows the tool exists so it doesn't reach for a non-POSIX substitute. It does not contain full syntax.
 
 ### The Syntax Lookup CLI (`sayance-lookup`)
 
