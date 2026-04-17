@@ -4,6 +4,23 @@ All notable changes to Sayance are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] — 2026-04-17
+
+### Fixed
+- `scripts/test_product_live.sh` — canary assertion helper failures now surface
+  as infrastructure failures instead of false-green semantic misses.
+- `README.md`, `CONTRIBUTING.md` — source install and contributor quick-start
+  examples now enter `sayance/` instead of the removed `posix/` checkout path.
+- Unit test execution now uses discovery (`python3 -m unittest discover -s tests -t .`)
+  instead of the drift-prone manual `test_all.py` aggregator.
+- Codex benchmark invocation now closes inherited stdin and uses benchmark-mode
+  prompt framing that preserves Bridge-Aided `TOOL_CALL` behavior, resolving the
+  documented `T02` stall path.
+
+### Changed
+- Stable install one-liners and the default `install.sh` `SAYANCE_REF` now point
+  at `v1.0.2`.
+
 ## [1.0.1] — 2026-04-17
 
 ### Removed
@@ -50,5 +67,6 @@ First public release.
 - Optional live-canary tests (`SAYANCE_LIVE_CANARY=1 make test-product-live-*`)
   that validate fresh-session bridge activation against real providers.
 
+[1.0.2]: https://github.com/gitguffaw/sayance/releases/tag/v1.0.2
 [1.0.1]: https://github.com/gitguffaw/sayance/releases/tag/v1.0.1
 [1.0.0]: https://github.com/gitguffaw/sayance/releases/tag/v1.0.0
