@@ -170,11 +170,17 @@ run_canary() {
   # trap mention. Delegates to scripts/canary_assert.py, which reuses
   # benchmark_core.providers._trap_match_is_negated so phrases like
   # "Use pax. Avoid tar." count as correct.
-  local assert_reason
-  if assert_reason="$(printf '%s' "$response" | python3 "${REPO_DIR}/scripts/canary_assert.py" --expected "$expected" --trap "$trap_util" 2>&1 >/dev/null)"; then
+  local assert_reason assert_rc
+  assert_reason="$(printf '%s' "$response" | python3 "${REPO_DIR}/scripts/canary_assert.py" --expected "$expected" --trap "$trap_util" 2>&1 >/dev/null)" || assert_rc=$?
+  assert_rc="${assert_rc:-0}"
+  if [[ "$assert_rc" -eq 0 ]]; then
     pass="true"
-  else
+  elif [[ "$assert_rc" -eq 1 ]]; then
     pass="false"
+  else
+    echo "FAIL [infra]: canary assertion helper failed (${assert_rc}) for ${provider} canary ${canary}: ${assert_reason}" >&2
+    exit_code=1
+    return 1
   fi
 
   # Emit telemetry

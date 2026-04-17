@@ -87,18 +87,18 @@ They also predate the provenance-hardening work in this repo, so treat them as *
 
 | | Claude | Codex | Gemini |
 |:---|:---:|:---:|:---:|
-| **Compliance (unaided)** | 70% | 69% | 61%* |
+| **Compliance (unaided)** | 70% | 70% | 61%* |
 | **Compliance (bridge-aided)** | 88% | 95% | 85% |
-| **Mean output tokens (unaided)** | 314 | 1,052 | 243 |
-| **Mean output tokens (bridge-aided)** | 452 | 1,392 | 92 |
-| **Mean latency (unaided)** | 10.1s | 22.3s | 20.7s |
-| **Mean latency (bridge-aided)** | 14.4s | 32.1s | 24.4s |
+| **Mean output tokens (unaided)** | 314 | 1,040 | 243 |
+| **Mean output tokens (bridge-aided)** | 452 | 1,385 | 92 |
+| **Mean latency (unaided)** | 10.1s | 22.2s | 20.7s |
+| **Mean latency (bridge-aided)** | 14.4s | 31.9s | 24.4s |
 | **Non-POSIX substitutions (unaided)** | 6 | 6 | 7 |
 | **Non-POSIX substitutions (bridge-aided)** | 1 | 0 | 3 |
-| **Visible results** | 40/40 both | 39/39 both** | 28/40 unaided, 40/40 bridge |
+| **Visible results** | 40/40 both | 40/40 both** | 28/40 unaided, 40/40 bridge |
 | **Dominant bridge-aided style** | over_explaining | tool_heavy_detour | minimal_or_near_minimal |
 
-\** Codex is missing `T02` in both fresh reruns. Treat the current Codex snapshot as a `39`-question comparison until that benchmark-path issue is resolved.
+\** The Codex row is a composite backfill: `39` rows from the April 15, 2026 aggregate plus targeted April 17, 2026 `T02` reruns in unaided and bridge-aided mode. It is not a fresh single-run 40-question Codex rerun.
 
 - **All three providers improved POSIX compliance** in the bridge-aided run.
 - **Gemini** showed the cleanest visible gain: higher compliance, much shorter answers, and no provider errors in bridge mode.
