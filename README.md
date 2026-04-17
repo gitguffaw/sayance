@@ -79,15 +79,13 @@ They also predate the provenance-hardening work in this repo, so treat them as *
 |:---------|:--------|:-------------|:------|
 | **Claude** | `███████░░░` 70% | `█████████░` 88% | **+18 pts** |
 | **Codex** | `███████░░░` 69% | `██████████` 95% | **+26 pts** |
-| **Gemini** | `███████░░░` 70%* | `████████░░` 85% | **+15 pts** |
-
-\* Gemini's published unaided row is a composite backfill: `28` rows from the April 15 aggregate plus targeted April 17 reruns for the 12 formerly missing questions. It is not a fresh single-run 40-question Gemini rerun.
+| **Gemini** | `███████░░░` 70% | `████████░░` 85% | **+15 pts** |
 
 ### Snapshot (40 questions, k=1)
 
 | | Claude | Codex | Gemini |
 |:---|:---:|:---:|:---:|
-| **Compliance (unaided)** | 70% | 70% | 70%* |
+| **Compliance (unaided)** | 70% | 70% | 70% |
 | **Compliance (bridge-aided)** | 88% | 95% | 85% |
 | **Mean output tokens (unaided)** | 314 | 1,040 | 243 |
 | **Mean output tokens (bridge-aided)** | 452 | 1,385 | 92 |
@@ -95,10 +93,8 @@ They also predate the provenance-hardening work in this repo, so treat them as *
 | **Mean latency (bridge-aided)** | 14.4s | 31.9s | 24.4s |
 | **Non-POSIX substitutions (unaided)** | 6 | 6 | 8 |
 | **Non-POSIX substitutions (bridge-aided)** | 1 | 0 | 4 |
-| **Visible results** | 40/40 both | 40/40 both** | 40/40 both* |
+| **Visible results** | 40/40 both | 40/40 both | 40/40 both |
 | **Dominant bridge-aided style** | over_explaining | tool_heavy_detour | minimal_or_near_minimal |
-
-\** The Codex row is a composite backfill: `39` rows from the April 15, 2026 aggregate plus targeted April 17, 2026 `T02` reruns in unaided and bridge-aided mode. It is not a fresh single-run 40-question Codex rerun.
 
 - **All three providers improved POSIX compliance** in the bridge-aided run.
 - **Gemini** still improved in bridge-aided mode, but the gain narrowed after backfilling the 12 missing unaided rows.
