@@ -43,7 +43,7 @@ DEFAULT_SHUFFLE_SEED = 20260329
 MODEL_OVERRIDE_AUTO_VALUES = {"", "auto", "default", "cli-default"}
 PINNED_CLAUDE_MODEL = "claude-opus-4-6"
 PINNED_CODEX_MODEL = "gpt-5.4"
-TOOL_CALL_PATTERN = re.compile(r"TOOL_CALL:\s*get_posix_syntax\((.*?)\)")
+SAYANCE_LOOKUP_PATTERN = re.compile(r"\bsayance-lookup\s+([A-Za-z][\w-]*)")
 UTILITY_NAME_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9]*$")
 
 

@@ -21,9 +21,9 @@ McIlroy didn't just solve the problem — he showed that the right combination o
 
 That was 1986. Today, LLMs have the same blind spot Knuth had — they reach for bespoke solutions instead of the tools that are already there.
 
-**LLMs don't know the shell tools that already exist.** They reach for `tar` when `pax` is right there. They write Python scripts to hex-dump a file instead of calling `od`. They reject `readlink` as "not POSIX" even though it's been standard since 2024. Every wrong tool is wasted tokens, wasted time, and a fragile non-portable script you now have to maintain.
+**LLMs don't know the shell tools that already exist.** They reach for `tar` when `pax` is right there. They write Python scripts to hex-dump a file instead of calling `od`. They reject `readlink` as "not POSIX" even though it's been standard since 2024. Every wrong tool is wasted time, a fragile non-portable script, and often a harder debugging cycle.
 
-**Sayance** fixes that with a two-layer reference injection system — and proves it works across Claude, Codex, and Gemini.
+**Sayance** fixes that with a two-layer reference injection system. The headline result is POSIX-compliance: Claude gains +17.5 pp and Codex gains +25.8 pp on a 40-question benchmark with the bridge enabled. Full numbers in [What the Latest Benchmark Shows](#what-the-latest-benchmark-shows).
 
 ## How It Works
 
@@ -68,10 +68,14 @@ The Discovery Map tells the agent *what exists*. Syntax Lookup tells it *how to 
 
 ## What the Latest Benchmark Shows
 
-Latest snapshot: 40-question corpus, `k=1`, with base runs on `2026-04-15` and targeted Codex/Gemini backfills on `2026-04-17`. Models: `claude-opus-4-6`, `gpt-5.4`, and `gemini-3.1-pro-preview`.
+Latest snapshot: 40-question corpus, `k=1`, run on `2026-04-17` against the
+real shipped `sayance-lookup` CLI contract. Models: `claude-opus-4-6` and
+`gpt-5.4`. (Gemini deferred for this snapshot because the bridge-aided
+simulation routinely exceeds Gemini's daily quota — see Known Issues in
+[CLAUDE.md](CLAUDE.md). Prior 2026-04-15 + 04-17 composite Gemini snapshot
+is preserved in [docs/evidence.md](docs/evidence.md).)
 
 These numbers are useful for regression tracking and product direction. They are not publication-grade statistical claims.
-They also predate the provenance-hardening work in this repo, so treat them as **legacy artifacts** rather than fully self-authenticating benchmark records.
 
 ### POSIX Compliance: Unaided vs Bridge-Aided
 
@@ -205,17 +209,20 @@ Model selection defaults:
 - To change pinned models, pass `--claude-model <model-id>` and/or `--codex-model <model-id>`.
 - Unpinned runs are blocked by default. To bypass intentionally, use `--claude-model auto` and/or `--codex-model auto` together with `--allow-unpinned-models`.
 
-Fresh unaided commands (provider-isolated):
+Reproducing the latest snapshot (Wave-3, Claude + Codex):
 
 ```bash
-# Claude unaided (pinned default: claude-opus-4-6)
-python3 run_benchmark.py --llms claude --claude-model claude-opus-4-6 --results-dir results/unaided-claude-2026-04-03
+# Unaided (pinned defaults: claude-opus-4-6, gpt-5.4)
+python3 run_benchmark.py --llms claude codex --label "wave3-unaided"
 
-# Codex unaided (pinned default: gpt-5.4)
-python3 run_benchmark.py --llms codex --codex-model gpt-5.4 --results-dir results/unaided-codex-2026-04-03
+# Bridge-Aided (same pins, with Discovery Map injection)
+python3 run_benchmark.py --llms claude codex --inject-posix --label "wave3-aided"
+```
 
-# Gemini unaided (quota-safe profile)
-python3 run_benchmark.py --llms gemini --max-workers 1 --delay 30 --results-dir results/unaided-gemini-2026-04-03
+Adding Gemini (quota-safe, single provider per day):
+
+```bash
+python3 run_benchmark.py --llms gemini --max-workers 1 --delay 30 --label "wave3-unaided-gemini"
 ```
 
 Summary validity semantics:

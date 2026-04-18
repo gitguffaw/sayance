@@ -179,7 +179,171 @@ def check_utility_consistency():
 
 
 # ---------------------------------------------------------------------------
-# 4. CLI executable sanity
+# 4. Dead tool reference drift
+# ---------------------------------------------------------------------------
+
+def check_no_dead_tool_refs():
+    """Fail if dead/retired tool names appear in *active* product or runner code.
+
+    Scope: shipped skill artifacts, source-of-truth Discovery Map, and the
+    benchmark runner/providers (the previous bug site). Excluded: README.md,
+    docs/*.md, CHANGELOG.md — those legitimately discuss the retired contract
+    in historical/design-rationale context. "MCP" is not forbidden; the
+    architecture docs explain why we *don't* use it.
+    """
+    print("=== Dead Tool Reference Check ===")
+    forbidden = ["get_posix_syntax"]
+    scan_targets = [
+        REPO / "skill/SKILL.md",
+        REPO / "skill/sayance-lookup",
+        REPO / "skill/sayance-tldr.json",
+        REPO / "sayance-core.md",
+        REPO / "install.sh",
+        REPO / "Makefile",
+        REPO / "benchmark_core" / "runner.py",
+        REPO / "benchmark_core" / "providers.py",
+    ]
+
+    findings = []
+    for path in scan_targets:
+        if path == Path(__file__).resolve():
+            continue
+        if not path.exists():
+            failed(f"{path.relative_to(REPO)} missing")
+            continue
+        try:
+            for idx, line in enumerate(path.read_text().splitlines(), start=1):
+                for pattern in forbidden:
+                    if pattern.lower() in line.lower():
+                        findings.append((path, idx, pattern, line.strip()))
+        except Exception as e:
+            failed(f"unable to scan {path.relative_to(REPO)}: {e}")
+
+    if not findings:
+        passed("no dead tool references in active product/runner code")
+        return
+
+    failed("dead tool references found in active artifacts")
+    for path, line_no, pattern, text in findings:
+        print(f"    {path.relative_to(REPO)}:{line_no}: {pattern} ({text})")
+
+
+# ---------------------------------------------------------------------------
+# 5. Discovery Map text parity
+# ---------------------------------------------------------------------------
+
+def _extract_section_lines(text, start_marker, end_marker=None):
+    """Return lines from start_marker through end_marker (exclusive) if given."""
+    lines = text.splitlines()
+    try:
+        start_idx = next(i for i, line in enumerate(lines) if start_marker in line)
+    except StopIteration:
+        return None
+
+    if end_marker:
+        end_idx = None
+        for i in range(start_idx + 1, len(lines)):
+            if end_marker in lines[i]:
+                end_idx = i
+                break
+        end_idx = end_idx if end_idx is not None else len(lines)
+        return [(i + 1, line) for i, line in enumerate(lines[start_idx:end_idx], start=start_idx)]
+    return [(i + 1, line) for i, line in enumerate(lines[start_idx:], start=start_idx)]
+
+
+def _normalize_discovery_lines(lines_with_no):
+    normalized = []
+    prev_blank = False
+    for line_no, line in lines_with_no:
+        normalized_line = line.rstrip()
+        if not normalized_line.strip():
+            if prev_blank:
+                continue
+            normalized.append((line_no, ""))
+            prev_blank = True
+            continue
+        prev_blank = False
+        if normalized_line.startswith("*   "):
+            normalized_line = normalized_line[4:]
+        if normalized_line.startswith("#"):
+            normalized_line = normalized_line.lower()
+        normalized.append((line_no, normalized_line))
+    return normalized
+
+
+def check_discovery_map_text_parity():
+    print("=== Discovery Map Text Parity ===")
+    core_lines = _extract_section_lines(
+        (REPO / "sayance-core.md").read_text(), "### [CORE_TRIVIAL]"
+    )
+    if core_lines is None:
+        failed("could not find sayance-core.md Discovery Map start marker")
+        return
+
+    # Anchor on the same `### [CORE_TRIVIAL]` marker to skip SKILL.md's
+    # wrapper "## Discovery Map" header (which sayance-core.md does not have).
+    skill_lines = _extract_section_lines(
+        (REPO / "skill/SKILL.md").read_text(),
+        "### [CORE_TRIVIAL]",
+        "## Syntax Lookup",
+    )
+    if skill_lines is None:
+        failed("could not find skill/SKILL.md Discovery Map section")
+        return
+
+    core_norm = _normalize_discovery_lines(core_lines)
+    skill_norm = _normalize_discovery_lines(skill_lines)
+
+    # Strip trailing blank entries — sayance-core.md ends at the last bullet
+    # while SKILL.md keeps a blank before the next `## Syntax Lookup` header.
+    while core_norm and core_norm[-1][1] == "":
+        core_norm.pop()
+    while skill_norm and skill_norm[-1][1] == "":
+        skill_norm.pop()
+
+    i = 0
+    j = 0
+    diffs = []
+    while i < len(core_norm) and j < len(skill_norm):
+        core_line_no, core_line = core_norm[i]
+        skill_line_no, skill_line = skill_norm[j]
+        if core_line != skill_line:
+            diffs.append(
+                (
+                    core_line_no,
+                    core_line,
+                    skill_line_no,
+                    skill_line,
+                )
+            )
+        i += 1
+        j += 1
+
+    if len(core_norm) > len(skill_norm):
+        for core_line_no, core_line in core_norm[len(skill_norm) :]:
+            diffs.append((core_line_no, core_line, None, None))
+    elif len(skill_norm) > len(core_norm):
+        for skill_line_no, skill_line in skill_norm[len(core_norm) :]:
+            diffs.append((None, None, skill_line_no, skill_line))
+
+    if not diffs:
+        passed("Discovery Map text parity OK")
+        return
+
+    failed("Discovery Map text parity failed")
+    for core_line_no, core_line, skill_line_no, skill_line in diffs[:5]:
+        if core_line is not None:
+            print(f"    sayance-core.md:{core_line_no}: {core_line}")
+        else:
+            print("    sayance-core.md:<missing>")
+        if skill_line is not None:
+            print(f"    SKILL.md:{skill_line_no}: {skill_line}")
+        else:
+            print("    SKILL.md:<missing>")
+
+
+# ---------------------------------------------------------------------------
+# 6. CLI executable sanity
 # ---------------------------------------------------------------------------
 
 def check_cli_sanity():
@@ -262,6 +426,8 @@ def main():
     check_source_artifacts()
     check_json_validity()
     check_utility_consistency()
+    check_no_dead_tool_refs()
+    check_discovery_map_text_parity()
     check_cli_sanity()
     check_installer_sanity()
     check_fixture_coverage()

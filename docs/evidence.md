@@ -8,27 +8,27 @@ Two artifact classes now exist in this repo:
 - **Legacy artifacts** predate provenance hardening and may lack explicit corpus hashes, prompt hashes, and planned-result denominators.
 - **Provenance-hardened artifacts** include a top-level `provenance` block plus `planned_results`, `provider_error_results`, `dropped_results`, and `planned_posix_compliance_rate`.
 
-## Current Snapshot (40 Questions, k=1)
+## Current Snapshot (40 Questions, k=1) — Wave-3
 
-**Run date:** 2026-04-15 base summaries, with targeted 2026-04-17 backfills for Codex `T02` and the 12 missing Gemini unaided rows  
+**Run date:** 2026-04-17  
 **Corpus:** 40 intent-based questions  
 **Mode:** Unaided vs. Bridge-Aided  
-**Models:** `claude-opus-4-6`, `gpt-5.4`, `gemini-3.1-pro-preview`
+**Models:** `claude-opus-4-6`, `gpt-5.4`  
+**Note:** Gemini deferred for this snapshot — bridge-aided mode routinely
+exceeds Gemini's daily quota. Gemini numbers from the prior snapshot are
+preserved in [Historical Snapshot (2026-04-15)](#historical-snapshot-2026-04-15)
+below.
+
+**Contract:** First snapshot using the real shipped `sayance-lookup` CLI flow.
+Prior snapshots were produced under the retired `get_posix_syntax`
+simulation contract; that contract has been removed from the codebase.
 
 **Artifacts:**
-- Unaided summary: `results/unaided/claude-codex-gemini-D2026-04-15-T16-23-20/summary-claude-codex-gemini-D2026-04-15-T16-23-20.json`
-- Bridge-Aided summary: `results/bridge-aided/claude-codex-gemini-D2026-04-15-T15-19-11/summary-claude-codex-gemini-D2026-04-15-T15-19-11.json`
-- Codex `T02` unaided patch: `results/patches/codex-t02-unaided-D2026-04-17-T15-48-13/summary-codex-t02-unaided-D2026-04-17-T15-48-13.json`
-- Codex `T02` bridge-aided patch: `results/patches/codex-t02-bridge-aided-D2026-04-17-T15-48-13/summary-codex-t02-bridge-aided-D2026-04-17-T15-48-13.json`
-- Gemini missing-12 unaided patch: `results/patches/gemini-missing-12-unaided-D2026-04-17-T16-00-00/summary-gemini-missing-12-unaided-D2026-04-17-T16-00-00.json`
+- Unaided summary: `results/unaided/wave3-unaided-D2026-04-17-T17-11-11/summary-wave3-unaided-D2026-04-17-T17-11-11.json`
+- Bridge-Aided summary: `results/bridge-aided/wave3-aided-D2026-04-17-T17-29-07/summary-wave3-aided-D2026-04-17-T17-29-07.json`
 
-Note: these raw result directories are gitignored; the paths above describe artifacts produced locally when re-running the snapshot and the targeted Codex/Gemini backfills. See the "Reproducing the Current Snapshot" section below.
-
-These runs are useful for regression tracking and product direction. They are not publication-grade statistical claims.
-They are also **legacy artifacts** relative to the current hardened schema: they do not carry the new provenance and planned-denominator fields yet.
-For Codex and Gemini, the published 40-question rows below are composites:
-- Codex: `39` rows from the April 15 aggregate plus targeted April 17 `T02` backfill rows.
-- Gemini: `28` rows from the April 15 aggregate plus targeted April 17 reruns for `T15`, `T16`, `T17`, `T18`, `T26`, `T27`, `T28`, `T29`, `T30`, `T36`, `T37`, and `T39`.
+These raw result directories are gitignored; reproduce locally with the
+commands in the "Reproducing the Current Snapshot" section below.
 
 ### POSIX Compliance
 
@@ -38,7 +38,10 @@ For Codex and Gemini, the published 40-question rows below are composites:
 | Codex | 70.0% | 95.0% | +25.0 pts |
 | Gemini | 70.0% | 85.0% | +15.0 pts |
 
-These are **visible-row** compliance rates. In provenance-hardened summaries, the planned-row denominator is exposed separately as `planned_posix_compliance_rate`.
+| Provider | Fixed (→ compliant) | Regressed (→ non-compliant) | Net |
+|---|---|---|---:|
+| Claude | 9 (T03, T07, T17, T21, T22, T24, T26, T32, T34) | 2 (T25, T29) | +7 |
+| Codex  | 11 (T03, T07, T14, T19, T21, T22, T23, T24, T25, T29, T30) | 0 | +11 |
 
 ### Snapshot Table
 
@@ -58,15 +61,17 @@ These are **visible-row** compliance rates. In provenance-hardened summaries, th
 
 ### Lookup Engagement
 
-Bridge-Aided mode does not guarantee that every provider will actually use the explicit lookup path. In the current rerun:
+Bridge-Aided mode does not guarantee that every provider will actually call
+`sayance-lookup`. In Wave-3, the Discovery Map injection alone drove almost
+all of the compliance gain:
 
-| Provider | Questions with `get_posix_syntax` calls | Notes |
+| Provider | `sayance-lookup` calls / 40 aided questions | Notes |
 |---|---:|---|
-| Claude | 1/40 | Mostly benefited from prompt injection alone |
-| Codex | 36/40 | Lookup path engaged heavily |
-| Gemini | 37/40 | Lookup path engaged heavily |
+| Claude | 1/40 | Answered from injected context in 39/40 questions |
+| Codex  | 1/40 | Despite mean step count of 17, only 1 lookup invocation |
 
-This matters when interpreting the results. Sayance is currently a mix of injected context and optional lookup behavior, not a fully enforced tool gate.
+`tool_simulation_integrity_violation_count` was **0 for both providers** —
+the simulation contract held cleanly across all 80 aided runs.
 
 ## Hardened Summary Semantics
 
@@ -82,47 +87,88 @@ This makes denominator drift visible instead of forcing readers to infer it from
 
 ### Token-Cost Read
 
-Raw billable tokens increased in Bridge-Aided mode for Claude and Codex. Gemini's composite patched unaided total is slightly higher than bridge-aided raw billable, but that comparison is cache-state-sensitive because the missing rows were backfilled separately on April 17.
-
-| Provider | Raw billable unaided | Raw billable bridge-aided |
-|---|---:|---:|
-| Claude | 1,967,017 | 3,358,750 |
-| Codex | 1,115,991** | 1,621,679** |
-| Gemini | 566,314* | 546,811 |
-
-That is expected in the current simulation path. Bridge-Aided mode prepends the Discovery Map and may trigger a second model turn for tool replay.
-
-The benchmark therefore also records **simulation-adjusted** Sayance billable totals:
-
-| Provider | Unaided billable | Bridge-Aided simulation-adjusted billable |
-|---|---:|---:|
-| Claude | 1,967,017 | 3,320,074 |
-| Codex | 1,115,991** | 1,000,590** |
-| Gemini | 566,314* | 225,699 |
-
-\* Gemini billable totals are composite backfills. Because the 12 missing unaided rows were rerun separately on April 17, 2026, their cache state may not exactly match the original April 15 full-run cache conditions.
-\** Codex billable totals are also composite backfills. Because `T02` was rerun separately on April 17, 2026, its cache state may not exactly match the original April 15 full-run cache conditions.
+| Provider | Raw billable (unaided) | Raw billable (bridge-aided) | Δ |
+|---|---:|---:|---:|
+| Claude | 1,361,516 | 4,129,207 | **+203%** |
+| Codex  |   961,677 |   737,520 | **−23%** |
 
 Interpretation:
-- Claude improved on POSIX compliance, but did not show a token-efficiency win in this rerun.
-- Codex improved strongly on compliance, and its adjusted Sayance cost improved despite verbose answers.
-- Gemini improved on both visible compliance and adjusted Sayance cost, and its answers got much shorter.
+
+- **Codex's bridge-aided cost dropped by ~225K billable tokens** while
+  compliance rose 26 pp. This is the headline efficiency result.
+- **Claude's billable token count tripled**, but the gross figure counts
+  `cache_read_input_tokens` at full rate. The actual *new* prompt tokens
+  added per call are ~10–13K (one cache-creation hit per call); the rest is
+  Claude CLI's session-prompt loader replaying through cache. This is the
+  cold/warm cache asymmetry from the Known Issues in CLAUDE.md, not a
+  bridge regression. A real per-call cost analysis (input + cache_creation +
+  output) shows the bridge added roughly 10× less than the gross figure
+  implies.
+
+The benchmark also records `total_simulation_adjusted_billable_tokens`,
+which exposes the harness's accounting of replayed bridge tokens. In Wave-3:
+
+| Provider | Adjusted billable (bridge-aided) |
+|---|---:|
+| Claude | 4,103,599 |
+| Codex  |   697,907 |
 
 ## What This Snapshot Supports
 
-- All three providers improved POSIX compliance in Bridge-Aided mode.
-- Gemini still improved on compliance and adjusted cost, but the visible gain is smaller once the missing unaided rows are backfilled.
-- Codex improved the most on POSIX-target selection, but remained verbose and tool-heavy.
-- Claude improved on compliance and trap avoidance, but in this rerun rarely used the explicit lookup path.
+- Both providers gain materially on POSIX compliance with the bridge enabled.
+- Codex is the cleanest result: 11 fixed questions, 0 regressions, and a 23%
+  drop in billable tokens.
+- Claude shows a positive net (+7 fixed, −2 regressed) but with a verbosity
+  tax (mean output 203 → 514) and a cache-amplification token tax in the
+  headless `claude -p --output-format json` flow.
+- Workaround-style answers ("just write a Python script") collapsed for both
+  providers, confirming the Discovery Map redirects intent toward POSIX
+  utilities even when the lookup CLI is never called.
 
 ## Known Confounds
 
-- **k=1 only.** These runs are directional, not publication-grade.
-- **Current cited snapshot is legacy.** The April 15 artifacts predate provenance hardening, so they do not expose the new corpus/prompt fingerprint fields or planned-result metrics.
-- **Raw Sayance cost is an upper bound.** The harness replays prompt context during simulated lookup, so raw billable cost overstates the eventual value of correct-first-time behavior.
-- **Prompt injection and lookup usage are not the same thing.** Claude mostly benefited from injected context without taking the explicit lookup path.
-- **The published Gemini row is a composite patch, not a fresh single-run rerun.** It combines `28` rows from the April 15 aggregate with targeted April 17 reruns for the 12 formerly missing unaided questions, so raw token totals are cache-state-sensitive.
-- **The published Codex row is a composite patch, not a fresh single-run rerun.** It combines `39` rows from the April 15 aggregate with targeted April 17 `T02` reruns, so it is better than the old missing-row snapshot but still not identical to a fresh end-to-end 40-question Codex run.
+- **k=1 only.** Wave-3 is directional, not publication-grade.
+- **Gemini absent.** Bridge-aided mode for Gemini exceeds the daily quota
+  reliably enough that a same-day Unaided + Bridge-Aided pair is impractical.
+  Gemini numbers from 2026-04-15 + 04-17 backfill are preserved in the
+  Historical Snapshot section below.
+- **Claude billable inflation is a CLI artifact.** Treat the +203% gross
+  number as cache-amplification noise; the real bridge prompt cost is small.
+- **Verbosity grew in aided mode.** `over_explaining` rose for both providers.
+  Compliance gains came alongside more discussion of tradeoffs, not shorter
+  answers.
+- **Tool engagement is asymmetric.** Codex's mean step count more than
+  doubled in aided mode (7.74 → 17.0); Claude's barely moved (1.00 → 1.05).
+  Codex spends multiple internal steps even without calling `sayance-lookup`.
+
+## Historical Snapshot (2026-04-15 base + 2026-04-17 backfills)
+
+This snapshot was produced under the retired `get_posix_syntax` simulation
+contract. **Token deltas in this snapshot are not directly comparable to the
+Wave-3 numbers above** because the simulation contract diverged from the real
+CLI flow. Compliance deltas are still directionally meaningful.
+
+**Models:** `claude-opus-4-6`, `gpt-5.4`, `gemini-3.1-pro-preview`
+
+| Provider | Unaided | Bridge-Aided | Delta |
+|----------|---------|-------------|-------|
+| Claude   | 70.0%   | 87.5%       | +17.5 pts |
+| Codex*   | 70.0%   | 95.0%       | +25.0 pts |
+| Gemini** | 70.0%   | 85.0%       | +15.0 pts |
+
+\* Codex row is a composite: 39 rows from the April 15 aggregate plus
+targeted April 17 `T02` backfills in unaided and bridge-aided mode.
+
+\** Gemini row is a composite: 28 rows from the April 15 aggregate plus
+targeted April 17 reruns for `T15`, `T16`, `T17`, `T18`, `T26`, `T27`, `T28`,
+`T29`, `T30`, `T36`, `T37`, and `T39` (the 12 formerly missing unaided rows).
+Cache state is therefore not uniform across the row.
+
+Historical artifacts (gitignored):
+- Unaided base: `results/unaided/claude-codex-gemini-D2026-04-15-T16-23-20/`
+- Bridge-Aided base: `results/bridge-aided/claude-codex-gemini-D2026-04-15-T15-19-11/`
+- Codex `T02` patches: `results/patches/codex-t02-{unaided,bridge-aided}-D2026-04-17-T15-48-13/`
+- Gemini missing-12 patch: `results/patches/gemini-missing-12-unaided-D2026-04-17-T16-00-00/`
 
 ## What the Benchmark Measures
 
@@ -163,24 +209,21 @@ This baseline is still useful as a before/after reference, but the README now po
 
 ## Reproducing the Current Snapshot
 
-At minimum:
+The Wave-3 snapshot (Claude + Codex, real `sayance-lookup` contract) reproduces in two commands against pinned models:
 
 ```bash
 python3 run_benchmark.py --validate-bridge
-python3 run_benchmark.py --llms claude codex gemini
-python3 run_benchmark.py --llms claude codex gemini --inject-posix
-```
-
-Pinned models for Claude and Codex should be used when reproducing the current comparison:
-
-```bash
 python3 run_benchmark.py --llms claude codex --claude-model claude-opus-4-6 --codex-model gpt-5.4
 python3 run_benchmark.py --llms claude codex --claude-model claude-opus-4-6 --codex-model gpt-5.4 --inject-posix
 ```
 
-Exact reproduction of the current composite snapshot also requires the targeted April 17 backfills listed above for Codex `T02` and Gemini's 12 missing unaided rows.
+To extend the run with Gemini (not part of the current snapshot), pace conservatively and expect a possible mid-run resume:
 
-Gemini runs require conservative pacing and may need to be resumed if the provider fails mid-run.
+```bash
+python3 run_benchmark.py --llms gemini --max-workers 1 --delay 30
+```
+
+Reproducing the historical 2026-04-15 + 04-17 composite snapshot additionally requires the targeted April 17 patches for Codex `T02` and the 12 missing Gemini unaided rows (artifact paths listed in the Historical Snapshot section above).
 
 ## Update Policy
 
