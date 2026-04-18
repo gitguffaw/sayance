@@ -13,7 +13,12 @@
     "Schedule one-time job: echo './script.sh' | at 0300 tomorrow"
   ],
   "awk": [
-    "Field processing: awk -F: '{print $1}' file"
+    "Print field N (default whitespace delimiter): awk '{print $2}' file",
+    "Use custom delimiter: awk -F: '{print $1, $3}' /etc/passwd",
+    "Sum a numeric field: awk '{sum += $2} END {print sum}' ledger.txt",
+    "Filter rows with a predicate: awk '$3 >= 100' data.txt",
+    "Show filename with each record: awk '{print FILENAME, $0}' file1 file2",
+    "DO NOT confuse $0 (entire line) with $1 (first field)."
   ],
   "basename": [
     "Strip directory prefix: basename /path/to/file.txt"
@@ -75,7 +80,11 @@
     "Generate tag index: ctags *.c *.h"
   ],
   "cut": [
-    "Extract 3rd column: cut -d: -f3 /etc/passwd"
+    "Extract 3rd field by delimiter: cut -d: -f3 /etc/passwd",
+    "Extract character range: cut -c1-8 username.txt",
+    "Extract to end from position: cut -c3- /etc/passwd",
+    "Pick multiple fields: cut -d, -f1,3 data.csv",
+    "DO NOT use -b for UTF-8 text; use -c only for byte-oriented byte slicing."
   ],
   "date": [
     "Display current date/time: date"
@@ -126,7 +135,12 @@
     "Detect file type heuristically: file target"
   ],
   "find": [
-    "Find files modified in last 24h: find / -name '*.conf' -mtime -1"
+    "Find by name: find . -name '*.log'",
+    "Find regular files changed in the last day: find . -type f -mtime -1",
+    "Execute action per match: find . -name '*.tmp' -exec rm {} \\; (requires escaped semicolon)",
+    "Prune directories while searching: find . -name '.git' -prune -o -type f -name '*.c' -print",
+    "Batch with NUL-safe names: find . -name '*.log' -print0 | xargs -0 grep ERROR",
+    "DO NOT use -delete (non-POSIX); use -exec rm {} \\; for portability."
   ],
   "fold": [
     "Wrap long lines: fold -w 80 file"
@@ -147,7 +161,12 @@
     "Lookup localized message: gettext domain 'msgid'"
   ],
   "grep": [
-    "Case-insensitive search: grep -i 'error' *.log"
+    "Simple text search: grep 'error' file",
+    "Case-insensitive match: grep -i 'error' *.log",
+    "Print matching line numbers: grep -n '^WARN' app.log",
+    "Match whole words: grep -w failed *.log",
+    "Search in multiple files: grep -H 'pattern' file1 file2",
+    "DO NOT use -R for recursion in POSIX portability assumptions."
   ],
   "hash": [
     "Remember command locations: hash ls"
@@ -302,6 +321,9 @@
   ],
   "sed": [
     "Replace all occurrences: sed 's/foo/bar/g' file > tmp && mv tmp file",
+    "Print a line range: sed -n '10,20p' file",
+    "Delete matching lines: sed '/^#/d' file > tmp && mv tmp file",
+    "Apply multiple substitutions: sed -e 's/foo/bar/' -e 's/baz/qux/' file > tmp && mv tmp file",
     "DO NOT USE -i (not POSIX). Always use redirect and mv."
   ],
   "sh": [
@@ -311,9 +333,12 @@
     "Pause for seconds: sleep 5"
   ],
   "sort": [
-    "Order by second column only: sort -t',' -k2,2 file.csv",
+    "Sort alphabetically: sort file",
+    "Sort by second CSV column: sort -t',' -k2,2 file.csv",
     "Sort numeric: sort -n file",
-    "Unique sort: sort -u file"
+    "Remove duplicates: sort -u file",
+    "Use locale-neutral collation: LC_ALL=C sort file",
+    "DO NOT use old +key -key notation; use -k in POSIX mode."
   ],
   "split": [
     "Split into 1000 line chunks: split -l 1000 largefile chunk_"
@@ -352,7 +377,11 @@
     "Query terminal capability: tput cols"
   ],
   "tr": [
-    "Uppercase to lowercase: tr '[:upper:]' '[:lower:]' < file"
+    "Uppercase to lowercase: tr '[:upper:]' '[:lower:]' < file",
+    "Delete characters: tr -d '\\r' < file",
+    "Squeeze repeated spaces: tr -s '[:space:]' ' ' < file",
+    "Translate delimiters: tr ',' ';' < csv.txt",
+    "DO NOT use tr for UTF-8 case folding; it is byte-oriented."
   ],
   "true": [
     "Return success status code: true"
@@ -424,7 +453,12 @@
     "Write message to another user terminal: write user"
   ],
   "xargs": [
-    "Build command lines from stdin: find . -type f | xargs ls -l"
+    "Build command lines from stdin: printf 'a b c\\n' | xargs echo",
+    "Process one file per command: printf 'one\\ntwo\\nthree' | xargs -n 1 echo",
+    "Preserve spaces with NUL-separated input: find . -print0 | xargs -0 grep TODO",
+    "Process an explicit list while preserving spaces: printf 'alpha beta\\ngamma' | xargs printf '%s\\n'",
+    "Pipe into a printf template: printf 'name\\n' | xargs printf '%s\\n'",
+    "DO NOT use -r; it is GNU-specific and may be unavailable."
   ],
   "xgettext": [
     "Extract translatable strings: xgettext source.c"
