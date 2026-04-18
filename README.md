@@ -81,16 +81,30 @@ These numbers are useful for regression tracking and product direction. They are
 
 | Provider | Unaided | Bridge-Aided | Delta |
 |:---------|:--------|:-------------|:------|
-| **Claude** | `██████░░░░` 65.0% | `████████░░` 82.5% | **+17.5 pts** |
-| **Codex**  | `██████░░░░` 66.7% | `█████████░` 92.5% | **+25.8 pts** |
+| **Claude** | `███████░░░` 70% | `█████████░` 88% | **+18 pts** |
+| **Codex** | `███████░░░` 69% | `██████████` 95% | **+26 pts** |
+| **Gemini** | `███████░░░` 70% | `████████░░` 85% | **+15 pts** |
 
+### Snapshot (40 questions, k=1)
 
-**The qualitative shift:** wrong-instinct workarounds collapsed for both providers — Claude 9→1, Codex 7→1. The Discovery Map redirects "I'll just write a Python script" intent into "use the right POSIX utility." posix refusals stayed at 0 in both modes for both providers.
+| | Claude | Codex | Gemini |
+|:---|:---:|:---:|:---:|
+| **Compliance (unaided)** | 70% | 70% | 70% |
+| **Compliance (bridge-aided)** | 88% | 95% | 85% |
+| **Mean output tokens (unaided)** | 314 | 1,040 | 243 |
+| **Mean output tokens (bridge-aided)** | 452 | 1,385 | 92 |
+| **Mean latency (unaided)** | 10.1s | 22.2s | 19.6s |
+| **Mean latency (bridge-aided)** | 14.4s | 31.9s | 24.4s |
+| **Non-POSIX substitutions (unaided)** | 6 | 6 | 8 |
+| **Non-POSIX substitutions (bridge-aided)** | 1 | 0 | 4 |
+| **Visible results** | 40/40 both | 40/40 both | 40/40 both |
+| **Dominant bridge-aided style** | over_explaining | tool_heavy_detour | minimal_or_near_minimal |
 
-**Token-efficiency (Codex only):** `gpt-5.4` reached 92.5% compliance on **23% fewer billable tokens** than its unaided baseline (962K → 738K) — more correct, fewer tokens, same task. Claude's per-call cost behavior is provider-dependent and broken out in [docs/evidence.md](docs/evidence.md).
-
-For the full breakdown (mean output tokens, latency, step count, inefficiency-mode deltas, per-provider token cost), see [docs/evidence.md](docs/evidence.md).
-
+- **All three providers improved POSIX compliance** in the bridge-aided run.
+- **Gemini** still improved in bridge-aided mode, but the gain narrowed after backfilling the 12 missing unaided rows.
+- **Codex** improved the most on tool selection, but remained verbose and tool-heavy.
+- **Claude** improved on compliance and trap avoidance, but in this rerun it rarely invoked the explicit lookup path.
+- **Raw billable tokens remain cache-sensitive** in this simulation path. Bridge mode prepends the Discovery Map and may trigger a second model turn for lookup replay, but targeted backfills also change cache state, so raw bridge-vs-unaided cost is only directional here.
 
 ### What These Numbers Mean
 

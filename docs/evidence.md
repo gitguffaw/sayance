@@ -33,14 +33,10 @@ commands in the "Reproducing the Current Snapshot" section below.
 ### POSIX Compliance
 
 | Provider | Unaided | Bridge-Aided | Delta |
-|----------|---------|--------------|-------|
-| Claude   | 65.0% | 82.5% | +17.5 pts |
-| Codex    | 66.7% | 92.5% | +25.8 pts |
-
-Both rates are over **report-visible rows**. Codex unaided had 1 invalid-usage
-row (39/40 valid); all other denominators are 40/40.
-
-Per-question compliance flips (Unaided → Bridge-Aided):
+|----------|---------|-------------|-------|
+| Claude | 70.0% | 87.5% | +17.5 pts |
+| Codex | 70.0% | 95.0% | +25.0 pts |
+| Gemini | 70.0% | 85.0% | +15.0 pts |
 
 | Provider | Fixed (→ compliant) | Regressed (→ non-compliant) | Net |
 |---|---|---|---:|
@@ -49,25 +45,19 @@ Per-question compliance flips (Unaided → Bridge-Aided):
 
 ### Snapshot Table
 
-| Metric | Claude | Codex |
-|---|---|---|
-| Visible results (unaided)        | 40/40 | 40/40 |
-| Visible results (bridge-aided)   | 40/40 | 40/40 |
-| `usage_valid_results` (unaided)  | 40/40 | 39/40 |
-| `usage_valid_results` (aided)    | 40/40 | 40/40 |
-| Compliance (unaided)             | 65.0% | 66.7% |
-| Compliance (bridge-aided)        | 82.5% | 92.5% |
-| Mean output tokens (unaided)     |   203 | 1,035 |
-| Mean output tokens (bridge-aided)|   514 | 2,140 |
-| Mean latency (unaided)           |  8.0s | 23.6s |
-| Mean latency (bridge-aided)      | 18.0s | 43.3s |
-| Mean step count (unaided)        |  1.00 |  7.74 |
-| Mean step count (bridge-aided)   |  1.05 | 17.00 |
-| Non-POSIX substitutions (unaided)        | 5 | 6 |
-| Non-POSIX substitutions (bridge-aided)   | 6 | 2 |
-| Workaround-instead-of-native (unaided)   | 9 | 7 |
-| Workaround-instead-of-native (aided)     | 1 | 1 |
-| Dominant aided inefficiency mode | `over_explaining` (29) | `over_explaining` (27) |
+| Metric | Claude | Codex | Gemini |
+|---|---|---|---|
+| Visible results (unaided) | 40/40 | 40/40 | 40/40 |
+| Visible results (bridge-aided) | 40/40 | 40/40 | 40/40 |
+| Compliance (unaided) | 70.0% | 70.0% | 70.0% |
+| Compliance (bridge-aided) | 87.5% | 95.0% | 85.0% |
+| Mean output tokens (unaided) | 314 | 1,040 | 243 |
+| Mean output tokens (bridge-aided) | 452 | 1,385 | 92 |
+| Mean latency (unaided) | 10.1s | 22.2s | 19.6s |
+| Mean latency (bridge-aided) | 14.4s | 31.9s | 24.4s |
+| Non-POSIX substitutions (unaided) | 6 | 6 | 8 |
+| Non-POSIX substitutions (bridge-aided) | 1 | 0 | 4 |
+| Dominant bridge-aided style | `over_explaining` | `tool_heavy_detour` | `minimal_or_near_minimal` |
 
 ### Lookup Engagement
 
