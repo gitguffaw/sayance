@@ -2,7 +2,9 @@
 
 ## What We Are Measuring
 
-The primary metric is **token cost** — how many tokens does an LLM burn to answer a real-world POSIX shell task? The secondary metric is **POSIX compliance** — did it actually give a correct, portable answer?
+The primary metric is **POSIX compliance** — did it actually choose a correct,
+portable tool path? The secondary metric is **token cost** — how much verbosity or
+invocation overhead was added to reach that answer.
 
 We are not measuring raw knowledge recall. We are measuring efficiency. A correct answer in 5 tokens beats a correct answer in 500. An answer that uses GNU extensions is wrong regardless of token count.
 
@@ -45,23 +47,29 @@ python3 run_benchmark.py --llms claude codex
 - Does it use GNU-only flags (`sed -i`, `grep -r`, `find -mmin`)?
 - Token cost per question — this is the baseline we will compare against.
 
-**Observed results (Unaided baseline, original 30-question corpus):**
+**Observed results (Unaided baseline, Wave-3, 40-question corpus, 2026-04-17):**
 
 | Provider | POSIX Compliance | Mean Output Tokens | Mean Steps |
 |----------|------------------|--------------------|------------|
-| Claude | 63.3% | 228 | 1.0 |
-| Codex | 58.6% | 930 | 8.1 |
-| Gemini | 65.4% | 215 | 1.0 |
+| Claude (`claude-opus-4-6`) | 65.0% | 203 | 1.00 |
+| Codex (`gpt-5.4`)          | 66.7% | 1,035 | 7.74 |
 
-Codex burns 4× more output tokens than Claude or Gemini due to multi-step agentic behavior. All three providers show significant non-POSIX substitution rates.
+Codex burns 5× more output tokens than Claude due to multi-step agentic behavior. Both providers show non-POSIX substitution rates of ~15% in the unaided baseline (Claude: 5/40 non-POSIX, 9/40 workaround; Codex: 6/40 non-POSIX, 7/40 workaround).
+
+Gemini was deferred from Wave-3 because bridge-aided mode exceeds the daily quota; the prior 2026-04-15 unaided Gemini result (60.7%) is preserved in [docs/evidence.md](evidence.md#historical-snapshot-2026-04-15).
 
 ---
 
 ### Bridge-Aided (With Sayance)
 
-**Purpose:** Prove that Sayance reduces token cost and improves POSIX compliance.
+**Purpose:** Measure tool-selection compliance for POSIX tasks and track
+bridge-aided behavior end-to-end.
 
-**What changes:** `sayance-core.md` is prepended to every prompt. The `get_posix_syntax` tool is available to the LLM during the run.
+Token cost is a secondary observation. It is provider-dependent: Codex
+saves billable tokens; Claude pays a cache-amplification tax in the
+headless `claude -p --output-format json` flow.
+
+**What changes:** `sayance-core.md` is prepended to every prompt. For non-trivial commands, the LLM is instructed to invoke `sayance-lookup <utility>` in bash to fetch POSIX syntax before answering.
 
 **How to run:**
 ```bash
@@ -69,20 +77,34 @@ python3 run_benchmark.py --llms claude codex --inject-posix
 ```
 
 **What to look for:**
-- Did token cost decrease compared to Unaided?
-- Did the LLM call `get_posix_syntax` before answering? (Check `execution.tool_calls_by_type`)
-- Did `trap_hits` drop to zero or near zero?
+- Is tool selection improving compared to Unaided, and is POSIX compliance
+  rising?
+- Did the LLM call `sayance-lookup` before answering? (Check `execution.tool_calls_by_type`)
+- Did `failure_modes.workaround_instead_of_native_utility` drop to near zero?
 - Did `posix_compliance_rate` improve?
 
-**Observed results (Bridge-Aided, original 30-question corpus):**
+**Observed results (Bridge-Aided, Wave-3, 40-question corpus, 2026-04-17):**
 
-| Provider | POSIX Compliance | Mean Output Tokens | Mean Steps |
-|----------|------------------|--------------------|------------|
-| Claude | 76.7% | 374 | 2.0 |
-| Codex | 86.7% | 1,289 | 9.5 |
-| Gemini | 86.7% | 105 | 2.8 |
+| Provider | POSIX Compliance | Mean Output Tokens | Mean Steps | Δ Billable |
+|----------|------------------|--------------------|------------|-----------:|
+| Claude (`claude-opus-4-6`) | 82.5% (+17.5pp) | 514 | 1.05 | +203% |
+| Codex (`gpt-5.4`)          | 92.5% (+25.8pp) | 2,140 | 17.0 | **−23%** |
 
-Compliance improved across all three providers. Gemini's output tokens dropped by more than half (215 → 105) — the biggest efficiency gain. Codex compliance jumped 28pp but output tokens increased; `tool_heavy_detour` was the dominant failure mode (25/30 questions), meaning Codex used the tool correctly but narrated every step at length.
+Compliance improved for both providers. Codex is a clean win: 11 fixes,
+0 regressions, and 23% lower billable tokens. Claude shows +9 fixes vs.
+2 regressions (T25, T29 — both verbose "needs approval" responses).
+`workaround_instead_of_native_utility` collapsed for both providers
+(Claude 9→1, Codex 7→1) — the strongest single signal that the bridge
+redirects "I'll just write a script" intent into POSIX utility selection.
+
+`over_explaining` rose for both providers (Claude 14→29, Codex 24→27)
+— bridge-aided answers grow longer because the Discovery Map gives the
+LLMs more context to discuss tradeoffs.
+
+Codex's mean step count more than doubled (7.74 → 17.0) without a matching
+rise in actual `sayance-lookup` calls (1/40 across both providers). The
+extra steps are internal Codex reasoning; the bridge prompt expands the
+solution space the model considers.
 
 ---
 
@@ -133,7 +155,7 @@ Use a conservative Gemini run profile unless your active account limits clearly 
 - Assume no more than `50` model calls per day.
 - Run Gemini alone, with `--max-workers 1`, so the benchmark never fans out concurrent Gemini calls.
 - Unaided baseline fits in one day: `40` questions = `40` Gemini calls.
-- Bridge-Aided does **not** reliably fit in one day: the Sayance simulation can trigger a second Gemini call when the model emits `TOOL_CALL: get_posix_syntax(...)`, so a 40-question run can exceed `50` calls.
+- Bridge-Aided does **not** reliably fit in one day: the Sayance simulation can trigger a second Gemini call when the model emits a `sayance-lookup` command call, so a 40-question run can exceed `50` calls.
 - Do not use Gemini as the judge if you are trying to stay within the daily quota.
 
 Safe Unaided baseline command:

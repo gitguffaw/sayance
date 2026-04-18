@@ -140,7 +140,7 @@ class StripCliNoiseTests(unittest.TestCase):
     def test_strip_cli_noise_strips_multiple_noise_lines_before_json(self) -> None:
         output = """Loading extension: github
 Registering notification handler
-Executing MCP tool get_posix_syntax
+Executing MCP tool sayance-lookup
 {"session_id":"sess_123","stdout":"ok"}"""
 
         stripped = benchmark.strip_cli_noise(output)

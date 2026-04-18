@@ -4,9 +4,27 @@
 Usage:
     sayance-lookup <utility>       Show syntax and examples
     sayance-lookup --list          List all available utilities
+    sayance-lookup --aliases       List curated wrong→right POSIX redirects
     sayance-lookup --json <util>   Output as JSON
     sayance-lookup --version       Print version and exit
 """
+
+ALIASES = {
+    "tar": ("pax", "tar is not in POSIX Issue 8 — pax is the portable archive tool."),
+    "gzip": ("compress", "gzip is GNU; POSIX uses compress / uncompress / zcat (LZW)."),
+    "gunzip": ("uncompress", "gunzip is GNU; POSIX uses uncompress."),
+    "xxd": ("od", "xxd is a vim utility; POSIX uses od for hex/octal dumps."),
+    "hexdump": ("od", "hexdump is BSD; POSIX uses od."),
+    "md5sum": ("cksum", "md5sum is GNU; POSIX provides cksum (CRC32)."),
+    "sha1sum": ("cksum", "sha1sum is GNU; POSIX provides cksum (CRC32)."),
+    "sha256sum": ("cksum", "sha256sum is GNU; POSIX provides cksum (CRC32)."),
+    "tac": ("tail", "tac is GNU; POSIX has no direct equivalent — closest is `tail -r` (BSD-only). Use awk to reverse portably."),
+    "seq": ("awk", "seq is GNU/BSD, not POSIX — use awk 'BEGIN{for(i=1;i<=10;i++) print i}'."),
+    "shuf": ("awk", "shuf is GNU; portable shuffle uses awk + sort -R (sort -R is non-POSIX too — be explicit)."),
+    "rev": ("awk", "rev is BSD; portable reverse-line uses awk."),
+    "wget": ("curl", "wget is non-POSIX; curl is also non-POSIX but ubiquitous. POSIX has no fetch utility."),
+}
+
 import json
 import sys
 from pathlib import Path
@@ -51,6 +69,8 @@ def main():
     if len(sys.argv) < 2:
         print("Usage: sayance-lookup <utility>", file=sys.stderr)
         print("       sayance-lookup --list", file=sys.stderr)
+        print("       sayance-lookup --aliases", file=sys.stderr)
+        print("       sayance-lookup --json <util>", file=sys.stderr)
         print("       sayance-lookup --version", file=sys.stderr)
         sys.exit(1)
 
@@ -80,8 +100,17 @@ def main():
             print(name)
         return
 
+    if arg == "--aliases":
+        for wrong, (correct, reason) in sorted(ALIASES.items()):
+            print(f"{wrong} → {correct} ({reason})")
+        return
+
     if arg == "--json" and len(sys.argv) > 2:
         util = sys.argv[2].lower()
+        if util in ALIASES:
+            correct, reason = ALIASES[util]
+            print(json.dumps({"redirect": {"to": correct, "reason": reason}}))
+            return
         entry = tldr.get(util)
         if not entry:
             print(json.dumps({"error": f"No entry for '{util}'"}))
@@ -91,6 +120,14 @@ def main():
 
     entry = tldr.get(arg)
     if not entry:
+        if arg in ALIASES:
+            correct, reason = ALIASES[arg]
+            print(
+                f"Not POSIX. Use '{correct}' instead. Reason: {reason}",
+                file=sys.stderr,
+            )
+            print(f"  Try: sayance-lookup {correct}", file=sys.stderr)
+            sys.exit(2)
         print(f"No entry for '{arg}'. Run sayance-lookup --list for available utilities.", file=sys.stderr)
         sys.exit(1)
 

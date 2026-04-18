@@ -82,7 +82,11 @@ def _codex_benchmark_prompt(question_text: str, *, inject_posix: bool) -> str:
         "system state. "
     )
     if inject_posix:
-        instruction += "If this prompt instructs you to emit a TOOL_CALL, do that exactly and stop."
+        instruction += (
+            "Exception: if this prompt's TOOL INSTRUCTION asks you to invoke "
+            "`sayance-lookup <utility>` via bash, you MUST do so. That CLI is the bridge's "
+            "syntax-lookup helper and is the only local invocation permitted in this mode."
+        )
     else:
         instruction += (
             "Respond with the POSIX command you would recommend, followed by at most one brief "
@@ -113,8 +117,8 @@ def _build_effective_prompt(
 
     return (
         f"{core_md}\n\n"
-        "TOOL INSTRUCTION: You must use the get_posix_syntax tool for any non-trivial command. "
-        "Output exactly: TOOL_CALL: get_posix_syntax(command) and stop. Do not guess syntax.\n\n"
+        "TOOL INSTRUCTION: For any non-trivial command, call the bash tool with `sayance-lookup <utility>` "
+        "to retrieve POSIX-correct syntax before answering. Do not guess flags. The CLI is on PATH.\n\n"
         f"{prompt if llm == 'codex' else f'TASK:\n{prompt}'}"
     )
 
@@ -611,8 +615,8 @@ def run_single(
     else:
         cache_state = "cold"
 
-    if inject_posix and "TOOL_CALL: get_posix_syntax(" in response_text:
-        match = providers.TOOL_CALL_PATTERN.search(response_text)
+    if inject_posix:
+        match = providers.SAYANCE_LOOKUP_PATTERN.search(response_text)
         if match:
             cmd = normalize_utility_name_fn(match.group(1))
             if not cmd:
@@ -632,7 +636,7 @@ def run_single(
             except (FileNotFoundError, json.JSONDecodeError):
                 syntax = ["Error reading sayance-tldr.json"]
 
-            tool_call = f"TOOL_CALL: get_posix_syntax({cmd})"
+            tool_call = f"sayance-lookup {cmd}"
             run1_response_text = response_text
             follow_up = (
                 f"{prompt}\n\nAssistant: {tool_call}\n\n"
@@ -695,7 +699,7 @@ def run_single(
 
             # Explicitly log the tool call success
             by_type = execution.tool_calls_by_type.copy()
-            by_type["get_posix_syntax"] = by_type.get("get_posix_syntax", 0) + 1
+            by_type["sayance_lookup"] = by_type.get("sayance_lookup", 0) + 1
 
             execution = ExecutionMetrics(
                 latency_ms=execution.latency_ms + exec2.latency_ms,

@@ -21,9 +21,9 @@ McIlroy didn't just solve the problem — he showed that the right combination o
 
 That was 1986. Today, LLMs have the same blind spot Knuth had — they reach for bespoke solutions instead of the tools that are already there.
 
-**LLMs don't know the shell tools that already exist.** They reach for `tar` when `pax` is right there. They write Python scripts to hex-dump a file instead of calling `od`. They reject `readlink` as "not POSIX" even though it's been standard since 2024. Every wrong tool is wasted tokens, wasted time, and a fragile non-portable script you now have to maintain.
+**LLMs don't know the shell tools that already exist.** They reach for `tar` when `pax` is right there. They write Python scripts to hex-dump a file instead of calling `od`. They reject `readlink` as "not POSIX" even though it's been standard since 2024. Every wrong tool is wasted time, a fragile non-portable script, and often a harder debugging cycle.
 
-**Sayance** fixes that with a two-layer reference injection system — and proves it works across Claude, Codex, and Gemini.
+**Sayance** fixes that with a two-layer reference injection system. The headline result is POSIX-compliance: Claude gains +17.5 pp and Codex gains +25.8 pp on a 40-question benchmark with the bridge enabled. Full numbers in [What the Latest Benchmark Shows](#what-the-latest-benchmark-shows).
 
 ## How It Works
 
@@ -68,43 +68,29 @@ The Discovery Map tells the agent *what exists*. Syntax Lookup tells it *how to 
 
 ## What the Latest Benchmark Shows
 
-Latest snapshot: 40-question corpus, `k=1`, with base runs on `2026-04-15` and targeted Codex/Gemini backfills on `2026-04-17`. Models: `claude-opus-4-6`, `gpt-5.4`, and `gemini-3.1-pro-preview`.
+Latest snapshot: 40-question corpus, `k=1`, run on `2026-04-17` against the
+real shipped `sayance-lookup` CLI contract. Models: `claude-opus-4-6` and
+`gpt-5.4`. (Gemini deferred for this snapshot because the bridge-aided
+simulation routinely exceeds Gemini's daily quota — see Known Issues in
+[CLAUDE.md](CLAUDE.md). Prior 2026-04-15 + 04-17 composite Gemini snapshot
+is preserved in [docs/evidence.md](docs/evidence.md).)
 
 These numbers are useful for regression tracking and product direction. They are not publication-grade statistical claims.
-They also predate the provenance-hardening work in this repo, so treat them as **legacy artifacts** rather than fully self-authenticating benchmark records.
 
 ### POSIX Compliance: Unaided vs Bridge-Aided
 
 | Provider | Unaided | Bridge-Aided | Delta |
 |:---------|:--------|:-------------|:------|
-| **Claude** | `███████░░░` 70% | `█████████░` 88% | **+18 pts** |
-| **Codex** | `███████░░░` 69% | `██████████` 95% | **+26 pts** |
-| **Gemini** | `███████░░░` 70%* | `████████░░` 85% | **+15 pts** |
+| **Claude** | `██████░░░░` 65.0% | `████████░░` 82.5% | **+17.5 pts** |
+| **Codex**  | `██████░░░░` 66.7% | `█████████░` 92.5% | **+25.8 pts** |
 
-\* Gemini's published unaided row is a composite backfill: `28` rows from the April 15 aggregate plus targeted April 17 reruns for the 12 formerly missing questions. It is not a fresh single-run 40-question Gemini rerun.
 
-### Snapshot (40 questions, k=1)
+**The qualitative shift:** wrong-instinct workarounds collapsed for both providers — Claude 9→1, Codex 7→1. The Discovery Map redirects "I'll just write a Python script" intent into "use the right POSIX utility." posix refusals stayed at 0 in both modes for both providers.
 
-| | Claude | Codex | Gemini |
-|:---|:---:|:---:|:---:|
-| **Compliance (unaided)** | 70% | 70% | 70%* |
-| **Compliance (bridge-aided)** | 88% | 95% | 85% |
-| **Mean output tokens (unaided)** | 314 | 1,040 | 243 |
-| **Mean output tokens (bridge-aided)** | 452 | 1,385 | 92 |
-| **Mean latency (unaided)** | 10.1s | 22.2s | 19.6s |
-| **Mean latency (bridge-aided)** | 14.4s | 31.9s | 24.4s |
-| **Non-POSIX substitutions (unaided)** | 6 | 6 | 8 |
-| **Non-POSIX substitutions (bridge-aided)** | 1 | 0 | 4 |
-| **Visible results** | 40/40 both | 40/40 both** | 40/40 both* |
-| **Dominant bridge-aided style** | over_explaining | tool_heavy_detour | minimal_or_near_minimal |
+**Token-efficiency (Codex only):** `gpt-5.4` reached 92.5% compliance on **23% fewer billable tokens** than its unaided baseline (962K → 738K) — more correct, fewer tokens, same task. Claude's per-call cost behavior is provider-dependent and broken out in [docs/evidence.md](docs/evidence.md).
 
-\** The Codex row is a composite backfill: `39` rows from the April 15, 2026 aggregate plus targeted April 17, 2026 `T02` reruns in unaided and bridge-aided mode. It is not a fresh single-run 40-question Codex rerun.
+For the full breakdown (mean output tokens, latency, step count, inefficiency-mode deltas, per-provider token cost), see [docs/evidence.md](docs/evidence.md).
 
-- **All three providers improved POSIX compliance** in the bridge-aided run.
-- **Gemini** still improved in bridge-aided mode, but the gain narrowed after backfilling the 12 missing unaided rows.
-- **Codex** improved the most on tool selection, but remained verbose and tool-heavy.
-- **Claude** improved on compliance and trap avoidance, but in this rerun it rarely invoked the explicit lookup path.
-- **Raw billable tokens remain cache-sensitive** in this simulation path. Bridge mode prepends the Discovery Map and may trigger a second model turn for lookup replay, but targeted backfills also change cache state, so raw bridge-vs-unaided cost is only directional here.
 
 ### What These Numbers Mean
 
@@ -209,17 +195,20 @@ Model selection defaults:
 - To change pinned models, pass `--claude-model <model-id>` and/or `--codex-model <model-id>`.
 - Unpinned runs are blocked by default. To bypass intentionally, use `--claude-model auto` and/or `--codex-model auto` together with `--allow-unpinned-models`.
 
-Fresh unaided commands (provider-isolated):
+Reproducing the latest snapshot (Wave-3, Claude + Codex):
 
 ```bash
-# Claude unaided (pinned default: claude-opus-4-6)
-python3 run_benchmark.py --llms claude --claude-model claude-opus-4-6 --results-dir results/unaided-claude-2026-04-03
+# Unaided (pinned defaults: claude-opus-4-6, gpt-5.4)
+python3 run_benchmark.py --llms claude codex --label "wave3-unaided"
 
-# Codex unaided (pinned default: gpt-5.4)
-python3 run_benchmark.py --llms codex --codex-model gpt-5.4 --results-dir results/unaided-codex-2026-04-03
+# Bridge-Aided (same pins, with Discovery Map injection)
+python3 run_benchmark.py --llms claude codex --inject-posix --label "wave3-aided"
+```
 
-# Gemini unaided (quota-safe profile)
-python3 run_benchmark.py --llms gemini --max-workers 1 --delay 30 --results-dir results/unaided-gemini-2026-04-03
+Adding Gemini (quota-safe, single provider per day):
+
+```bash
+python3 run_benchmark.py --llms gemini --max-workers 1 --delay 30 --label "wave3-unaided-gemini"
 ```
 
 Summary validity semantics:

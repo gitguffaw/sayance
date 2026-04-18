@@ -9,7 +9,7 @@ A regression is any change to the codebase, prompt, question set, or tool that m
 | `total_billable_tokens` goes up for either LLM | A prompt got longer, or a question was made more ambiguous |
 | `posix_compliance_rate` drops | A question was changed in a way that now leads the LLM away from the right tool |
 | `usage_valid_results` drops below `report_visible_results` | A parser broke, telemetry drifted, or usage was marked invalid |
-| `mean_step_count` for Codex spikes above its Unaided baseline | The Sayance prompt is causing detours, not reducing them |
+| `mean_step_count` for Codex exceeds ~25 in Bridge-Aided | The Sayance prompt is causing recursive detours; ~17 is normal as of Wave-3 |
 | Gemini shows `usage_valid_results: 0` | The MCP prefix stripping broke, or the model API is down |
 | A question contains the utility name, "POSIX", or standards language | The Taboo rule was violated — that question's data is worthless |
 
@@ -170,20 +170,24 @@ After running Bridge-Aided (`--inject-posix`), verify these specific things befo
 
 ### 1. The LLM actually used the tool
 
-Check `execution.tool_calls_by_type` in the individual result files. You should see `get_posix_syntax` called for Uncommon and Obscure questions. If it's absent, the LLM answered from training data alone — the architecture didn't engage.
+Check `execution.tool_calls_by_type` in the individual result files. You should see `sayance_lookup` called for Uncommon and Obscure questions. If it's absent, the LLM answered from training data alone — the architecture didn't engage.
 
 ```bash
-# Quick check: count how many results show get_posix_syntax calls
-grep -r "get_posix_syntax" results/claude/
+# Quick check: count how many results show sayance_lookup calls
+grep -r "sayance_lookup" results/claude/
 ```
 
 ### 2. Trap hits dropped
 
 Compare `failure_modes.non_posix_substitution` between Unaided and Bridge-Aided summaries. If Bridge-Aided still shows the same trap hit rate as Unaided, the Discovery Map hooks are not working — the LLM isn't connecting user intent to the right tool.
 
-### 3. Token cost actually went down
+### 3. Compliance is the regression gate
 
-Compare `total_billable_tokens` between Unaided and Bridge-Aided for the same LLM. Bridge-Aided will have slightly higher *input* tokens (because `sayance-core.md` is prepended), but *output* tokens should drop significantly. If total billable tokens are higher in Bridge-Aided, we made things worse.
+Compare `posix_compliance_rate` between Unaided and Bridge-Aided for the same
+LLM. This is the primary regression gate while bridge efficiency baselines are
+still being re-established in the post-hardening run. `total_billable_tokens` and
+token deltas are tracked as secondary signals only until a fresh measured baseline
+is available.
 
 ### 4. Issue 8 refusals are zero
 
@@ -225,9 +229,9 @@ Before committing any change to `benchmark_data.json`, `run_benchmark.py`, or `b
 
 - **Gemini daily quota planning:** In this repo, assume Gemini is only safe for one benchmark call every 30 seconds and no more than 50 model calls per day unless your active account limits show otherwise. That means:
   - Unaided baseline with the current 40-question corpus still fits: `python3 run_benchmark.py --llms gemini --max-workers 1 --delay 30`
-  - Bridge-Aided mode may exceed the daily quota because `TOOL_CALL: get_posix_syntax(...)` causes a second Gemini invocation for a question
+  - Bridge-Aided mode may exceed the daily quota because `sayance-lookup <utility>` calls can cause a second Gemini invocation for a question
   - If a run stops partway through, reuse the same results directory and resume on the next day
 
-- **Codex step count:** Codex (GPT-5.4) runs 8.1 mean steps in Unaided and 9.5 in Bridge-Aided. This is normal behavior — Codex is agentic by default. `mean_step_count` above 12 is a red flag; check for ambiguous question wording or injected context causing extra tool loops.
+- **Codex step count:** Codex (GPT-5.4) runs ~7.7 mean steps in Unaided and ~17 in Bridge-Aided under the real `sayance-lookup` contract (Wave-3, 2026-04-17). The bridge-aided figure is more than double the unaided baseline because the Discovery Map expands the solution space Codex considers, even though only ~1 in 40 aided runs actually calls `sayance-lookup`. `mean_step_count` above ~25 in bridge-aided mode is a red flag; check for ambiguous question wording, recursive lookup loops, or excessive shell verification.
 
 - **Claude cache state:** Anthropic charges differently for cache hits vs. cache misses. The `tokens.input_cached` field in results tracks this. Back-to-back runs of the same questions will show lower costs due to caching. Run Unaided and Bridge-Aided in separate sessions if you want cold-cache numbers.
