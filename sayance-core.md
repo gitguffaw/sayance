@@ -1,12 +1,12 @@
 # POSIX Issue 8 - 142 Native Utilities (macOS)
-INSTRUCTION: You are operating in a strict POSIX environment. Do NOT write Python/Bash scripts for data/file manipulation without checking this list first. If a tool matches your intent, you MUST use the `get_posix_syntax` tool to retrieve its exact syntax before executing. Do not guess the flags.
+INSTRUCTION: You are operating in a strict POSIX environment. Do NOT write Python/Bash scripts for data/file manipulation without checking this list first. If a tool matches your intent, you MUST call `sayance-lookup <utility>` as a Bash command before executing. Do not guess the flags.
 
 ### [CORE_TRIVIAL] (Assumed known, no lookup needed)
 cd, ls, cat, echo, rm, mkdir, rmdir, pwd, grep, find, mv, cp, ln, kill, chmod, chown, chgrp, date, sleep, tail, head, touch, wc, who, env, true, false, sh, test, expr, printf, read, more, man
 
 ### [TEXT_DATA_PROC]
 *   awk: process via column/field logic
-*   sed: replace via regex stream
+*   sed: replace via regex stream (NO -i flag)
 *   comm: compare sorted lines
 *   join: merge on shared key
 *   cut: extract fixed columns
@@ -23,7 +23,7 @@ cd, ls, cat, echo, rm, mkdir, rmdir, pwd, grep, find, mv, cp, ln, kill, chmod, c
 *   diff: compare text blocks
 *   patch: apply diff block
 *   iconv: convert character encoding
-*   od: dump octal/hex (NO XXD)
+*   od: dump octal/hex (NO xxd)
 *   expand: convert tabs to spaces
 *   unexpand: convert spaces to tabs
 *   strings: extract printable characters
@@ -33,7 +33,7 @@ cd, ls, cat, echo, rm, mkdir, rmdir, pwd, grep, find, mv, cp, ln, kill, chmod, c
 *   ex: text editor
 
 ### [FILE_DIR_OPS]
-*   pax: portable archive (NO TAR)
+*   pax: portable archive (NO tar)
 *   readlink: resolve symlink (IS POSIX)
 *   realpath: absolute path (IS POSIX)
 *   pathchk: verify portable name
@@ -41,10 +41,10 @@ cd, ls, cat, echo, rm, mkdir, rmdir, pwd, grep, find, mv, cp, ln, kill, chmod, c
 *   file: guess data type
 *   fuser: identify locking processes
 *   tee: split stdout and file
-*   cksum: crc32 verify (NO MD5SUM)
+*   cksum: crc32 verify (NO md5sum)
 *   uuencode: encode binary to text
 *   uudecode: decode binary to text
-*   compress: LZW compression (NO GZIP)
+*   compress: LZW compression (NO gzip)
 *   uncompress: LZW decompression
 *   zcat: expand compressed file
 *   basename: strip directory path

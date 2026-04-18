@@ -589,9 +589,9 @@ class ToolSimulationAdjustmentTests(unittest.TestCase):
         adjustment = captured_tool_simulation_adjustment(
             total_billable=10,
             tool_call_output=6,
-            run2_input_billable=10,
+            run2_input_billable=11,
             prompt="P" * 10,
-            tool_call="TOOL_CALL: get_posix_syntax(od)",
+            tool_call="sayance-lookup od",
             syntax=["od -An -tx1 file"],
         )
 
@@ -629,7 +629,7 @@ class ToolSimulationAdjustmentTests(unittest.TestCase):
             tool_call_output=5,
             run2_input_billable=40,
             prompt="P" * 20,
-            tool_call="TOOL_CALL: get_posix_syntax(od)",
+            tool_call="sayance-lookup od",
             syntax=["od -An -tx1 file"],
         )
 
@@ -680,7 +680,7 @@ class ToolSimulationAdjustmentTests(unittest.TestCase):
         )
         parse_response_mock.side_effect = [
             (
-                "TOOL_CALL: get_posix_syntax(od)\nHere is extra explanatory text.",
+                "sayance-lookup od\nHere is extra explanatory text.",
                 run1_tokens,
                 "claude-opus-4-6",
                 ExecutionMetrics(latency_ms=10, step_count=1, tool_call_count=0, tool_calls_by_type={}),
@@ -721,7 +721,7 @@ class ValidityReportingTests(unittest.TestCase):
     def test_save_summary_includes_tool_simulation_integrity_diagnostics(self) -> None:
         simulated = make_result(
             "T10",
-            response="TOOL_CALL: get_posix_syntax(od)\n\n[TOOL RESULT]: ['od -An -tx1 file']\n\nod -An -tx1 file",
+            response="sayance-lookup od\n\n[TOOL RESULT]: ['od -An -tx1 file']\n\nod -An -tx1 file",
             tokens=TokenUsage(
                 input=20,
                 input_cached=0,
@@ -958,7 +958,7 @@ class ValidityReportingTests(unittest.TestCase):
     def test_generate_report_mentions_tool_simulation_integrity_violations(self) -> None:
         simulated = make_result(
             "T10",
-            response="TOOL_CALL: get_posix_syntax(od)\n\n[TOOL RESULT]: ['od -An -tx1 file']\n\nod -An -tx1 file",
+            response="sayance-lookup od\n\n[TOOL RESULT]: ['od -An -tx1 file']\n\nod -An -tx1 file",
             tokens=TokenUsage(
                 input=20,
                 input_cached=0,
@@ -1354,7 +1354,8 @@ class PromptConstructionTests(unittest.TestCase):
 
         self.assertIn("CORE", prompt)
         self.assertIn("TOOL INSTRUCTION", prompt)
-        self.assertIn("If this prompt instructs you to emit a TOOL_CALL", prompt)
+        self.assertIn("`sayance-lookup <utility>`", prompt)
+        self.assertIn("Exception: if this prompt's TOOL INSTRUCTION asks you to invoke", prompt)
         self.assertNotIn("Respond with the POSIX command you would recommend", prompt)
         self.assertIn("TASK:\nraw prompt", prompt)
 
