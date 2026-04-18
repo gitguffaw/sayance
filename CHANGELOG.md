@@ -4,6 +4,63 @@ All notable changes to Sayance are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] — 2026-04-17
+
+### Changed
+- Repaired the bridge contract from `get_posix_syntax` simulation wiring to the
+  shipped `sayance-lookup` CLI contract. Supersedes the `TOOL_CALL` framing that
+  v1.0.2 patched.
+- Added drift-detection coverage for `sayance-lookup` and lookup payload
+  consistency in repository verification.
+- Added utility aliases to the shipped `sayance-lookup` CLI path.
+- Enriched the hot-path TLDR layer for faster POSIX command recall.
+- Reframed README and benchmark docs to emphasize POSIX compliance and
+  tool-selection accuracy.
+- Discovery Map text-parity check now anchors at `### [CORE_TRIVIAL]` in both
+  `sayance-core.md` and `skill/SKILL.md`, ignoring the SKILL.md wrapper header
+  and trailing blank line.
+- Dead-tool reference scan tightened to active product/runner code only;
+  legitimate historical mentions in README/CHANGELOG/architecture docs no
+  longer trip the gate.
+
+### Benchmark Rerun (Wave-3, 2026-04-17, real `sayance-lookup` contract)
+
+First benchmark run after the contract repair. 40 questions, k=1, cold cache
+start. `claude-opus-4-6` and `gpt-5.4` only — Gemini skipped due to daily
+quota constraints.
+
+| Provider | Mode | Compliance | Billable Tokens | Mean Output | Mean Latency | Mean Steps |
+|---|---|---:|---:|---:|---:|---:|
+| Claude | Unaided      | 65.0% | 1,361,516 |   203 |  8.0s | 1.00 |
+| Claude | Bridge-Aided | **82.5%** | 4,129,207 |   514 | 18.0s | 1.05 |
+| Codex  | Unaided      | 66.7% |   961,677 | 1,035 | 23.6s | 7.74 |
+| Codex  | Bridge-Aided | **92.5%** |   737,520 | 2,140 | 43.3s | 17.0 |
+
+Compliance flips (Unaided → Bridge-Aided):
+- Claude: +9 fixed, −2 regressed (T25, T29) → net **+7** compliant
+- Codex:  +11 fixed, **0 regressions** → net **+11** compliant
+
+Inefficiency-mode shifts:
+- `workaround_instead_of_native_utility` collapsed for both: Claude 9→1, Codex 7→1.
+- Codex `non_posix_substitution` 6→2; Claude flat (5→6).
+- `over_explaining` rose for both (Claude 14→29, Codex 24→27) — bridge-aided answers grow verbose.
+- Codex `tool_heavy_detour` 2→10 — bridge engages multiple shell steps per question.
+
+Notable telemetry:
+- Actual `sayance-lookup` invocations across 80 aided runs: **2 total** (1 per
+  provider). Most compliance gains come from Discovery Map injection alone, not
+  from on-demand lookups.
+- `tool_simulation_integrity_violation_count`: 0 in both providers.
+- Claude `total_billable_tokens` rose +203% — the gross figure counts
+  `cache_read_input_tokens` at full rate; the actual new tokens added per
+  prompt are ~10–13K (one cache-creation hit per call).
+- Codex billable tokens **fell 23%** (962K → 738K) despite compliance rising
+  by 26pp.
+
+Artifacts (gitignored, reproducible):
+- Unaided summary: `results/unaided/wave3-unaided-D2026-04-17-T17-11-11/summary-wave3-unaided-D2026-04-17-T17-11-11.json`
+- Bridge-Aided summary: `results/bridge-aided/wave3-aided-D2026-04-17-T17-29-07/summary-wave3-aided-D2026-04-17-T17-29-07.json`
+
 ## [1.0.2] — 2026-04-17
 
 ### Fixed
