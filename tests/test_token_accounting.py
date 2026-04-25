@@ -1027,8 +1027,9 @@ class ResultPreservationTests(unittest.TestCase):
             execute: bool = False,
             claude_model: str | None = None,
             codex_model: str | None = None,
+            context_mode: str = benchmark.CONTEXT_MODE_AMBIENT,
         ) -> QuestionResult:
-            del llm, judge, delay, timeout_seconds, inject_posix, execute, claude_model, codex_model
+            del llm, judge, delay, timeout_seconds, inject_posix, execute, claude_model, codex_model, context_mode
             if question["id"] == "T02":
                 raise RuntimeError("boom")
             return make_result(
@@ -1245,8 +1246,9 @@ class GradeResponsePromptTests(unittest.TestCase):
             timeout_seconds: int,
             claude_model: str | None = None,
             codex_model: str | None = None,
+            context_mode: str = benchmark.CONTEXT_MODE_AMBIENT,
         ) -> benchmark.CLIInvocation:
-            del judge, timeout_seconds, claude_model, codex_model
+            del judge, timeout_seconds, claude_model, codex_model, context_mode
             captured["prompt"] = prompt
             return benchmark.CLIInvocation(
                 stdout='{"score": 2, "reason": "ok", "used_posix": true, "traps_hit": []}',
@@ -1324,6 +1326,88 @@ class InvokeCliBytesRegressionTests(unittest.TestCase):
 
         self.assertIs(captured_kwargs["stdin"], providers_module.subprocess.DEVNULL)
 
+    def test_invoke_cli_isolated_context_scrubs_cwd_flags_and_host_agent_env(self) -> None:
+        from benchmark_core import providers as providers_module
+
+        calls: list[tuple[list[str], dict[str, object]]] = []
+
+        def fake_run(cmd, **kwargs):
+            calls.append((cmd, kwargs))
+            return providers_module.subprocess.CompletedProcess(
+                args=cmd,
+                returncode=0,
+                stdout='{"ok": true}',
+                stderr="",
+            )
+
+        host_env = {
+            "CODEX_THREAD_ID": "thread-leak",
+            "CODEX_INTERNAL_ORIGINATOR_OVERRIDE": "codex-app",
+            "CODEX_HOME": "/tmp/codex-home-is-auth",
+            "CLAUDE_CODE_SHELL": "1",
+            "ANTHROPIC_API_KEY": "preserve-claude-auth",
+            "GEMINI_API_KEY": "preserve-gemini-auth",
+            "GEMINI_CLI_IDE_WORKSPACE_PATH": "/repo/leak",
+        }
+
+        with mock.patch.dict(providers_module.os.environ, host_env, clear=True), \
+                mock.patch.object(providers_module.subprocess, "run", side_effect=fake_run):
+            benchmark.invoke_cli(
+                "claude",
+                "prompt",
+                timeout_seconds=1,
+                claude_model="claude-opus-4-6",
+                context_mode=benchmark.CONTEXT_MODE_ISOLATED,
+            )
+            benchmark.invoke_cli(
+                "codex",
+                "prompt",
+                timeout_seconds=1,
+                codex_model="gpt-5.4",
+                context_mode=benchmark.CONTEXT_MODE_ISOLATED,
+            )
+            benchmark.invoke_cli(
+                "gemini",
+                "prompt",
+                timeout_seconds=1,
+                context_mode=benchmark.CONTEXT_MODE_ISOLATED,
+            )
+
+        claude_cmd, claude_kwargs = calls[0]
+        codex_cmd, codex_kwargs = calls[1]
+        gemini_cmd, gemini_kwargs = calls[2]
+
+        self.assertIn("--setting-sources", claude_cmd)
+        self.assertIn("--disable-slash-commands", claude_cmd)
+        self.assertIn("--strict-mcp-config", claude_cmd)
+        self.assertIn("--tools", claude_cmd)
+        self.assertNotEqual(Path(claude_kwargs["cwd"]).resolve(), benchmark.SCRIPT_DIR.resolve())
+
+        self.assertIn("--ignore-user-config", codex_cmd)
+        self.assertIn("--ignore-rules", codex_cmd)
+        self.assertIn("--ephemeral", codex_cmd)
+        self.assertIn("--sandbox", codex_cmd)
+        self.assertIn("read-only", codex_cmd)
+        self.assertIn("--cd", codex_cmd)
+        self.assertNotEqual(Path(codex_kwargs["cwd"]).resolve(), benchmark.SCRIPT_DIR.resolve())
+
+        self.assertIn("--extensions", gemini_cmd)
+        self.assertIn("none", gemini_cmd)
+        self.assertIn("--allowed-mcp-server-names", gemini_cmd)
+        gemini_settings = Path(gemini_kwargs["cwd"]) / ".gemini" / "settings.json"
+        self.assertTrue(gemini_settings.exists())
+        self.assertFalse(json.loads(gemini_settings.read_text())["skills"]["enabled"])
+
+        for _, kwargs in calls:
+            env = kwargs["env"]
+            self.assertNotIn("CODEX_THREAD_ID", env)
+            self.assertNotIn("CODEX_INTERNAL_ORIGINATOR_OVERRIDE", env)
+            self.assertNotIn("CLAUDE_CODE_SHELL", env)
+            self.assertNotIn("GEMINI_CLI_IDE_WORKSPACE_PATH", env)
+            self.assertEqual(env["CODEX_HOME"], "/tmp/codex-home-is-auth")
+            self.assertEqual(env["ANTHROPIC_API_KEY"], "preserve-claude-auth")
+            self.assertEqual(env["GEMINI_API_KEY"], "preserve-gemini-auth")
+
 
 class PromptConstructionTests(unittest.TestCase):
     def test_build_effective_prompt_wraps_codex_in_benchmark_mode(self) -> None:
@@ -1383,6 +1467,26 @@ class PromptConstructionTests(unittest.TestCase):
         self.assertIn("CORE", prompt)
         self.assertIn("TASK:\nraw prompt", prompt)
         self.assertNotIn(r"TASK:\nraw prompt", prompt)
+
+    def test_result_provenance_distinguishes_context_mode_from_same_prompt(self) -> None:
+        from benchmark_core import runner as runner_module
+
+        question = {"id": "T01", "question": "raw prompt"}
+
+        ambient = runner_module._result_provenance(
+            question,
+            prompt="raw prompt",
+            context_mode=benchmark.CONTEXT_MODE_AMBIENT,
+        )
+        isolated = runner_module._result_provenance(
+            question,
+            prompt="raw prompt",
+            context_mode=benchmark.CONTEXT_MODE_ISOLATED,
+        )
+
+        self.assertEqual(ambient["effective_prompt_sha256"], isolated["effective_prompt_sha256"])
+        self.assertEqual(ambient["context_mode"], benchmark.CONTEXT_MODE_AMBIENT)
+        self.assertEqual(isolated["context_mode"], benchmark.CONTEXT_MODE_ISOLATED)
 
 
 if __name__ == "__main__":

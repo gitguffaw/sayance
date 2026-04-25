@@ -37,6 +37,9 @@ Command examples below are convenience references. Canonical command/runbook det
 # Dry run (no API calls)
 python3 run_benchmark.py --dry-run
 
+# Neutral-context dry run for naked/unaided baselines
+python3 run_benchmark.py --context-mode isolated --dry-run
+
 # Validate bridge completeness (core + tldr)
 python3 run_benchmark.py --validate-bridge
 
@@ -50,14 +53,14 @@ SAYANCE_LIVE_CANARY=1 make test-product-live-codex
 
 # Run specific LLMs
 python3 run_benchmark.py --llms gemini
-python3 run_benchmark.py --llms gemini claude codex
+python3 run_benchmark.py --llms gemini claude codex --context-mode isolated
 
 # Model pins for unaided runs
-python3 run_benchmark.py --llms claude --claude-model claude-opus-4-6
-python3 run_benchmark.py --llms codex --codex-model gpt-5.4
+python3 run_benchmark.py --llms claude --claude-model claude-opus-4-6 --context-mode isolated
+python3 run_benchmark.py --llms codex --codex-model gpt-5.4 --context-mode isolated
 
 # Safe Gemini unaided under tight quota
-python3 run_benchmark.py --llms gemini --max-workers 1 --delay 30
+python3 run_benchmark.py --llms gemini --max-workers 1 --delay 30 --context-mode isolated
 
 # Run specific questions
 python3 run_benchmark.py --questions T01 T02 T16
@@ -84,6 +87,8 @@ Results are saved under `results/` as JSON/HTML, with mode roots at `results/una
 - Claude: `claude -p "prompt" --output-format json`
 - Gemini: `gemini -p "prompt" -o json`
 - Codex: `codex exec --json --skip-git-repo-check "prompt"`
+
+For new naked/Unaided baselines, run with `--context-mode isolated`. This mode keeps provider auth but runs from neutral temp directories and disables provider-specific ambient context: Claude `CLAUDE.md` discovery/settings/skills/MCP, Codex `AGENTS.md` discovery/user config/rules/session persistence, and Gemini skills/extensions/MCP/global `GEMINI.md`.
 
 ## Key Files
 
@@ -112,6 +117,7 @@ Results are saved under `results/` as JSON/HTML, with mode roots at `results/una
 - [OBSERVED 2026-04-17] **Codex step-count doubles under real bridge**: Under the shipped `sayance-lookup` contract (Wave-3), Codex (`gpt-5.4`) `mean_step_count` rose from 7.74 (Unaided) to 17.0 (Bridge-Aided) on the 40-question corpus. This is more than the 8.1 → 9.5 spread observed under the retired `get_posix_syntax` simulation contract. The expanded step count comes from internal Codex reasoning, not actual `sayance-lookup` invocations — only 1/40 aided runs called the CLI. Treat ~17 as the new baseline; flag values above ~25 for investigation.
 - [OBSERVED 2026-04-17] **Claude gross billable inflates under bridge**: Under the shipped contract (Wave-3), Claude (`claude-opus-4-6`) `total_billable_tokens` rose ~3× in Bridge-Aided mode (1.36M → 4.13M). The increase is dominated by `cache_read_input_tokens` counted at full rate; the actual *new* prompt tokens added per call are ~10–13K. This is the cold/warm cache asymmetry for the headless `claude -p --output-format json` flow, not a bridge regression. For per-call cost analysis, prefer `input_tokens + cache_creation_input_tokens + output_tokens` over the gross `billable` field.
 - [OBSERVED 2026-04-17] **Bridge-aided lookup rate is low**: Under the shipped contract (Wave-3), only 1/40 aided runs invoked `sayance-lookup` per provider (Claude and Codex each). The Discovery Map injection alone drives the compliance lift; the lookup CLI is a precision fallback rather than the primary mechanism. When investigating an aided regression, check Discovery Map injection integrity first, lookup invocation second.
+- [OBSERVED 2026-04-24] **Unaided context contamination**: Legacy Unaided runs launched provider CLIs from the repository root, allowing Claude to read `CLAUDE.md`, Codex to read `AGENTS.md`/user skills/session environment, and Gemini to read user skills/extensions/MCP/global `GEMINI.md`. Use `--context-mode isolated` for new naked baselines; ambient mode remains only for historical comparability.
 
 ## Important Context
 
