@@ -17,7 +17,6 @@ for idx in {1..10}; do
     python3 run_benchmark.py \
       --llms claude codex \
       --no-grade \
-      --context-mode isolated \
       --claude-model claude-opus-4-6 \
       --codex-model gpt-5.4 \
       --results-dir "results/unaided-scheduled-5h/run${run_id}" \

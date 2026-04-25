@@ -81,15 +81,6 @@ def main():
         help="Inject POSIX Step-Up Architecture for testing",
     )
     parser.add_argument(
-        "--context-mode",
-        default=providers.CONTEXT_MODE_AMBIENT,
-        choices=providers.CONTEXT_MODES,
-        help=(
-            "Provider context policy: ambient uses normal CLI context; isolated runs from neutral "
-            "temp dirs with provider skills, memory, MCP/plugins, and project docs disabled"
-        ),
-    )
-    parser.add_argument(
         "--execute", action="store_true",
         help="Execute extracted commands against fixtures (Command Verification)",
     )
@@ -179,15 +170,12 @@ def main():
         inject_posix=args.inject_posix,
         execute=args.execute,
     )
-    default_label = config.derive_run_label(
+    run_label = args.label or config.derive_run_label(
         llms=args.llms,
         requested_models=requested_models,
         timeout_seconds=args.timeout,
         default_timeout_seconds=providers.DEFAULT_CLI_TIMEOUT_SECONDS,
     )
-    if args.context_mode == providers.CONTEXT_MODE_ISOLATED:
-        default_label = f"{default_label}-isolated"
-    run_label = args.label or default_label
     config.set_results_dir(config.make_run_results_dir(default_results_root, label=run_label))
     if args.results_dir:
         custom_results_dir = Path(args.results_dir)
@@ -219,7 +207,6 @@ def main():
         execute=args.execute,
         claude_model=claude_model_override,
         codex_model=codex_model_override,
-        context_mode=args.context_mode,
     )
 
     if all_results:
@@ -242,7 +229,6 @@ def main():
                 "seed": args.seed,
                 "k": args.k,
                 "judge": judge,
-                "context_mode": args.context_mode,
             },
             retain_latest_only=retain_latest_artifacts,
         )

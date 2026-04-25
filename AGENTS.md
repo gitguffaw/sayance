@@ -17,11 +17,10 @@ This repository is a small, stdlib-only Python benchmark. `run_benchmark.py` is 
 Use Python directly; there is no virtualenv or build step.
 
 - `python3 run_benchmark.py --dry-run` checks question selection and CLI wiring without making API calls.
-- `python3 run_benchmark.py --context-mode isolated --dry-run` checks the neutral-context benchmark path without API calls. Use `--context-mode isolated` for new unaided/naked baselines so Claude does not read `CLAUDE.md`, Codex does not read `AGENTS.md` or user skills, and Gemini does not read user skills/extensions/MCP/global `GEMINI.md`.
 - `python3 run_benchmark.py --validate-bridge` verifies `sayance-core.md` + `sayance-tldr.json` cover all 142 macOS-available utilities and exits.
-- `python3 run_benchmark.py --llms gemini claude --context-mode isolated` runs selected providers only under neutral context.
-- `python3 run_benchmark.py --llms claude --claude-model claude-opus-4-6 --context-mode isolated` runs Claude with the pinned baseline model (also the default) under neutral context.
-- `python3 run_benchmark.py --llms codex --codex-model gpt-5.4 --context-mode isolated` runs Codex with the pinned baseline model (also the default) under neutral context.
+- `python3 run_benchmark.py --llms gemini claude` runs selected providers only.
+- `python3 run_benchmark.py --llms claude --claude-model claude-opus-4-6` runs Claude with the pinned baseline model (also the default).
+- `python3 run_benchmark.py --llms codex --codex-model gpt-5.4` runs Codex with the pinned baseline model (also the default).
 - `python3 run_benchmark.py --questions T01 T02 --k 3` repeats specific questions for comparison.
 - `python3 run_benchmark.py --judge claude` enables grading when you want token and accuracy data.
 - `python3 run_benchmark.py --no-grade` skips LLM-as-judge grading (token-only mode).
@@ -45,7 +44,7 @@ Follow the existing Python style across `benchmark_core/` and `run_benchmark.py`
 Unit tests live in `tests/` (token accounting, reporting integrity) and run via `python3 -m unittest discover -s tests -t .`. Repo integrity checks live in `scripts/verify_repo.py` and run via `make test-repo`. The unified command is `make verify`.
 
 Use a three-path validation approach:
-- Simulation Testing (legacy): dry runs and focused benchmark runs. For any new Unaided baseline, pass `--context-mode isolated`; the default `ambient` mode is retained only for historical comparability with older runs that intentionally included normal provider CLI context.
+- Simulation Testing (legacy): dry runs and focused benchmark runs.
 - Install Testing (additive): installed product-path checks via `make test-product` and `make test-product-negative`. Includes single-target install isolation, installed artifact drift validation, and partial-uninstall symlink correctness. Optional live canary extension (`make test-product-live-claude` / `make test-product-live-codex`) is billable and informational — not part of the pre-merge gate.
 - Repo Integrity: structural coherence checks via `make test-repo`.
 

@@ -110,7 +110,6 @@ class QuestionResult:
     benchmark_data_sha256: str = ""
     effective_prompt_sha256: str = ""
     prompt_template_version: str = ""
-    context_mode: str = "ambient"
 
 
 @dataclass(frozen=True)

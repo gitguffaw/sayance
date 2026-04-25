@@ -35,14 +35,12 @@ RESULT_PROVENANCE_FIELDS = (
     "benchmark_data_sha256",
     "effective_prompt_sha256",
     "prompt_template_version",
-    "context_mode",
 )
 CACHE_PROVENANCE_FIELDS = (
     "benchmark_data_sha256",
     "question_sha256",
     "prompt_template_version",
     "effective_prompt_sha256",
-    "context_mode",
 )
 
 # Result directories map to benchmark modes:
