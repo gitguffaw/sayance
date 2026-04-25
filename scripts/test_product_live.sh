@@ -108,9 +108,11 @@ triage_failure() {
 # ---------------------------------------------------------------------------
 run_canary() {
   local provider="$1" canary="$2" prompt="$3" expected="$4" trap_util="$5"
-  local tmp_home response rc start_s end_s latency_s pass lower
+  local tmp_home tmp_workspace response rc start_s end_s latency_s pass lower
 
   tmp_home="$(mktemp -d)"
+  tmp_workspace="${tmp_home}/neutral-workspace"
+  mkdir -p "${tmp_workspace}"
   # Cleanup this temp HOME on return
   # shellcheck disable=SC2064
   trap "rm -rf '${tmp_home}'" RETURN
@@ -142,14 +144,14 @@ run_canary() {
   rc=0
   case "$provider" in
     claude)
-      response="$(HOME="${tmp_home}" \
+      response="$(cd "${tmp_workspace}" && HOME="${tmp_home}" PATH="${lane_bin}:${PATH}" \
         run_with_timeout "${TIMEOUT_S}" \
-        claude -p "$prompt" --output-format json 2>/dev/null)" || rc=$?
+        claude -p "$prompt" --output-format json --no-session-persistence --no-chrome 2>/dev/null)" || rc=$?
       ;;
     codex)
-      response="$(HOME="${tmp_home}" \
+      response="$(cd "${tmp_workspace}" && HOME="${tmp_home}" PATH="${lane_bin}:${PATH}" \
         run_with_timeout "${TIMEOUT_S}" \
-        codex exec --json --skip-git-repo-check "$prompt" 2>/dev/null)" || rc=$?
+        codex exec --json --skip-git-repo-check --ephemeral --sandbox read-only --cd "${tmp_workspace}" "$prompt" 2>/dev/null)" || rc=$?
       ;;
   esac
   end_s="$(date +%s)"
