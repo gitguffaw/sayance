@@ -1,8 +1,12 @@
+import atexit
 import json
+import os
 import random
 import re
+import shutil
 import shlex
 import subprocess
+import tempfile
 import time
 from pathlib import Path
 
@@ -20,6 +24,12 @@ LLM_COMMANDS: dict[str, list[str]] = {
     "gemini": ["gemini", "-o", "json", "-p"],
     "codex": ["codex", "exec", "--json", "--skip-git-repo-check"],
 }
+
+CONTEXT_MODE_AMBIENT = "ambient"
+CONTEXT_MODE_ISOLATED = "isolated"
+CONTEXT_MODES = (CONTEXT_MODE_AMBIENT, CONTEXT_MODE_ISOLATED)
+_NO_MCP_SERVER_SENTINEL = "__sayance_no_mcp__"
+_isolated_dirs: dict[str, Path] = {}
 
 
 NOISE_PREFIXES = (
@@ -143,6 +153,163 @@ def normalize_model_override(raw_model: str | None) -> str | None:
     return normalized
 
 
+def normalize_context_mode(raw_mode: str | None) -> str:
+    """Normalize provider context mode names."""
+    normalized = (raw_mode or CONTEXT_MODE_AMBIENT).strip().lower()
+    if normalized not in CONTEXT_MODES:
+        raise ValueError(
+            f"unknown context mode {raw_mode!r}; expected one of {', '.join(CONTEXT_MODES)}"
+        )
+    return normalized
+
+
+def _isolated_dir(llm: str) -> Path:
+    """Return a neutral per-provider cwd used to defeat project context discovery."""
+    existing = _isolated_dirs.get(llm)
+    if existing is not None:
+        return existing
+
+    path = Path(tempfile.mkdtemp(prefix=f"sayance-{llm}-isolated-"))
+    atexit.register(shutil.rmtree, path, ignore_errors=True)
+
+    if llm == "gemini":
+        settings_dir = path / ".gemini"
+        settings_dir.mkdir(parents=True, exist_ok=True)
+        empty_context_filename = f"__sayance_empty_context_{os.getpid()}_{len(_isolated_dirs)}__.md"
+        settings = {
+            "context": {
+                "fileName": empty_context_filename,
+                "includeDirectories": [],
+                "loadMemoryFromIncludeDirectories": False,
+                "discoveryMaxDirs": 0,
+                "memoryBoundaryMarkers": [],
+            },
+            "skills": {"enabled": False},
+            "mcp": {
+                "allowed": [],
+                "excluded": ["*"],
+            },
+            "hooks": {},
+        }
+        (settings_dir / "settings.json").write_text(json.dumps(settings) + "\n")
+
+    if llm == "claude":
+        settings = {"autoMemoryEnabled": False}
+        (path / "claude-isolated-settings.json").write_text(json.dumps(settings) + "\n")
+
+    _isolated_dirs[llm] = path
+    return path
+
+
+def _isolated_env() -> dict[str, str]:
+    """Build a subprocess environment that preserves auth while dropping host-agent context."""
+    env = dict(os.environ)
+    remove_exact = {
+        "CODEX_CI",
+        "CODEX_INTERNAL_ORIGINATOR_OVERRIDE",
+        "CODEX_SHELL",
+        "CODEX_THREAD_ID",
+        "CLAUDE_PROJECT_DIR",
+        "CLAUDE_WORKING_DIR",
+        "GEMINI_CLI_IDE_WORKSPACE_PATH",
+        "GEMINI_PROJECT_DIR",
+        "GEMINI_SANDBOX",
+    }
+    remove_prefixes = (
+        "CLAUDE_CODE_",
+    )
+    for key in list(env):
+        if key in remove_exact or any(key.startswith(prefix) for prefix in remove_prefixes):
+            env.pop(key, None)
+    return env
+
+
+def _build_invocation(
+    llm: str,
+    prompt: str,
+    *,
+    context_mode: str,
+    claude_model: str | None = None,
+    codex_model: str | None = None,
+) -> tuple[list[str], Path | None, dict[str, str] | None]:
+    mode = normalize_context_mode(context_mode)
+    cwd: Path | None = None
+    env: dict[str, str] | None = None
+
+    if mode == CONTEXT_MODE_ISOLATED:
+        cwd = _isolated_dir(llm)
+        env = _isolated_env()
+    else:
+        cmd = LLM_COMMANDS[llm].copy()
+        if llm == "claude" and claude_model:
+            cmd.extend(["--model", claude_model])
+        if llm == "codex" and codex_model:
+            cmd.extend(["--model", codex_model])
+        cmd.append(prompt)
+        return cmd, cwd, env
+
+    if llm == "claude":
+        cmd = ["claude", "--output-format", "json", "-p"]
+        if mode == CONTEXT_MODE_ISOLATED:
+            assert cwd is not None
+            cmd.extend(
+                [
+                    "--setting-sources",
+                    "",
+                    "--disable-slash-commands",
+                    "--no-session-persistence",
+                    "--no-chrome",
+                    "--strict-mcp-config",
+                    "--tools",
+                    "",
+                    "--settings",
+                    str(cwd / "claude-isolated-settings.json"),
+                ]
+            )
+        if claude_model:
+            cmd.extend(["--model", claude_model])
+        cmd.append(prompt)
+        return cmd, cwd, env
+
+    if llm == "gemini":
+        cmd = ["gemini", "-o", "json"]
+        if mode == CONTEXT_MODE_ISOLATED:
+            cmd.extend(
+                [
+                    "--approval-mode",
+                    "plan",
+                    "--extensions",
+                    "none",
+                    "--allowed-mcp-server-names",
+                    _NO_MCP_SERVER_SENTINEL,
+                ]
+            )
+        cmd.extend(["-p", prompt])
+        return cmd, cwd, env
+
+    if llm == "codex":
+        cmd = ["codex", "exec", "--json", "--skip-git-repo-check"]
+        if mode == CONTEXT_MODE_ISOLATED:
+            assert cwd is not None
+            cmd.extend(
+                [
+                    "--ignore-user-config",
+                    "--ignore-rules",
+                    "--ephemeral",
+                    "--sandbox",
+                    "read-only",
+                    "--cd",
+                    str(cwd),
+                ]
+            )
+        if codex_model:
+            cmd.extend(["--model", codex_model])
+        cmd.append(prompt)
+        return cmd, cwd, env
+
+    raise KeyError(f"unknown llm: {llm}")
+
+
 def format_seconds_from_ms(ms: int | float) -> str:
     """Render milliseconds as a concise seconds string."""
     seconds = max(float(ms), 0.0) / 1000.0
@@ -229,14 +396,16 @@ def invoke_cli(
     timeout_seconds: int = DEFAULT_CLI_TIMEOUT_SECONDS,
     claude_model: str | None = None,
     codex_model: str | None = None,
+    context_mode: str = CONTEXT_MODE_AMBIENT,
 ) -> CLIInvocation:
     """Send a prompt to an LLM CLI and return raw stdout plus latency."""
-    cmd = LLM_COMMANDS[llm].copy()
-    if llm == "claude" and claude_model:
-        cmd.extend(["--model", claude_model])
-    if llm == "codex" and codex_model:
-        cmd.extend(["--model", codex_model])
-    cmd.append(prompt)
+    cmd, cwd, env = _build_invocation(
+        llm,
+        prompt,
+        context_mode=context_mode,
+        claude_model=claude_model,
+        codex_model=codex_model,
+    )
 
     started = time.perf_counter()
     try:
@@ -246,6 +415,8 @@ def invoke_cli(
             text=True,
             stdin=subprocess.DEVNULL,
             timeout=timeout_seconds,
+            cwd=str(cwd) if cwd else None,
+            env=env,
         )
         latency_ms = int((time.perf_counter() - started) * 1000)
         if result.returncode != 0 and not result.stdout.strip():

@@ -123,14 +123,21 @@ def _build_effective_prompt(
     )
 
 
-def _result_provenance(question: dict, *, prompt: str) -> dict[str, object]:
+def _result_provenance(
+    question: dict,
+    *,
+    prompt: str,
+    context_mode: str = providers.CONTEXT_MODE_AMBIENT,
+) -> dict[str, object]:
     question_snapshot = dict(question)
+    normalized_context_mode = providers.normalize_context_mode(context_mode)
     return {
         "question_snapshot": question_snapshot,
         "question_sha256": _sha256_json(question_snapshot),
         "benchmark_data_sha256": config.sha256_file(config.DATA_FILE) or "",
         "effective_prompt_sha256": _sha256_text(prompt),
         "prompt_template_version": config.PROMPT_TEMPLATE_VERSION,
+        "context_mode": normalized_context_mode,
     }
 
 
@@ -144,6 +151,7 @@ def _build_error_result(
     latency_ms: int = 0,
     claude_model: str | None = None,
     codex_model: str | None = None,
+    context_mode: str = providers.CONTEXT_MODE_AMBIENT,
     cache_state: str = "cold",
     result_provenance: dict[str, object] | None = None,
 ) -> QuestionResult:
@@ -156,6 +164,7 @@ def _build_error_result(
     provenance = result_provenance or _result_provenance(
         question,
         prompt=_build_effective_prompt(question, llm=llm, inject_posix=False),
+        context_mode=context_mode,
     )
     return QuestionResult(
         id=question["id"],
@@ -208,6 +217,7 @@ def _build_error_result(
         benchmark_data_sha256=str(provenance["benchmark_data_sha256"]),
         effective_prompt_sha256=str(provenance["effective_prompt_sha256"]),
         prompt_template_version=str(provenance["prompt_template_version"]),
+        context_mode=str(provenance["context_mode"]),
     )
 
 
@@ -271,6 +281,7 @@ def load_existing_result(
             benchmark_data_sha256=data.get("benchmark_data_sha256", ""),
             effective_prompt_sha256=data.get("effective_prompt_sha256", ""),
             prompt_template_version=data.get("prompt_template_version", ""),
+            context_mode=data.get("context_mode", providers.CONTEXT_MODE_AMBIENT),
         )
     except (json.JSONDecodeError, KeyError, TypeError):
         return None
@@ -357,6 +368,7 @@ def grade_response(
     timeout_seconds: int,
     claude_model: str | None = None,
     codex_model: str | None = None,
+    context_mode: str = providers.CONTEXT_MODE_AMBIENT,
 ) -> AccuracyGrade:
     """Use an LLM to grade another LLM's response."""
     import base64
@@ -379,6 +391,7 @@ def grade_response(
         timeout_seconds=timeout_seconds,
         claude_model=claude_model,
         codex_model=codex_model,
+        context_mode=context_mode,
     )
     raw_cleaned = providers.strip_cli_noise(raw.stdout)
 
@@ -556,6 +569,7 @@ def run_single(
     execute: bool = False,
     claude_model: str | None = None,
     codex_model: str | None = None,
+    context_mode: str = providers.CONTEXT_MODE_AMBIENT,
     *,
     invoke_cli_fn=providers.invoke_cli,
     parse_response_fn=providers.parse_response,
@@ -571,6 +585,7 @@ def run_single(
     execute_question_fn=execution_module.execute_question,
 ) -> QuestionResult:
     """Run a single question against a single LLM and return the result."""
+    normalized_context_mode = providers.normalize_context_mode(context_mode)
     effective_delay = delay
     if llm == "gemini":
         effective_delay = max(delay, GEMINI_MIN_DELAY_SECONDS)
@@ -586,7 +601,11 @@ def run_single(
         load_posix_core_fn=load_posix_core_fn,
         log_missing=True,
     )
-    result_provenance = _result_provenance(question, prompt=prompt)
+    result_provenance = _result_provenance(
+        question,
+        prompt=prompt,
+        context_mode=normalized_context_mode,
+    )
 
     # Detect cache state (first call to this provider = cold)
     cache_state = "warm" if already_completed_fn(llm, q_id, 0) else "unknown"
@@ -597,6 +616,7 @@ def run_single(
         timeout_seconds=timeout_seconds,
         claude_model=claude_model,
         codex_model=codex_model,
+        context_mode=normalized_context_mode,
     )
     response_text, tokens, model, execution = parse_response_fn(
         llm,
@@ -651,6 +671,7 @@ def run_single(
                 timeout_seconds=timeout_seconds,
                 claude_model=claude_model,
                 codex_model=codex_model,
+                context_mode=normalized_context_mode,
             )
             resp2, tok2, _, exec2 = parse_response_fn(
                 llm,
@@ -720,6 +741,7 @@ def run_single(
             timeout_seconds=timeout_seconds,
             claude_model=claude_model,
             codex_model=codex_model,
+            context_mode=normalized_context_mode,
         )
 
     # Command Verification: execute the extracted command if --execute was passed
@@ -747,6 +769,7 @@ def run_single(
         benchmark_data_sha256=str(result_provenance["benchmark_data_sha256"]),
         effective_prompt_sha256=str(result_provenance["effective_prompt_sha256"]),
         prompt_template_version=str(result_provenance["prompt_template_version"]),
+        context_mode=str(result_provenance["context_mode"]),
     )
 
 
@@ -778,6 +801,7 @@ def run_provider_batch(
     execute: bool = False,
     claude_model: str | None = None,
     codex_model: str | None = None,
+    context_mode: str = providers.CONTEXT_MODE_AMBIENT,
     *,
     run_single_fn=run_single,
     already_completed_fn=already_completed,
@@ -785,6 +809,7 @@ def run_provider_batch(
     write_incremental_fn=write_incremental,
 ) -> list[QuestionResult]:
     """Run all questions for a single provider with concurrency."""
+    normalized_context_mode = providers.normalize_context_mode(context_mode)
     workers = max_workers or PROVIDER_CONCURRENCY.get(llm, 1)
     results: list[QuestionResult] = []
     tasks_to_run = []
@@ -793,6 +818,7 @@ def run_provider_batch(
         expected_provenance = _result_provenance(
             q,
             prompt=_build_effective_prompt(q, llm=llm, inject_posix=inject_posix),
+            context_mode=normalized_context_mode,
         )
         if already_completed_fn(llm, q["id"], run_idx):
             existing = load_existing_result_fn(
@@ -828,6 +854,7 @@ def run_provider_batch(
                 execute,
                 claude_model,
                 codex_model,
+                normalized_context_mode,
             )
             futures[future] = (q["id"], run_idx)
 
@@ -845,9 +872,11 @@ def run_provider_batch(
                     error_kind="question_exception",
                     claude_model=claude_model,
                     codex_model=codex_model,
+                    context_mode=normalized_context_mode,
                     result_provenance=_result_provenance(
                         question,
                         prompt=_build_effective_prompt(question, llm=llm, inject_posix=inject_posix),
+                        context_mode=normalized_context_mode,
                     ),
                 )
 
@@ -900,10 +929,12 @@ def run_benchmark(
     execute: bool = False,
     claude_model: str | None = None,
     codex_model: str | None = None,
+    context_mode: str = providers.CONTEXT_MODE_AMBIENT,
     *,
     run_provider_batch_fn=run_provider_batch,
 ) -> dict[str, list[QuestionResult]]:
     """Run the full benchmark across all providers."""
+    normalized_context_mode = providers.normalize_context_mode(context_mode)
     total_calls = len(questions) * len(llms) * k
 
     mode_label = "Unaided"
@@ -928,6 +959,7 @@ def run_benchmark(
         print(f"  Executable fixtures: {len(exec_qs)}/{len(questions)}")
     print(f"  Shuffle seed: {seed}")
     print(f"  CLI timeout: {timeout_seconds}s")
+    print(f"  Context mode: {normalized_context_mode}")
     print(f"  Total calls: {total_calls}")
     print(f"{'=' * 60}\n")
 
@@ -962,6 +994,7 @@ def run_benchmark(
                 execute,
                 claude_model,
                 codex_model,
+                normalized_context_mode,
             )
             provider_futures[future] = llm
 
@@ -977,6 +1010,7 @@ def run_benchmark(
                     expected_provenance = _result_provenance(
                         question,
                         prompt=_build_effective_prompt(question, llm=llm, inject_posix=inject_posix),
+                        context_mode=normalized_context_mode,
                     )
                     if already_completed(llm, question["id"], run_idx):
                         existing = load_existing_result(
@@ -996,6 +1030,7 @@ def run_benchmark(
                         error_kind="provider_batch_failure",
                         claude_model=claude_model,
                         codex_model=codex_model,
+                        context_mode=normalized_context_mode,
                         result_provenance=expected_provenance,
                     )
                     provider_results.append(error_result)

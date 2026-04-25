@@ -54,6 +54,9 @@ DEFAULT_SHUFFLE_SEED = providers.DEFAULT_SHUFFLE_SEED
 MODEL_OVERRIDE_AUTO_VALUES = providers.MODEL_OVERRIDE_AUTO_VALUES
 PINNED_CLAUDE_MODEL = providers.PINNED_CLAUDE_MODEL
 PINNED_CODEX_MODEL = providers.PINNED_CODEX_MODEL
+CONTEXT_MODE_AMBIENT = providers.CONTEXT_MODE_AMBIENT
+CONTEXT_MODE_ISOLATED = providers.CONTEXT_MODE_ISOLATED
+CONTEXT_MODES = providers.CONTEXT_MODES
 TOOL_CALL_PATTERN = providers.SAYANCE_LOOKUP_PATTERN
 UTILITY_NAME_PATTERN = providers.UTILITY_NAME_PATTERN
 LLM_COMMANDS = providers.LLM_COMMANDS
@@ -72,6 +75,7 @@ _load_posix_tldr = providers._load_posix_tldr
 _load_posix_utilities = providers._load_posix_utilities
 normalize_utility_name = providers.normalize_utility_name
 normalize_model_override = providers.normalize_model_override
+normalize_context_mode = providers.normalize_context_mode
 format_seconds_from_ms = providers.format_seconds_from_ms
 prune_timestamped_artifacts = providers.prune_timestamped_artifacts
 strip_cli_noise = providers.strip_cli_noise
@@ -145,6 +149,7 @@ def run_single(
     execute: bool = False,
     claude_model: str | None = None,
     codex_model: str | None = None,
+    context_mode: str = providers.CONTEXT_MODE_AMBIENT,
 ):
     _sync_results_dir_to_config()
     return runner.run_single(
@@ -158,6 +163,7 @@ def run_single(
         execute=execute,
         claude_model=claude_model,
         codex_model=codex_model,
+        context_mode=context_mode,
         invoke_cli_fn=invoke_cli,
         parse_response_fn=parse_response,
         load_posix_core_fn=_load_posix_core,
@@ -186,6 +192,7 @@ def run_provider_batch(
     execute: bool = False,
     claude_model: str | None = None,
     codex_model: str | None = None,
+    context_mode: str = providers.CONTEXT_MODE_AMBIENT,
 ):
     _sync_results_dir_to_config()
     return runner.run_provider_batch(
@@ -201,6 +208,7 @@ def run_provider_batch(
         execute=execute,
         claude_model=claude_model,
         codex_model=codex_model,
+        context_mode=context_mode,
         run_single_fn=run_single,
         already_completed_fn=already_completed,
         load_existing_result_fn=load_existing_result,
@@ -222,6 +230,7 @@ def run_benchmark(
     execute: bool = False,
     claude_model: str | None = None,
     codex_model: str | None = None,
+    context_mode: str = providers.CONTEXT_MODE_AMBIENT,
 ):
     _sync_results_dir_to_config()
     return runner.run_benchmark(
@@ -238,6 +247,7 @@ def run_benchmark(
         execute=execute,
         claude_model=claude_model,
         codex_model=codex_model,
+        context_mode=context_mode,
         run_provider_batch_fn=run_provider_batch,
     )
 
