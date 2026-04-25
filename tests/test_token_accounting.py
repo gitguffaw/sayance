@@ -1341,6 +1341,7 @@ class InvokeCliBytesRegressionTests(unittest.TestCase):
             )
 
         host_env = {
+            "HOME": "/tmp/ambient-home-leak",
             "CODEX_THREAD_ID": "thread-leak",
             "CODEX_INTERNAL_ORIGINATOR_OVERRIDE": "codex-app",
             "CODEX_HOME": "/tmp/codex-home-is-auth",
@@ -1378,6 +1379,7 @@ class InvokeCliBytesRegressionTests(unittest.TestCase):
         gemini_cmd, gemini_kwargs = calls[2]
 
         self.assertIn("--setting-sources", claude_cmd)
+        self.assertIn("--bare", claude_cmd)
         self.assertIn("--disable-slash-commands", claude_cmd)
         self.assertIn("--strict-mcp-config", claude_cmd)
         self.assertIn("--tools", claude_cmd)
@@ -1389,24 +1391,38 @@ class InvokeCliBytesRegressionTests(unittest.TestCase):
         self.assertIn("--sandbox", codex_cmd)
         self.assertIn("read-only", codex_cmd)
         self.assertIn("--cd", codex_cmd)
+        self.assertIn("-c", codex_cmd)
+        self.assertIn("shell_environment_policy.inherit=none", codex_cmd)
         self.assertNotEqual(Path(codex_kwargs["cwd"]).resolve(), benchmark.SCRIPT_DIR.resolve())
 
         self.assertIn("--extensions", gemini_cmd)
         self.assertIn("none", gemini_cmd)
         self.assertIn("--allowed-mcp-server-names", gemini_cmd)
+        gemini_home_settings = Path(gemini_kwargs["env"]["HOME"]) / ".gemini" / "settings.json"
+        self.assertTrue(gemini_home_settings.exists())
+        self.assertFalse(json.loads(gemini_home_settings.read_text())["skills"]["enabled"])
         gemini_settings = Path(gemini_kwargs["cwd"]) / ".gemini" / "settings.json"
         self.assertTrue(gemini_settings.exists())
         self.assertFalse(json.loads(gemini_settings.read_text())["skills"]["enabled"])
 
         for _, kwargs in calls:
             env = kwargs["env"]
+            self.assertNotEqual(env["HOME"], "/tmp/ambient-home-leak")
+            self.assertIn("sayance-", Path(env["HOME"]).name)
+            self.assertEqual(env["XDG_CONFIG_HOME"], str(Path(env["HOME"]) / ".config"))
+            self.assertEqual(env["XDG_DATA_HOME"], str(Path(env["HOME"]) / ".local" / "share"))
+            self.assertEqual(env["XDG_CACHE_HOME"], str(Path(env["HOME"]) / ".cache"))
             self.assertNotIn("CODEX_THREAD_ID", env)
             self.assertNotIn("CODEX_INTERNAL_ORIGINATOR_OVERRIDE", env)
             self.assertNotIn("CLAUDE_CODE_SHELL", env)
             self.assertNotIn("GEMINI_CLI_IDE_WORKSPACE_PATH", env)
-            self.assertEqual(env["CODEX_HOME"], "/tmp/codex-home-is-auth")
             self.assertEqual(env["ANTHROPIC_API_KEY"], "preserve-claude-auth")
             self.assertEqual(env["GEMINI_API_KEY"], "preserve-gemini-auth")
+
+        self.assertNotEqual(codex_kwargs["env"]["CODEX_HOME"], "/tmp/codex-home-is-auth")
+        self.assertEqual(codex_kwargs["env"]["CODEX_HOME"], str(Path(codex_kwargs["env"]["HOME"]) / ".codex"))
+        self.assertNotIn("CODEX_HOME", claude_kwargs["env"])
+        self.assertNotIn("CODEX_HOME", gemini_kwargs["env"])
 
 
 class PromptConstructionTests(unittest.TestCase):

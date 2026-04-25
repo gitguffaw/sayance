@@ -17,7 +17,7 @@ This repository is a small, stdlib-only Python benchmark. `run_benchmark.py` is 
 Use Python directly; there is no virtualenv or build step.
 
 - `python3 run_benchmark.py --dry-run` checks question selection and CLI wiring without making API calls.
-- `python3 run_benchmark.py --context-mode isolated --dry-run` checks the neutral-context benchmark path without API calls. Use `--context-mode isolated` for new unaided/naked baselines so Claude does not read `CLAUDE.md`, Codex does not read `AGENTS.md` or user skills, and Gemini does not read user skills/extensions/MCP/global `GEMINI.md`.
+- `python3 run_benchmark.py --context-mode isolated --dry-run` checks the neutral-context benchmark path without API calls. Use `--context-mode isolated` for new unaided/naked baselines so providers run from temp working directories and sterile temp `HOME`/XDG trees. Provider auth may be copied or passed explicitly, but user/project context files, skills, extensions, MCP config, memories, and global agent docs must not be visible.
 - `python3 run_benchmark.py --validate-bridge` verifies `sayance-core.md` + `sayance-tldr.json` cover all 142 macOS-available utilities and exits.
 - `python3 run_benchmark.py --llms gemini claude --context-mode isolated` runs selected providers only under neutral context.
 - `python3 run_benchmark.py --llms claude --claude-model claude-opus-4-6 --context-mode isolated` runs Claude with the pinned baseline model (also the default) under neutral context.

@@ -30,6 +30,8 @@ CONTEXT_MODE_ISOLATED = "isolated"
 CONTEXT_MODES = (CONTEXT_MODE_AMBIENT, CONTEXT_MODE_ISOLATED)
 _NO_MCP_SERVER_SENTINEL = "__sayance_no_mcp__"
 _isolated_dirs: dict[str, Path] = {}
+_isolated_homes: dict[str, Path] = {}
+ISOLATED_PATH = "/opt/homebrew/opt/node/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
 
 NOISE_PREFIXES = (
@@ -163,13 +165,106 @@ def normalize_context_mode(raw_mode: str | None) -> str:
     return normalized
 
 
+def _copy_if_present(source: Path, destination: Path) -> None:
+    """Copy one auth/config file into the sterile home if it exists."""
+    try:
+        if source.is_file():
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, destination)
+    except OSError:
+        return
+
+
+def _copy_auth_env_file(env: dict[str, str], key: str, home: Path) -> None:
+    raw_path = os.environ.get(key)
+    if not raw_path:
+        return
+    source = Path(raw_path).expanduser()
+    destination = home / ".auth" / key.lower()
+    _copy_if_present(source, destination)
+    if destination.exists():
+        env[key] = str(destination)
+
+
+def _source_codex_home() -> Path:
+    return Path(os.environ.get("CODEX_HOME") or (Path.home() / ".codex"))
+
+
+def _source_gemini_home() -> Path:
+    return Path.home() / ".gemini"
+
+
+def _gemini_auth_settings(source_home: Path) -> dict:
+    try:
+        settings = json.loads((source_home / "settings.json").read_text())
+        selected_type = settings.get("security", {}).get("auth", {}).get("selectedType")
+    except (FileNotFoundError, OSError, json.JSONDecodeError, AttributeError):
+        selected_type = None
+    if not selected_type:
+        return {}
+    return {"security": {"auth": {"selectedType": selected_type}}}
+
+
+def _isolated_home(llm: str) -> Path:
+    """Return a sterile per-provider HOME that carries auth but no skills/memory."""
+    existing = _isolated_homes.get(llm)
+    if existing is not None:
+        return existing
+
+    home = Path(tempfile.mkdtemp(prefix=f"sayance-{llm}-home-"))
+    atexit.register(shutil.rmtree, home, ignore_errors=True)
+    (home / ".config").mkdir(parents=True, exist_ok=True)
+    (home / ".local" / "share").mkdir(parents=True, exist_ok=True)
+    (home / ".cache").mkdir(parents=True, exist_ok=True)
+
+    if llm == "codex":
+        codex_home = home / ".codex"
+        codex_home.mkdir(parents=True, exist_ok=True)
+        source_home = _source_codex_home()
+        for filename in ("auth.json", "installation_id"):
+            _copy_if_present(source_home / filename, codex_home / filename)
+
+    if llm == "gemini":
+        gemini_home = home / ".gemini"
+        gemini_home.mkdir(parents=True, exist_ok=True)
+        source_home = _source_gemini_home()
+        for filename in (
+            "oauth_creds.json",
+            "google_accounts.json",
+            "installation_id",
+            "integrity.key",
+        ):
+            _copy_if_present(source_home / filename, gemini_home / filename)
+        sterile_settings = {
+            "context": {
+                "fileName": f"__sayance_no_global_context_{os.getpid()}__.md",
+                "includeDirectories": [],
+                "loadMemoryFromIncludeDirectories": False,
+                "discoveryMaxDirs": 0,
+                "memoryBoundaryMarkers": [],
+            },
+            "skills": {"enabled": False},
+            "mcp": {"allowed": [], "excluded": ["*"]},
+            "hooks": {},
+        }
+        sterile_settings.update(_gemini_auth_settings(source_home))
+        (gemini_home / "settings.json").write_text(json.dumps(sterile_settings) + "\n")
+
+    _isolated_homes[llm] = home
+    return home
+
+
+def _executable(name: str) -> str:
+    return shutil.which(name) or name
+
+
 def _isolated_dir(llm: str) -> Path:
     """Return a neutral per-provider cwd used to defeat project context discovery."""
     existing = _isolated_dirs.get(llm)
     if existing is not None:
         return existing
 
-    path = Path(tempfile.mkdtemp(prefix=f"sayance-{llm}-isolated-"))
+    path = Path(tempfile.mkdtemp(prefix=f"sayance-{llm}-cwd-"))
     atexit.register(shutil.rmtree, path, ignore_errors=True)
 
     if llm == "gemini":
@@ -201,27 +296,65 @@ def _isolated_dir(llm: str) -> Path:
     return path
 
 
-def _isolated_env() -> dict[str, str]:
-    """Build a subprocess environment that preserves auth while dropping host-agent context."""
-    env = dict(os.environ)
-    remove_exact = {
-        "CODEX_CI",
-        "CODEX_INTERNAL_ORIGINATOR_OVERRIDE",
-        "CODEX_SHELL",
-        "CODEX_THREAD_ID",
-        "CLAUDE_PROJECT_DIR",
-        "CLAUDE_WORKING_DIR",
-        "GEMINI_CLI_IDE_WORKSPACE_PATH",
-        "GEMINI_PROJECT_DIR",
-        "GEMINI_SANDBOX",
-    }
-    remove_prefixes = (
-        "CLAUDE_CODE_",
-    )
-    for key in list(env):
-        if key in remove_exact or any(key.startswith(prefix) for prefix in remove_prefixes):
-            env.pop(key, None)
+def _isolated_env(llm: str) -> dict[str, str]:
+    """Build a sterile subprocess environment with auth-only provider state."""
+    home = _isolated_home(llm)
+    env: dict[str, str] = {}
+    env["PATH"] = ISOLATED_PATH
+
+    for key in (
+        "LANG",
+        "LC_ALL",
+        "LC_CTYPE",
+        "TERM",
+        "SSL_CERT_FILE",
+        "SSL_CERT_DIR",
+    ):
+        if os.environ.get(key):
+            env[key] = os.environ[key]
+
+    env["HOME"] = str(home)
+    env["XDG_CONFIG_HOME"] = str(home / ".config")
+    env["XDG_DATA_HOME"] = str(home / ".local" / "share")
+    env["XDG_CACHE_HOME"] = str(home / ".cache")
+    env["NO_COLOR"] = "1"
+
+    for key in (
+        "ANTHROPIC_API_KEY",
+        "ANTHROPIC_AUTH_TOKEN",
+        "ANTHROPIC_BASE_URL",
+        "ANTHROPIC_IDENTITY_TOKEN",
+        "CLAUDE_CODE_OAUTH_TOKEN",
+        "GEMINI_API_KEY",
+        "GOOGLE_API_KEY",
+        "GOOGLE_CLOUD_PROJECT",
+        "OPENAI_API_KEY",
+        "CODEX_API_KEY",
+    ):
+        if os.environ.get(key):
+            env[key] = os.environ[key]
+
+    _copy_auth_env_file(env, "ANTHROPIC_IDENTITY_TOKEN_FILE", home)
+    _copy_auth_env_file(env, "GOOGLE_APPLICATION_CREDENTIALS", home)
+
+    if llm == "codex":
+        env["CODEX_HOME"] = str(home / ".codex")
+        env["CODEX_CI"] = "1"
+
     return env
+
+
+def _has_sterile_claude_auth(env: dict[str, str]) -> bool:
+    return any(
+        env.get(key)
+        for key in (
+            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_AUTH_TOKEN",
+            "ANTHROPIC_IDENTITY_TOKEN",
+            "ANTHROPIC_IDENTITY_TOKEN_FILE",
+            "CLAUDE_CODE_OAUTH_TOKEN",
+        )
+    )
 
 
 def _build_invocation(
@@ -238,7 +371,7 @@ def _build_invocation(
 
     if mode == CONTEXT_MODE_ISOLATED:
         cwd = _isolated_dir(llm)
-        env = _isolated_env()
+        env = _isolated_env(llm)
     else:
         cmd = LLM_COMMANDS[llm].copy()
         if llm == "claude" and claude_model:
@@ -249,11 +382,29 @@ def _build_invocation(
         return cmd, cwd, env
 
     if llm == "claude":
-        cmd = ["claude", "--output-format", "json", "-p"]
+        cmd = [_executable("claude"), "--output-format", "json", "-p"]
         if mode == CONTEXT_MODE_ISOLATED:
             assert cwd is not None
+            assert env is not None
+            if not _has_sterile_claude_auth(env):
+                return (
+                    [
+                        "/bin/sh",
+                        "-c",
+                        (
+                            "printf '%s\\n' "
+                            "'{\"error\":\"isolated Claude requires ANTHROPIC_API_KEY, "
+                            "ANTHROPIC_AUTH_TOKEN, ANTHROPIC_IDENTITY_TOKEN, "
+                            "ANTHROPIC_IDENTITY_TOKEN_FILE, or CLAUDE_CODE_OAUTH_TOKEN; "
+                            "refusing to use ambient HOME auth\"}'"
+                        ),
+                    ],
+                    cwd,
+                    env,
+                )
             cmd.extend(
                 [
+                    "--bare",
                     "--setting-sources",
                     "",
                     "--disable-slash-commands",
@@ -272,7 +423,7 @@ def _build_invocation(
         return cmd, cwd, env
 
     if llm == "gemini":
-        cmd = ["gemini", "-o", "json"]
+        cmd = [_executable("gemini"), "-o", "json"]
         if mode == CONTEXT_MODE_ISOLATED:
             cmd.extend(
                 [
@@ -288,11 +439,15 @@ def _build_invocation(
         return cmd, cwd, env
 
     if llm == "codex":
-        cmd = ["codex", "exec", "--json", "--skip-git-repo-check"]
+        cmd = [_executable("codex"), "exec", "--json", "--skip-git-repo-check"]
         if mode == CONTEXT_MODE_ISOLATED:
             assert cwd is not None
             cmd.extend(
                 [
+                    "-c",
+                    "shell_environment_policy.inherit=none",
+                    "-c",
+                    "tools.web_search=false",
                     "--ignore-user-config",
                     "--ignore-rules",
                     "--ephemeral",
