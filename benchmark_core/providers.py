@@ -6,6 +6,7 @@ import re
 import shutil
 import shlex
 import subprocess
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -205,6 +206,87 @@ def _gemini_auth_settings(source_home: Path) -> dict:
     return {"security": {"auth": {"selectedType": selected_type}}}
 
 
+def _write_gemini_tool_guard(gemini_home: Path) -> Path:
+    hook_path = gemini_home / "hooks" / "disable_tools.py"
+    hook_path.parent.mkdir(parents=True, exist_ok=True)
+    hook_path.write_text(
+        "\n".join(
+            [
+                "import json",
+                "print(json.dumps({",
+                '    "suppressOutput": True,',
+                '    "hookSpecificOutput": {',
+                '        "hookEventName": "BeforeToolSelection",',
+                '        "toolConfig": {"mode": "NONE"},',
+                "    },",
+                "}))",
+                "",
+            ]
+        )
+    )
+    return hook_path
+
+
+def _gemini_sterile_settings(context_filename: str, tool_guard_hook: Path) -> dict:
+    """Settings that preserve Gemini auth while disabling user/project context."""
+    return {
+        "context": {
+            "fileName": context_filename,
+            "includeDirectories": [],
+            "includeDirectoryTree": False,
+            "loadMemoryFromIncludeDirectories": False,
+            "discoveryMaxDirs": 0,
+            "memoryBoundaryMarkers": [],
+        },
+        "general": {
+            "defaultApprovalMode": "default",
+            "plan": {"enabled": False},
+        },
+        "admin": {
+            "mcp": {"enabled": False},
+            "extensions": {"enabled": False},
+            "skills": {"enabled": False},
+        },
+        "skills": {"enabled": False},
+        "mcp": {"allowed": [], "excluded": ["*"]},
+        "tools": {
+            "core": ["LSTool"],
+            "allowed": [],
+            "exclude": [],
+            "discoveryCommand": "",
+            "callCommand": "",
+            "shell": {"enableInteractiveShell": False},
+        },
+        "hooks": {
+            "BeforeToolSelection": [
+                {
+                    "matcher": "*",
+                    "hooks": [
+                        {
+                            "name": "sayance-disable-tools",
+                            "type": "command",
+                            "command": (
+                                f"{shlex.quote(sys.executable)} "
+                                f"{shlex.quote(str(tool_guard_hook))}"
+                            ),
+                            "timeout": 5000,
+                        }
+                    ],
+                }
+            ]
+        },
+        "hooksConfig": {"enabled": True, "notifications": False},
+        "useWriteTodos": False,
+        "experimental": {
+            "enableAgents": False,
+            "taskTracker": False,
+            "jitContext": False,
+            "memoryManager": False,
+            "extensionReloading": False,
+        },
+    }
+
+
 def _isolated_home(llm: str) -> Path:
     """Return a sterile per-provider HOME that carries auth but no skills/memory."""
     existing = _isolated_homes.get(llm)
@@ -235,18 +317,11 @@ def _isolated_home(llm: str) -> Path:
             "integrity.key",
         ):
             _copy_if_present(source_home / filename, gemini_home / filename)
-        sterile_settings = {
-            "context": {
-                "fileName": f"__sayance_no_global_context_{os.getpid()}__.md",
-                "includeDirectories": [],
-                "loadMemoryFromIncludeDirectories": False,
-                "discoveryMaxDirs": 0,
-                "memoryBoundaryMarkers": [],
-            },
-            "skills": {"enabled": False},
-            "mcp": {"allowed": [], "excluded": ["*"]},
-            "hooks": {},
-        }
+        tool_guard_hook = _write_gemini_tool_guard(gemini_home)
+        sterile_settings = _gemini_sterile_settings(
+            f"__sayance_no_global_context_{os.getpid()}__.md",
+            tool_guard_hook,
+        )
         sterile_settings.update(_gemini_auth_settings(source_home))
         (gemini_home / "settings.json").write_text(json.dumps(sterile_settings) + "\n")
 
@@ -266,27 +341,6 @@ def _isolated_dir(llm: str) -> Path:
 
     path = Path(tempfile.mkdtemp(prefix=f"sayance-{llm}-cwd-"))
     atexit.register(shutil.rmtree, path, ignore_errors=True)
-
-    if llm == "gemini":
-        settings_dir = path / ".gemini"
-        settings_dir.mkdir(parents=True, exist_ok=True)
-        empty_context_filename = f"__sayance_empty_context_{os.getpid()}_{len(_isolated_dirs)}__.md"
-        settings = {
-            "context": {
-                "fileName": empty_context_filename,
-                "includeDirectories": [],
-                "loadMemoryFromIncludeDirectories": False,
-                "discoveryMaxDirs": 0,
-                "memoryBoundaryMarkers": [],
-            },
-            "skills": {"enabled": False},
-            "mcp": {
-                "allowed": [],
-                "excluded": ["*"],
-            },
-            "hooks": {},
-        }
-        (settings_dir / "settings.json").write_text(json.dumps(settings) + "\n")
 
     if llm == "claude":
         settings = {"autoMemoryEnabled": False}
@@ -427,8 +481,6 @@ def _build_invocation(
         if mode == CONTEXT_MODE_ISOLATED:
             cmd.extend(
                 [
-                    "--approval-mode",
-                    "plan",
                     "--extensions",
                     "none",
                     "--allowed-mcp-server-names",

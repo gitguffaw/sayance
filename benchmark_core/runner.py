@@ -89,7 +89,7 @@ def _codex_benchmark_prompt(question_text: str, *, inject_posix: bool) -> str:
         )
     else:
         instruction += (
-            "Respond with the POSIX command you would recommend, followed by at most one brief "
+            "Respond with the shell command you would recommend, followed by at most one brief "
             "sentence."
         )
     return f"{instruction}\n\nTASK:\n{question_text}"
@@ -104,7 +104,7 @@ def _build_effective_prompt(
     log_missing: bool = False,
 ) -> str:
     prompt = question["question"]
-    if llm == "codex":
+    if llm == "codex" and inject_posix:
         prompt = _codex_benchmark_prompt(question["question"], inject_posix=inject_posix)
     if not inject_posix:
         return prompt

@@ -1398,12 +1398,29 @@ class InvokeCliBytesRegressionTests(unittest.TestCase):
         self.assertIn("--extensions", gemini_cmd)
         self.assertIn("none", gemini_cmd)
         self.assertIn("--allowed-mcp-server-names", gemini_cmd)
+        self.assertNotIn("--approval-mode", gemini_cmd)
         gemini_home_settings = Path(gemini_kwargs["env"]["HOME"]) / ".gemini" / "settings.json"
         self.assertTrue(gemini_home_settings.exists())
-        self.assertFalse(json.loads(gemini_home_settings.read_text())["skills"]["enabled"])
+        home_gemini_settings = json.loads(gemini_home_settings.read_text())
+        self.assertFalse(home_gemini_settings["skills"]["enabled"])
+        self.assertFalse(home_gemini_settings["admin"]["skills"]["enabled"])
+        self.assertFalse(home_gemini_settings["admin"]["mcp"]["enabled"])
+        self.assertFalse(home_gemini_settings["admin"]["extensions"]["enabled"])
+        self.assertTrue(home_gemini_settings["hooksConfig"]["enabled"])
+        self.assertFalse(home_gemini_settings["hooksConfig"]["notifications"])
+        self.assertFalse(home_gemini_settings["context"]["includeDirectoryTree"])
+        self.assertEqual(home_gemini_settings["tools"]["core"], ["LSTool"])
+        self.assertEqual(
+            home_gemini_settings["hooks"]["BeforeToolSelection"][0]["hooks"][0]["name"],
+            "sayance-disable-tools",
+        )
+        hook_command = home_gemini_settings["hooks"]["BeforeToolSelection"][0]["hooks"][0]["command"]
+        self.assertIn("disable_tools.py", hook_command)
+        self.assertTrue((Path(gemini_kwargs["env"]["HOME"]) / ".gemini" / "hooks" / "disable_tools.py").exists())
+        self.assertEqual(home_gemini_settings["general"]["defaultApprovalMode"], "default")
+        self.assertFalse(home_gemini_settings["general"]["plan"]["enabled"])
         gemini_settings = Path(gemini_kwargs["cwd"]) / ".gemini" / "settings.json"
-        self.assertTrue(gemini_settings.exists())
-        self.assertFalse(json.loads(gemini_settings.read_text())["skills"]["enabled"])
+        self.assertFalse(gemini_settings.exists())
 
         for _, kwargs in calls:
             env = kwargs["env"]
@@ -1426,7 +1443,7 @@ class InvokeCliBytesRegressionTests(unittest.TestCase):
 
 
 class PromptConstructionTests(unittest.TestCase):
-    def test_build_effective_prompt_wraps_codex_in_benchmark_mode(self) -> None:
+    def test_build_effective_prompt_leaves_codex_unaided_prompt_raw(self) -> None:
         from benchmark_core import runner as runner_module
 
         question = {
@@ -1436,9 +1453,9 @@ class PromptConstructionTests(unittest.TestCase):
 
         prompt = runner_module._build_effective_prompt(question, llm="codex", inject_posix=False)
 
-        self.assertIn("BENCHMARK MODE", prompt)
-        self.assertIn("Do not inspect the local filesystem", prompt)
-        self.assertIn(question["question"], prompt)
+        self.assertEqual(prompt, question["question"])
+        self.assertNotIn("BENCHMARK MODE", prompt)
+        self.assertNotIn("POSIX", prompt)
 
     def test_build_effective_prompt_wraps_codex_bridge_mode_without_direct_answer_instruction(self) -> None:
         from benchmark_core import runner as runner_module
@@ -1457,6 +1474,7 @@ class PromptConstructionTests(unittest.TestCase):
         self.assertIn("`sayance-lookup <utility>`", prompt)
         self.assertIn("Exception: if this prompt's TOOL INSTRUCTION asks you to invoke", prompt)
         self.assertNotIn("Respond with the POSIX command you would recommend", prompt)
+        self.assertNotIn("Respond with the shell command you would recommend", prompt)
         self.assertIn("TASK:\nraw prompt", prompt)
 
     def test_build_effective_prompt_leaves_non_codex_unaided_prompt_raw(self) -> None:
