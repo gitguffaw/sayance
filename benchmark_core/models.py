@@ -94,7 +94,7 @@ class QuestionResult:
     id: str
     llm: str
     model: str                   # detected from CLI response
-    requested_model: str         # model requested via --claude-model / --codex-model, or ""
+    requested_model: str         # model requested via provider-specific --*-model flag, or ""
     run_k: int
     question: str
     response: str                # full response text

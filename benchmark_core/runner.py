@@ -59,11 +59,14 @@ def _requested_model_for_llm(
     *,
     claude_model: str | None = None,
     codex_model: str | None = None,
+    gemini_model: str | None = None,
 ) -> str:
     if llm == "claude":
         return claude_model or ""
     if llm == "codex":
         return codex_model or ""
+    if llm == "gemini":
+        return gemini_model or ""
     return ""
 
 
@@ -151,6 +154,7 @@ def _build_error_result(
     latency_ms: int = 0,
     claude_model: str | None = None,
     codex_model: str | None = None,
+    gemini_model: str | None = None,
     context_mode: str = providers.CONTEXT_MODE_AMBIENT,
     cache_state: str = "cold",
     result_provenance: dict[str, object] | None = None,
@@ -174,6 +178,7 @@ def _build_error_result(
             llm,
             claude_model=claude_model,
             codex_model=codex_model,
+            gemini_model=gemini_model,
         ),
         run_k=run_k,
         question=question["question"],
@@ -368,6 +373,7 @@ def grade_response(
     timeout_seconds: int,
     claude_model: str | None = None,
     codex_model: str | None = None,
+    gemini_model: str | None = None,
     context_mode: str = providers.CONTEXT_MODE_AMBIENT,
 ) -> AccuracyGrade:
     """Use an LLM to grade another LLM's response."""
@@ -391,6 +397,7 @@ def grade_response(
         timeout_seconds=timeout_seconds,
         claude_model=claude_model,
         codex_model=codex_model,
+        gemini_model=gemini_model,
         context_mode=context_mode,
     )
     raw_cleaned = providers.strip_cli_noise(raw.stdout)
@@ -570,6 +577,7 @@ def run_single(
     claude_model: str | None = None,
     codex_model: str | None = None,
     context_mode: str = providers.CONTEXT_MODE_AMBIENT,
+    gemini_model: str | None = None,
     *,
     invoke_cli_fn=providers.invoke_cli,
     parse_response_fn=providers.parse_response,
@@ -616,6 +624,7 @@ def run_single(
         timeout_seconds=timeout_seconds,
         claude_model=claude_model,
         codex_model=codex_model,
+        gemini_model=gemini_model,
         context_mode=normalized_context_mode,
     )
     response_text, tokens, model, execution = parse_response_fn(
@@ -625,7 +634,12 @@ def run_single(
         codex_model=codex_model,
     )
 
-    requested = claude_model if llm == "claude" else (codex_model if llm == "codex" else "")
+    requested = _requested_model_for_llm(
+        llm,
+        claude_model=claude_model,
+        codex_model=codex_model,
+        gemini_model=gemini_model,
+    )
     if requested and model != "unknown" and requested.lower() != model.lower():
         print(f"  [{q_id}] WARNING: requested model '{requested}' but detected '{model}'")
 
@@ -671,6 +685,7 @@ def run_single(
                 timeout_seconds=timeout_seconds,
                 claude_model=claude_model,
                 codex_model=codex_model,
+                gemini_model=gemini_model,
                 context_mode=normalized_context_mode,
             )
             resp2, tok2, _, exec2 = parse_response_fn(
@@ -741,6 +756,7 @@ def run_single(
             timeout_seconds=timeout_seconds,
             claude_model=claude_model,
             codex_model=codex_model,
+            gemini_model=gemini_model,
             context_mode=normalized_context_mode,
         )
 
@@ -802,6 +818,7 @@ def run_provider_batch(
     claude_model: str | None = None,
     codex_model: str | None = None,
     context_mode: str = providers.CONTEXT_MODE_AMBIENT,
+    gemini_model: str | None = None,
     *,
     run_single_fn=run_single,
     already_completed_fn=already_completed,
@@ -844,17 +861,18 @@ def run_provider_batch(
         for q, run_idx in tasks_to_run:
             future = pool.submit(
                 run_single_fn,
-                llm,
-                q,
-                run_idx,
-                judge,
-                delay,
-                timeout_seconds,
-                inject_posix,
-                execute,
-                claude_model,
-                codex_model,
-                normalized_context_mode,
+                llm=llm,
+                question=q,
+                run_k=run_idx,
+                judge=judge,
+                delay=delay,
+                timeout_seconds=timeout_seconds,
+                inject_posix=inject_posix,
+                execute=execute,
+                claude_model=claude_model,
+                codex_model=codex_model,
+                context_mode=normalized_context_mode,
+                gemini_model=gemini_model,
             )
             futures[future] = (q["id"], run_idx)
 
@@ -872,6 +890,7 @@ def run_provider_batch(
                     error_kind="question_exception",
                     claude_model=claude_model,
                     codex_model=codex_model,
+                    gemini_model=gemini_model,
                     context_mode=normalized_context_mode,
                     result_provenance=_result_provenance(
                         question,
@@ -930,6 +949,7 @@ def run_benchmark(
     claude_model: str | None = None,
     codex_model: str | None = None,
     context_mode: str = providers.CONTEXT_MODE_AMBIENT,
+    gemini_model: str | None = None,
     *,
     run_provider_batch_fn=run_provider_batch,
 ) -> dict[str, list[QuestionResult]]:
@@ -982,19 +1002,20 @@ def run_benchmark(
             print(f"--- {llm.upper()} ---\n")
             future = provider_pool.submit(
                 run_provider_batch_fn,
-                llm,
-                questions,
-                k,
-                judge,
-                delay,
-                timeout_seconds,
-                max_workers,
-                seed,
-                inject_posix,
-                execute,
-                claude_model,
-                codex_model,
-                normalized_context_mode,
+                llm=llm,
+                questions=questions,
+                k=k,
+                judge=judge,
+                delay=delay,
+                timeout_seconds=timeout_seconds,
+                max_workers=max_workers,
+                seed=seed,
+                inject_posix=inject_posix,
+                execute=execute,
+                claude_model=claude_model,
+                codex_model=codex_model,
+                context_mode=normalized_context_mode,
+                gemini_model=gemini_model,
             )
             provider_futures[future] = llm
 
@@ -1030,6 +1051,7 @@ def run_benchmark(
                         error_kind="provider_batch_failure",
                         claude_model=claude_model,
                         codex_model=codex_model,
+                        gemini_model=gemini_model,
                         context_mode=normalized_context_mode,
                         result_provenance=expected_provenance,
                     )

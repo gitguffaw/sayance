@@ -52,13 +52,18 @@ def main():
         help=f"Claude model override for benchmark runs (default: {providers.PINNED_CLAUDE_MODEL})",
     )
     parser.add_argument(
+        "--gemini-model",
+        default=providers.PINNED_GEMINI_MODEL,
+        help=f"Gemini model override for benchmark runs (default: {providers.PINNED_GEMINI_MODEL})",
+    )
+    parser.add_argument(
         "--codex-model",
         default=providers.PINNED_CODEX_MODEL,
         help=f"Codex model override for benchmark runs (default: {providers.PINNED_CODEX_MODEL})",
     )
     parser.add_argument(
         "--allow-unpinned-models", action="store_true",
-        help="Allow Claude/Codex runs without pinned models (must pass --*-model auto/default)",
+        help="Allow provider runs without pinned models (must pass --*-model auto/default)",
     )
     parser.add_argument(
         "--max-workers", type=int, default=None,
@@ -148,8 +153,17 @@ def main():
             return
 
     claude_model_override = providers.normalize_model_override(args.claude_model)
+    gemini_model_override = providers.normalize_model_override(args.gemini_model)
     codex_model_override = providers.normalize_model_override(args.codex_model)
 
+    if (
+        "gemini" in args.llms
+        and gemini_model_override is None
+        and not args.allow_unpinned_models
+    ):
+        parser.error(
+            "Gemini model is unpinned. Use --gemini-model <model-id> or pass --allow-unpinned-models."
+        )
     if (
         "claude" in args.llms
         and claude_model_override is None
@@ -170,10 +184,10 @@ def main():
     requested_models: dict[str, str | None] = {
         "claude": claude_model_override if "claude" in args.llms else None,
         "codex": codex_model_override if "codex" in args.llms else None,
-        "gemini": None,
+        "gemini": gemini_model_override if "gemini" in args.llms else None,
     }
     requested_labels = [
-        f"{llm}:{model}" for llm, model in requested_models.items() if llm in args.llms and model
+        f"{llm}:{requested_models[llm]}" for llm in args.llms if requested_models.get(llm)
     ]
     default_results_root = config.mode_results_dir(
         inject_posix=args.inject_posix,
@@ -219,6 +233,7 @@ def main():
         execute=args.execute,
         claude_model=claude_model_override,
         codex_model=codex_model_override,
+        gemini_model=gemini_model_override,
         context_mode=args.context_mode,
     )
 

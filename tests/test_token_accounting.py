@@ -48,8 +48,8 @@ def make_result(
     return QuestionResult(
         id=q_id,
         llm="claude",
-        model="claude-opus-4-6",
-        requested_model="claude-opus-4-6",
+        model="claude-opus-4-7",
+        requested_model="claude-opus-4-7",
         run_k=0,
         question=f"Question {q_id}",
         response=response,
@@ -682,13 +682,13 @@ class ToolSimulationAdjustmentTests(unittest.TestCase):
             (
                 "sayance-lookup od\nHere is extra explanatory text.",
                 run1_tokens,
-                "claude-opus-4-6",
+                "claude-opus-4-7",
                 ExecutionMetrics(latency_ms=10, step_count=1, tool_call_count=0, tool_calls_by_type={}),
             ),
             (
                 "od -An -tx1 file",
                 run2_tokens,
-                "claude-opus-4-6",
+                "claude-opus-4-7",
                 ExecutionMetrics(latency_ms=20, step_count=1, tool_call_count=0, tool_calls_by_type={}),
             ),
         ]
@@ -1027,9 +1027,11 @@ class ResultPreservationTests(unittest.TestCase):
             execute: bool = False,
             claude_model: str | None = None,
             codex_model: str | None = None,
+            gemini_model: str | None = None,
             context_mode: str = benchmark.CONTEXT_MODE_AMBIENT,
         ) -> QuestionResult:
-            del llm, judge, delay, timeout_seconds, inject_posix, execute, claude_model, codex_model, context_mode
+            del llm, judge, delay, timeout_seconds, inject_posix, execute
+            del claude_model, codex_model, gemini_model, context_mode
             if question["id"] == "T02":
                 raise RuntimeError("boom")
             return make_result(
@@ -1112,7 +1114,7 @@ class ResultPreservationTests(unittest.TestCase):
                 seed=123,
                 inject_posix=False,
                 execute=False,
-                claude_model="claude-opus-4-6",
+                claude_model="claude-opus-4-7",
                 run_provider_batch_fn=raising_batch,
             )
 
@@ -1246,9 +1248,10 @@ class GradeResponsePromptTests(unittest.TestCase):
             timeout_seconds: int,
             claude_model: str | None = None,
             codex_model: str | None = None,
+            gemini_model: str | None = None,
             context_mode: str = benchmark.CONTEXT_MODE_AMBIENT,
         ) -> benchmark.CLIInvocation:
-            del judge, timeout_seconds, claude_model, codex_model, context_mode
+            del judge, timeout_seconds, claude_model, codex_model, gemini_model, context_mode
             captured["prompt"] = prompt
             return benchmark.CLIInvocation(
                 stdout='{"score": 2, "reason": "ok", "used_posix": true, "traps_hit": []}',
@@ -1357,20 +1360,21 @@ class InvokeCliBytesRegressionTests(unittest.TestCase):
                 "claude",
                 "prompt",
                 timeout_seconds=1,
-                claude_model="claude-opus-4-6",
+                claude_model="claude-opus-4-7",
                 context_mode=benchmark.CONTEXT_MODE_ISOLATED,
             )
             benchmark.invoke_cli(
                 "codex",
                 "prompt",
                 timeout_seconds=1,
-                codex_model="gpt-5.4",
+                codex_model="gpt-5.5",
                 context_mode=benchmark.CONTEXT_MODE_ISOLATED,
             )
             benchmark.invoke_cli(
                 "gemini",
                 "prompt",
                 timeout_seconds=1,
+                gemini_model="gemini-3.1-pro-preview",
                 context_mode=benchmark.CONTEXT_MODE_ISOLATED,
             )
 
@@ -1397,6 +1401,9 @@ class InvokeCliBytesRegressionTests(unittest.TestCase):
 
         self.assertIn("--extensions", gemini_cmd)
         self.assertIn("none", gemini_cmd)
+        self.assertIn("--model", gemini_cmd)
+        self.assertIn("gemini-3.1-pro-preview", gemini_cmd)
+        self.assertLess(gemini_cmd.index("gemini-3.1-pro-preview"), gemini_cmd.index("-p"))
         self.assertIn("--allowed-mcp-server-names", gemini_cmd)
         self.assertNotIn("--approval-mode", gemini_cmd)
         gemini_home_settings = Path(gemini_kwargs["env"]["HOME"]) / ".gemini" / "settings.json"
@@ -1440,6 +1447,41 @@ class InvokeCliBytesRegressionTests(unittest.TestCase):
         self.assertEqual(codex_kwargs["env"]["CODEX_HOME"], str(Path(codex_kwargs["env"]["HOME"]) / ".codex"))
         self.assertNotIn("CODEX_HOME", claude_kwargs["env"])
         self.assertNotIn("CODEX_HOME", gemini_kwargs["env"])
+
+    def test_isolated_claude_rejects_oauth_only_for_bare_baseline(self) -> None:
+        from benchmark_core import providers as providers_module
+
+        calls: list[tuple[list[str], dict[str, object]]] = []
+
+        def fake_run(cmd, **kwargs):
+            calls.append((cmd, kwargs))
+            return providers_module.subprocess.CompletedProcess(
+                args=cmd,
+                returncode=0,
+                stdout='{"error":"synthetic"}',
+                stderr="",
+            )
+
+        providers_module._isolated_dirs.clear()
+        providers_module._isolated_homes.clear()
+        host_env = {"CLAUDE_CODE_OAUTH_TOKEN": "oauth-is-not-bare-auth"}
+
+        with mock.patch.dict(providers_module.os.environ, host_env, clear=True), \
+                mock.patch.object(providers_module.subprocess, "run", side_effect=fake_run):
+            benchmark.invoke_cli(
+                "claude",
+                "prompt",
+                timeout_seconds=1,
+                claude_model="claude-opus-4-7",
+                context_mode=benchmark.CONTEXT_MODE_ISOLATED,
+            )
+
+        claude_cmd, claude_kwargs = calls[0]
+        self.assertEqual(claude_cmd[:2], ["/bin/sh", "-c"])
+        self.assertIn("isolated Claude requires ANTHROPIC_API_KEY", claude_cmd[2])
+        self.assertIn("Claude Code --bare does not read OAuth/keychain auth", claude_cmd[2])
+        self.assertIn("CLAUDE_CODE_OAUTH_TOKEN", claude_kwargs["env"])
+        self.assertNotIn("--bare", claude_cmd)
 
 
 class PromptConstructionTests(unittest.TestCase):

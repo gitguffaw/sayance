@@ -22,7 +22,7 @@ from benchmark_core.models import (
 
 LLM_COMMANDS: dict[str, list[str]] = {
     "claude": ["claude", "--output-format", "json", "-p"],
-    "gemini": ["gemini", "-o", "json", "-p"],
+    "gemini": ["gemini", "-o", "json"],
     "codex": ["codex", "exec", "--json", "--skip-git-repo-check"],
 }
 
@@ -54,8 +54,9 @@ NOISE_PREFIXES = (
 DEFAULT_CLI_TIMEOUT_SECONDS = 120
 DEFAULT_SHUFFLE_SEED = 20260329
 MODEL_OVERRIDE_AUTO_VALUES = {"", "auto", "default", "cli-default"}
-PINNED_CLAUDE_MODEL = "claude-opus-4-6"
-PINNED_CODEX_MODEL = "gpt-5.4"
+PINNED_GEMINI_MODEL = "gemini-3.1-pro-preview"
+PINNED_CLAUDE_MODEL = "claude-opus-4-7"
+PINNED_CODEX_MODEL = "gpt-5.5"
 SAYANCE_LOOKUP_PATTERN = re.compile(r"\bsayance-lookup\s+([A-Za-z][\w-]*)")
 UTILITY_NAME_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9]*$")
 
@@ -399,16 +400,11 @@ def _isolated_env(llm: str) -> dict[str, str]:
 
 
 def _has_sterile_claude_auth(env: dict[str, str]) -> bool:
-    return any(
-        env.get(key)
-        for key in (
-            "ANTHROPIC_API_KEY",
-            "ANTHROPIC_AUTH_TOKEN",
-            "ANTHROPIC_IDENTITY_TOKEN",
-            "ANTHROPIC_IDENTITY_TOKEN_FILE",
-            "CLAUDE_CODE_OAUTH_TOKEN",
-        )
-    )
+    # Claude Code 2.1.119 documents that --bare never reads OAuth/keychain
+    # auth. In bare print mode, publishable isolated runs require API-key auth
+    # (or a future explicit apiKeyHelper integration), not Claude subscription
+    # OAuth tokens.
+    return bool(env.get("ANTHROPIC_API_KEY"))
 
 
 def _build_invocation(
@@ -418,6 +414,7 @@ def _build_invocation(
     context_mode: str,
     claude_model: str | None = None,
     codex_model: str | None = None,
+    gemini_model: str | None = None,
 ) -> tuple[list[str], Path | None, dict[str, str] | None]:
     mode = normalize_context_mode(context_mode)
     cwd: Path | None = None
@@ -432,7 +429,12 @@ def _build_invocation(
             cmd.extend(["--model", claude_model])
         if llm == "codex" and codex_model:
             cmd.extend(["--model", codex_model])
-        cmd.append(prompt)
+        if llm == "gemini":
+            if gemini_model:
+                cmd.extend(["--model", gemini_model])
+            cmd.extend(["-p", prompt])
+        else:
+            cmd.append(prompt)
         return cmd, cwd, env
 
     if llm == "claude":
@@ -447,10 +449,9 @@ def _build_invocation(
                         "-c",
                         (
                             "printf '%s\\n' "
-                            "'{\"error\":\"isolated Claude requires ANTHROPIC_API_KEY, "
-                            "ANTHROPIC_AUTH_TOKEN, ANTHROPIC_IDENTITY_TOKEN, "
-                            "ANTHROPIC_IDENTITY_TOKEN_FILE, or CLAUDE_CODE_OAUTH_TOKEN; "
-                            "refusing to use ambient HOME auth\"}'"
+                            "'{\"error\":\"isolated Claude requires ANTHROPIC_API_KEY "
+                            "because Claude Code --bare does not read OAuth/keychain auth; "
+                            "refusing to use ambient HOME auth or non-bare diagnostic OAuth\"}'"
                         ),
                     ],
                     cwd,
@@ -478,6 +479,8 @@ def _build_invocation(
 
     if llm == "gemini":
         cmd = [_executable("gemini"), "-o", "json"]
+        if gemini_model:
+            cmd.extend(["--model", gemini_model])
         if mode == CONTEXT_MODE_ISOLATED:
             cmd.extend(
                 [
@@ -603,6 +606,7 @@ def invoke_cli(
     timeout_seconds: int = DEFAULT_CLI_TIMEOUT_SECONDS,
     claude_model: str | None = None,
     codex_model: str | None = None,
+    gemini_model: str | None = None,
     context_mode: str = CONTEXT_MODE_AMBIENT,
 ) -> CLIInvocation:
     """Send a prompt to an LLM CLI and return raw stdout plus latency."""
@@ -612,6 +616,7 @@ def invoke_cli(
         context_mode=context_mode,
         claude_model=claude_model,
         codex_model=codex_model,
+        gemini_model=gemini_model,
     )
 
     started = time.perf_counter()

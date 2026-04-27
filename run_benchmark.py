@@ -52,6 +52,7 @@ RESULTS_DIR = config.RESULTS_DIR_BASE
 DEFAULT_CLI_TIMEOUT_SECONDS = providers.DEFAULT_CLI_TIMEOUT_SECONDS
 DEFAULT_SHUFFLE_SEED = providers.DEFAULT_SHUFFLE_SEED
 MODEL_OVERRIDE_AUTO_VALUES = providers.MODEL_OVERRIDE_AUTO_VALUES
+PINNED_GEMINI_MODEL = providers.PINNED_GEMINI_MODEL
 PINNED_CLAUDE_MODEL = providers.PINNED_CLAUDE_MODEL
 PINNED_CODEX_MODEL = providers.PINNED_CODEX_MODEL
 CONTEXT_MODE_AMBIENT = providers.CONTEXT_MODE_AMBIENT
@@ -150,6 +151,7 @@ def run_single(
     claude_model: str | None = None,
     codex_model: str | None = None,
     context_mode: str = providers.CONTEXT_MODE_AMBIENT,
+    gemini_model: str | None = None,
 ):
     _sync_results_dir_to_config()
     return runner.run_single(
@@ -164,6 +166,7 @@ def run_single(
         claude_model=claude_model,
         codex_model=codex_model,
         context_mode=context_mode,
+        gemini_model=gemini_model,
         invoke_cli_fn=invoke_cli,
         parse_response_fn=parse_response,
         load_posix_core_fn=_load_posix_core,
@@ -193,6 +196,7 @@ def run_provider_batch(
     claude_model: str | None = None,
     codex_model: str | None = None,
     context_mode: str = providers.CONTEXT_MODE_AMBIENT,
+    gemini_model: str | None = None,
 ):
     _sync_results_dir_to_config()
     return runner.run_provider_batch(
@@ -209,6 +213,7 @@ def run_provider_batch(
         claude_model=claude_model,
         codex_model=codex_model,
         context_mode=context_mode,
+        gemini_model=gemini_model,
         run_single_fn=run_single,
         already_completed_fn=already_completed,
         load_existing_result_fn=load_existing_result,
@@ -231,6 +236,7 @@ def run_benchmark(
     claude_model: str | None = None,
     codex_model: str | None = None,
     context_mode: str = providers.CONTEXT_MODE_AMBIENT,
+    gemini_model: str | None = None,
 ):
     _sync_results_dir_to_config()
     return runner.run_benchmark(
@@ -248,6 +254,7 @@ def run_benchmark(
         claude_model=claude_model,
         codex_model=codex_model,
         context_mode=context_mode,
+        gemini_model=gemini_model,
         run_provider_batch_fn=run_provider_batch,
     )
 

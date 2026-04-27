@@ -42,8 +42,8 @@ def make_result(
     return QuestionResult(
         id=q_id,
         llm="claude",
-        model="claude-opus-4-6",
-        requested_model="claude-opus-4-6",
+        model="claude-opus-4-7",
+        requested_model="claude-opus-4-7",
         run_k=0,
         question=f"Question {q_id}",
         response=response,
@@ -87,7 +87,7 @@ class ComparisonReportTests(unittest.TestCase):
         unaided = make_summary(
             timestamp="20260403-100000",
             claude_payload={
-                "model": "claude-opus-4-6",
+                "model": "claude-opus-4-7",
                 "valid_results": 1,
                 "total_results": 1,
                 "posix_compliance_rate": 1.0,
@@ -115,7 +115,7 @@ class ComparisonReportTests(unittest.TestCase):
         experiment = make_summary(
             timestamp="20260403-110000",
             claude_payload={
-                "model": "claude-opus-4-6",
+                "model": "claude-opus-4-7",
                 "valid_results": 1,
                 "total_results": 1,
                 "posix_compliance_rate": 0.5,
@@ -456,7 +456,7 @@ class ProvenanceReportingTests(unittest.TestCase):
                 ):
                     summary_path = reporting_module.save_summary(
                         {"claude": [make_result("T06")]},
-                        requested_models={"claude": "claude-opus-4-6"},
+                        requested_models={"claude": "claude-opus-4-7"},
                         run_metadata={"mode": "unaided", "label": "test-run"},
                     )
             finally:

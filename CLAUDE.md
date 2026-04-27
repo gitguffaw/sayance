@@ -56,8 +56,9 @@ python3 run_benchmark.py --llms gemini
 python3 run_benchmark.py --llms gemini claude codex --context-mode isolated
 
 # Model pins for unaided runs
-python3 run_benchmark.py --llms claude --claude-model claude-opus-4-6 --context-mode isolated
-python3 run_benchmark.py --llms codex --codex-model gpt-5.4 --context-mode isolated
+python3 run_benchmark.py --llms gemini --gemini-model gemini-3.1-pro-preview --context-mode isolated
+python3 run_benchmark.py --llms claude --claude-model claude-opus-4-7 --context-mode isolated
+python3 run_benchmark.py --llms codex --codex-model gpt-5.5 --context-mode isolated
 
 # Safe Gemini unaided under tight quota
 python3 run_benchmark.py --llms gemini --max-workers 1 --delay 30 --context-mode isolated
@@ -84,11 +85,13 @@ No virtual environment or dependencies needed — pure stdlib Python 3.
 Results are saved under `results/` as JSON/HTML, with mode roots at `results/unaided/` for Unaided runs, `results/bridge-aided/` for Bridge-Aided runs, `results/execute/` for Command Verification, and `results/bridge-aided-execute/` for Bridge-Aided Verification. Each invocation writes to its own run directory using `label-DYYYY-MM-DD-THH-MM-SS`, for example `claude-codex-D2026-04-10-T08-55-15`. Each run directory also includes a `run.json` manifest so experiment context is not stored only in the folder name.
 
 **CLI invocation patterns:**
-- Claude: `claude -p "prompt" --output-format json`
-- Gemini: `gemini -p "prompt" -o json`
-- Codex: `codex exec --json --skip-git-repo-check "prompt"`
+- Claude: `claude -p "prompt" --output-format json --model claude-opus-4-7`
+- Gemini: `gemini --model gemini-3.1-pro-preview -p "prompt" -o json`
+- Codex: `codex exec --json --skip-git-repo-check --model gpt-5.5 "prompt"`
 
-For new naked/Unaided baselines, run with `--context-mode isolated`. This mode must use neutral temp working directories and sterile temp `HOME`/XDG trees. Provider auth may be copied or passed explicitly, but user/project context files, skills, extensions, MCP config, memories, user hooks, broad built-in tool access, and global agent docs must not be visible. Isolated Claude requires explicit API/token auth; do not fall back to real `HOME` auth.
+Current unaided baseline model standards are Gemini `gemini-3.1-pro-preview`, Claude `claude-opus-4-7`, and Codex `gpt-5.5`. Do not report older Gemini defaults, Claude Opus 4.6, or Codex GPT-5.4 runs as current baselines.
+
+For new naked/Unaided baselines, run with `--context-mode isolated`. This mode must use neutral temp working directories and sterile temp `HOME`/XDG trees. Provider auth may be copied or passed explicitly, but user/project context files, skills, extensions, MCP config, memories, user hooks, broad built-in tool access, and global agent docs must not be visible. Isolated Claude requires `ANTHROPIC_API_KEY` auth for the strict `--bare` path; Claude Code 2.1.119 documents that `--bare` never reads OAuth/keychain auth and only accepts `ANTHROPIC_API_KEY` or `apiKeyHelper` via `--settings`. Do not fall back to real `HOME` auth or label non-bare OAuth runs as naked baselines.
 
 ## Key Files
 
@@ -114,8 +117,8 @@ For new naked/Unaided baselines, run with `--context-mode isolated`. This mode m
 - [OBSERVED 2026-04-02] **POSIX Issue 8 vs 7**: `readlink`, `realpath`, and `timeout` are now POSIX (Issue 8, 2024). LLMs trained on older data will incorrectly call these "not POSIX." `c99` is now `c17`. The batch `q*` utilities and `fort77` were removed.
 - [OBSERVED 2026-04-03] **Bridge completeness gate**: Incomplete semantic bridge coverage can corrupt Bridge-Aided benchmark runs. `run_benchmark.py --inject-posix` now performs strict preflight validation and exits if `sayance-core.md` or `sayance-tldr.json` drift from 142-utility (macOS subset) coverage.
 - [OBSERVED 2026-04-03] **GitHub merge-gate availability**: `gitguffaw/sayance` is public, so CI-required status checks can be enforced at the branch protection level. Keep `make verify` as the enforcement contract and avoid duplicating private-repo 403-era assumptions.
-- [OBSERVED 2026-04-17] **Codex step-count doubles under real bridge**: Under the shipped `sayance-lookup` contract (Wave-3), Codex (`gpt-5.4`) `mean_step_count` rose from 7.74 (Unaided) to 17.0 (Bridge-Aided) on the 40-question corpus. This is more than the 8.1 → 9.5 spread observed under the retired `get_posix_syntax` simulation contract. The expanded step count comes from internal Codex reasoning, not actual `sayance-lookup` invocations — only 1/40 aided runs called the CLI. Treat ~17 as the new baseline; flag values above ~25 for investigation.
-- [OBSERVED 2026-04-17] **Claude gross billable inflates under bridge**: Under the shipped contract (Wave-3), Claude (`claude-opus-4-6`) `total_billable_tokens` rose ~3× in Bridge-Aided mode (1.36M → 4.13M). The increase is dominated by `cache_read_input_tokens` counted at full rate; the actual *new* prompt tokens added per call are ~10–13K. This is the cold/warm cache asymmetry for the headless `claude -p --output-format json` flow, not a bridge regression. For per-call cost analysis, prefer `input_tokens + cache_creation_input_tokens + output_tokens` over the gross `billable` field.
+- [OBSERVED 2026-04-17] **Codex step-count doubled under real bridge in the retired GPT-5.4 standard**: Under the shipped `sayance-lookup` contract (Wave-3), Codex (`gpt-5.4`) `mean_step_count` rose from 7.74 (Unaided) to 17.0 (Bridge-Aided) on the 40-question corpus. This is more than the 8.1 → 9.5 spread observed under the retired `get_posix_syntax` simulation contract. The expanded step count came from internal Codex reasoning, not actual `sayance-lookup` invocations — only 1/40 aided runs called the CLI. Treat this as historical GPT-5.4 evidence, not the current GPT-5.5 baseline.
+- [OBSERVED 2026-04-17] **Claude gross billable inflated under bridge in the retired Opus 4.6 standard**: Under the shipped contract (Wave-3), Claude (`claude-opus-4-6`) `total_billable_tokens` rose ~3× in Bridge-Aided mode (1.36M → 4.13M). The increase was dominated by `cache_read_input_tokens` counted at full rate; the actual *new* prompt tokens added per call were ~10–13K. This is historical Opus 4.6 evidence, not the current Opus 4.7 baseline. For per-call cost analysis, prefer `input_tokens + cache_creation_input_tokens + output_tokens` over the gross `billable` field.
 - [OBSERVED 2026-04-17] **Bridge-aided lookup rate is low**: Under the shipped contract (Wave-3), only 1/40 aided runs invoked `sayance-lookup` per provider (Claude and Codex each). The Discovery Map injection alone drives the compliance lift; the lookup CLI is a precision fallback rather than the primary mechanism. When investigating an aided regression, check Discovery Map injection integrity first, lookup invocation second.
 - [OBSERVED 2026-04-25] **Unaided context contamination**: Legacy Unaided runs launched provider CLIs from the repository root, allowing Claude to read `CLAUDE.md`, Codex to read `AGENTS.md`/user skills/session environment, and Gemini to read user skills/extensions/MCP/global `GEMINI.md`. An attempted isolated run on 2026-04-25 still preserved real `HOME`, so it is contaminated and must not be used as a naked baseline. A later Gemini isolated run still left admin-level MCP/extensions/skills gates, hooks, broad built-in tools, and plan mode available; treat that run as suspect too. New isolated runs must use sterile temp `HOME`/XDG state plus auth-only allowlisting, disable Gemini admin MCP/extensions/skills, restrict Gemini to the minimal `LSTool` core-tool allowlist required for a valid CLI request, install only the generated `BeforeToolSelection` guard hook that forces `toolConfig.mode = "NONE"`, and avoid `--approval-mode plan` in Unaided mode; ambient mode remains only for historical comparability.
 
