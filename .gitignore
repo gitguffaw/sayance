@@ -16,10 +16,16 @@ venv/
 .claude/worktrees/
 .claude/settings.json
 .claude/settings.local.json
+.claude/scheduled_tasks.lock
 
 # Benchmark artifacts and ephemera
 results/**
 state/
+agentic-project-template/
+HANDOFF.md
+docs/blog-agentic-experience-data-points.md
+docs/blog-experience-agentic-development.md
+docs/retrospective.md
 docs/archive/
 docs/solutions/workflow/
 docs/solutions/logic-errors/
