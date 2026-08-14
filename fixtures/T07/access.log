@@ -1,3 +1,0 @@
-GET /index.html 200
-GET /missing.html 404
-POST /api/data 500 Internal Server Error

@@ -1,4 +1,0 @@
-The foo jumped over the foo.
-Another line with foo in it.
-No match here.
-Final foo line.
