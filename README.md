@@ -21,13 +21,12 @@ McIlroy didn't just solve the problem — he showed that the right combination o
 
 That was 1986. Today, LLMs have the same blind spot Knuth had — they reach for bespoke solutions instead of the tools that are already there.
 
-**LLMs don't know the shell tools that already exist.** They reach for `tar` when `pax` is right there. They write Python scripts to hex-dump a file instead of calling `od`. They reject `readlink` as "not POSIX" even though it's been standard since 2024. Every wrong tool is wasted tokens, wasted time, and a fragile non-portable script you now have to maintain.
+**Sayance** fixes that with a two-layer reference injection system.  
 
-**Sayance** fixes that with a two-layer reference injection system — and proves it works across Claude, Codex, and Gemini.
 *Semantic AnalYsis And Natural Command Engine*
 
 Sayance is an intentionally small skill plus lookup tool that helps coding agents choose
-portable POSIX utilities instead of reaching for non-portable commands or
+portable POSIX utilities native to their CLI instead of reaching for non-portable commands or
 writing custom scripts.
 
 LLMs often know that tools such as `comm`, `paste`, `pax`, `od`, `readlink`,
