@@ -3,7 +3,7 @@ CODEX_SKILL_DIR  := $(HOME)/.codex/skills/sayance
 BIN_DIR          := $(HOME)/.local/bin
 REPO_DIR         := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
-.PHONY: install install-all install-claude install-codex uninstall uninstall-claude uninstall-codex test test-product test-product-negative test-product-live-claude test-product-live-codex test-repo verify
+.PHONY: install install-all install-claude install-codex uninstall uninstall-claude uninstall-codex test test-data test-product test-product-negative verify
 
 install: install-all
 
@@ -89,18 +89,14 @@ test-product:
 test-product-negative:
 	@./scripts/test_product_negative.sh
 
-test-product-live-claude:
-	@SAYANCE_LIVE_CANARY=1 ./scripts/test_product_live.sh claude
-
-test-product-live-codex:
-	@SAYANCE_LIVE_CANARY=1 ./scripts/test_product_live.sh codex
-
-test-repo:
-	@python3 scripts/verify_repo.py
+test-data:
+	@python3 -m json.tool skill/sayance-tldr.json >/dev/null
+	@python3 -c 'import json, pathlib; scope={line.strip() for line in pathlib.Path("macOS-posix-utilities.txt").read_text().splitlines() if line.strip()}; data=set(json.loads(pathlib.Path("skill/sayance-tldr.json").read_text())); assert len(scope)==142, len(scope); assert len(data)==142, len(data); assert scope==data, sorted(scope ^ data)'
+	@test "$$(cat VERSION)" = "$$(cat skill/VERSION)"
 
 verify:
-	python3 -m py_compile run_benchmark.py benchmark_core/*.py
-	python3 -m unittest discover -s tests -t .
-	$(MAKE) test-repo
+	python3 -m py_compile skill/sayance-lookup
+	$(MAKE) test-data
+	$(MAKE) test
 	$(MAKE) test-product
 	$(MAKE) test-product-negative

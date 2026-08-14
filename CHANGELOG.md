@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased] — 2026-04-17
 
+### Removed
+- Removed non-product benchmark, fixture, test, internal documentation, agent
+  configuration, and review-template files from the public repository tree.
+  The public repo now contains the Sayance skill, lookup CLI, lookup data,
+  installer, license, README, changelog, and product validation scripts.
+
 ### Changed
 - Repaired the bridge contract from `get_posix_syntax` simulation wiring to the
   shipped `sayance-lookup` CLI contract. Supersedes the `TOOL_CALL` framing that
