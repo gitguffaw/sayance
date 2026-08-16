@@ -13,6 +13,8 @@ __pycache__/
 venv/
 
 # Agent-CLI local state (personal, not shared)
+AGENTS.md
+CLAUDE.md
 .codex/
 .claude/worktrees/
 .claude/settings.json
