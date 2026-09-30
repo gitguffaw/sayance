@@ -3,8 +3,12 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
     branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
   verify:
@@ -103,3 +107,61 @@ jobs:
             rm -rf "$tmp_home"
           done
           echo "public install OK: claude and codex targets"
+      - name: Verify Omarchy profile installs
+        run: |
+          set -euo pipefail
+          expected="$(cat VERSION)"
+          script_url="https://raw.githubusercontent.com/${{ github.repository }}/${{ steps.ref.outputs.sha }}/install.sh"
+          for target in all claude codex; do
+            tmp_home="$(mktemp -d)"
+            curl -fsSL "$script_url" \
+              | HOME="$tmp_home" SAYANCE_REF="${{ steps.ref.outputs.sha }}" SAYANCE_PROFILE=omarchy bash -s "$target"
+            cli="$tmp_home/.local/bin/sayance-lookup"
+            actual="$(HOME="$tmp_home" "$cli" --version | awk '{print $2}')"
+            if [ "$expected" != "$actual" ]; then
+              echo "Omarchy VERSION mismatch for $target: repo=$expected installed=$actual"
+              exit 1
+            fi
+            "$cli" --local-tools | grep -q '^rg:'
+            "$cli" tar | grep -q 'Omarchy:'
+            case "$target" in
+              all)
+                grep -q '^# Sayance for Omarchy$' "$tmp_home/.claude/skills/sayance/SKILL.md"
+                grep -q '^# Sayance for Omarchy$' "$tmp_home/.codex/skills/sayance/SKILL.md"
+                ;;
+              claude)
+                grep -q '^# Sayance for Omarchy$' "$tmp_home/.claude/skills/sayance/SKILL.md"
+                test ! -e "$tmp_home/.codex"
+                ;;
+              codex)
+                grep -q '^# Sayance for Omarchy$' "$tmp_home/.codex/skills/sayance/SKILL.md"
+                test ! -e "$tmp_home/.claude"
+                ;;
+            esac
+            rm -rf "$tmp_home"
+          done
+          echo "public install OK: Omarchy all, claude, and codex targets"
+      - name: Verify stable tag installs
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          set -euo pipefail
+          expected_tag="v$(cat VERSION)"
+          if [ "$GITHUB_REF_NAME" != "$expected_tag" ]; then
+            echo "Tag mismatch: expected $expected_tag, got $GITHUB_REF_NAME"
+            exit 1
+          fi
+          script_url="https://raw.githubusercontent.com/${{ github.repository }}/${GITHUB_REF_NAME}/install.sh"
+          for profile in macos omarchy; do
+            tmp_home="$(mktemp -d)"
+            if [ "$profile" = macos ]; then
+              curl -fsSL "$script_url" | HOME="$tmp_home" bash
+              grep -q '^# Sayance$' "$tmp_home/.codex/skills/sayance/SKILL.md"
+            else
+              curl -fsSL "$script_url" | HOME="$tmp_home" SAYANCE_PROFILE=omarchy bash
+              grep -q '^# Sayance for Omarchy$' "$tmp_home/.codex/skills/sayance/SKILL.md"
+              "$tmp_home/.local/bin/sayance-lookup" --local-tools | grep -q '^rg:'
+            fi
+            test "$("$tmp_home/.local/bin/sayance-lookup" --version)" = "sayance $(cat VERSION)"
+            rm -rf "$tmp_home"
+          done
+          echo "stable tag install OK: $GITHUB_REF_NAME"

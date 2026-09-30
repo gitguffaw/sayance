@@ -4,7 +4,16 @@ All notable changes to Sayance are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] — 2026-04-17
+## [Unreleased]
+
+## [1.1.0] — 2026-09-30
+
+### Added
+- Added a stable, opt-in Omarchy profile with GNU/Linux-local tool guidance and
+  a `--local-tools` lookup surface. Select it with
+  `SAYANCE_PROFILE=omarchy` or `make ... PROFILE=omarchy`.
+- Added cross-profile tests for the macOS/POSIX and Omarchy skill, CLI, and
+  Claude/Codex installation paths.
 
 ### Removed
 - Removed non-product benchmark, fixture, test, internal documentation, agent
@@ -13,6 +22,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   installer, license, README, changelog, and product validation scripts.
 
 ### Changed
+- Kept the macOS/POSIX profile as the unqualified install default. Its
+  Discovery Map, 142-utility catalog, alias behavior, and JSON contract remain
+  separate from the Omarchy profile.
+- Updated the stable installer reference and product version to `v1.1.0`.
 - Repaired the bridge contract from `get_posix_syntax` simulation wiring to the
   shipped `sayance-lookup` CLI contract. Supersedes the `TOOL_CALL` framing that
   v1.0.2 patched.
@@ -130,6 +143,7 @@ First public release.
 - Optional live-canary tests (`SAYANCE_LIVE_CANARY=1 make test-product-live-*`)
   that validate fresh-session bridge activation against real providers.
 
+[1.1.0]: https://github.com/gitguffaw/sayance/releases/tag/v1.1.0
 [1.0.2]: https://github.com/gitguffaw/sayance/releases/tag/v1.0.2
 [1.0.1]: https://github.com/gitguffaw/sayance/releases/tag/v1.0.1
 [1.0.0]: https://github.com/gitguffaw/sayance/releases/tag/v1.0.0

@@ -21,7 +21,9 @@ check_old_brand_artifacts() {
 
 # Sayance — one-line installer
 # Usage (stable, recommended):
-#   curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/v1.0.2/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/v1.1.0/install.sh | bash
+# Usage (Omarchy profile):
+#   curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/v1.1.0/install.sh | SAYANCE_PROFILE=omarchy bash
 # Usage (bleeding-edge main):
 #   curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/main/install.sh | SAYANCE_REF=main bash
 #
@@ -32,9 +34,25 @@ check_old_brand_artifacts() {
 # release shipped with this script). Override with SAYANCE_REF=main to track
 # the development branch.
 
-readonly SAYANCE_REF="${SAYANCE_REF:-v1.0.2}"
+readonly SAYANCE_REF="${SAYANCE_REF:-v1.1.0}"
 readonly REPO_RAW="https://raw.githubusercontent.com/gitguffaw/sayance/${SAYANCE_REF}"
 readonly TARGET="${1:-all}"
+readonly SAYANCE_PROFILE="${SAYANCE_PROFILE:-macos}"
+
+case "${SAYANCE_PROFILE}" in
+  macos)
+    readonly SKILL_SOURCE="skill/SKILL.md"
+    readonly LOOKUP_SOURCE="skill/sayance-lookup"
+    ;;
+  omarchy)
+    readonly SKILL_SOURCE="profiles/omarchy/SKILL.md"
+    readonly LOOKUP_SOURCE="profiles/omarchy/sayance-lookup"
+    ;;
+  *)
+    echo "Unknown Sayance profile: ${SAYANCE_PROFILE} (expected macos or omarchy)" >&2
+    exit 1
+    ;;
+esac
 
 check_old_brand_artifacts
 
@@ -50,11 +68,11 @@ install_for() {
 
   local bin_dir="${HOME}/.local/bin"
 
-  echo "Installing Sayance for ${agent}..."
+  echo "Installing Sayance (${SAYANCE_PROFILE}) for ${agent}..."
   mkdir -p "${skill_dir}" "${bin_dir}"
 
-  curl -fsSL "${REPO_RAW}/skill/SKILL.md"        -o "${skill_dir}/SKILL.md"
-  curl -fsSL "${REPO_RAW}/skill/sayance-lookup"     -o "${skill_dir}/sayance-lookup"
+  curl -fsSL "${REPO_RAW}/${SKILL_SOURCE}"           -o "${skill_dir}/SKILL.md"
+  curl -fsSL "${REPO_RAW}/${LOOKUP_SOURCE}"          -o "${skill_dir}/sayance-lookup"
   curl -fsSL "${REPO_RAW}/skill/sayance-tldr.json"  -o "${skill_dir}/sayance-tldr.json"
   curl -fsSL "${REPO_RAW}/skill/VERSION"           -o "${skill_dir}/VERSION"
 
