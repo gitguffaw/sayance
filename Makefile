@@ -2,8 +2,19 @@ CLAUDE_SKILL_DIR := $(HOME)/.claude/skills/sayance
 CODEX_SKILL_DIR  := $(HOME)/.codex/skills/sayance
 BIN_DIR          := $(HOME)/.local/bin
 REPO_DIR         := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+PROFILE          ?= macos
 
-.PHONY: install install-all install-claude install-codex uninstall uninstall-claude uninstall-codex test test-data test-product test-product-negative verify
+ifeq ($(PROFILE),macos)
+SKILL_SOURCE     := skill/SKILL.md
+LOOKUP_SOURCE    := skill/sayance-lookup
+else ifeq ($(PROFILE),omarchy)
+SKILL_SOURCE     := profiles/omarchy/SKILL.md
+LOOKUP_SOURCE    := profiles/omarchy/sayance-lookup
+else
+$(error Unknown PROFILE '$(PROFILE)'; expected macos or omarchy)
+endif
+
+.PHONY: install install-all install-claude install-codex uninstall uninstall-claude uninstall-codex test test-data test-product test-product-negative test-profiles verify
 
 install: install-all
 
@@ -13,13 +24,14 @@ install-all: install-claude install-codex
 	@echo "  Claude -> $(CLAUDE_SKILL_DIR)/"
 	@echo "  Codex  -> $(CODEX_SKILL_DIR)/"
 	@echo "  CLI    -> $(BIN_DIR)/sayance-lookup"
+	@echo "  Profile -> $(PROFILE)"
 	@echo ""
 	@echo "Restart Claude Code / Codex to load the skill."
 
 install-claude:
 	@mkdir -p $(CLAUDE_SKILL_DIR) $(BIN_DIR)
-	cp skill/SKILL.md $(CLAUDE_SKILL_DIR)/SKILL.md
-	cp skill/sayance-lookup $(CLAUDE_SKILL_DIR)/sayance-lookup
+	cp $(SKILL_SOURCE) $(CLAUDE_SKILL_DIR)/SKILL.md
+	cp $(LOOKUP_SOURCE) $(CLAUDE_SKILL_DIR)/sayance-lookup
 	cp skill/sayance-tldr.json $(CLAUDE_SKILL_DIR)/sayance-tldr.json
 	cp skill/VERSION $(CLAUDE_SKILL_DIR)/VERSION
 	chmod +x $(CLAUDE_SKILL_DIR)/sayance-lookup
@@ -27,8 +39,8 @@ install-claude:
 
 install-codex:
 	@mkdir -p $(CODEX_SKILL_DIR) $(BIN_DIR)
-	cp skill/SKILL.md $(CODEX_SKILL_DIR)/SKILL.md
-	cp skill/sayance-lookup $(CODEX_SKILL_DIR)/sayance-lookup
+	cp $(SKILL_SOURCE) $(CODEX_SKILL_DIR)/SKILL.md
+	cp $(LOOKUP_SOURCE) $(CODEX_SKILL_DIR)/sayance-lookup
 	cp skill/sayance-tldr.json $(CODEX_SKILL_DIR)/sayance-tldr.json
 	cp skill/VERSION $(CODEX_SKILL_DIR)/VERSION
 	chmod +x $(CODEX_SKILL_DIR)/sayance-lookup
@@ -89,14 +101,20 @@ test-product:
 test-product-negative:
 	@./scripts/test_product_negative.sh
 
+test-profiles:
+	@./scripts/test_profiles.sh
+
 test-data:
 	@python3 -m json.tool skill/sayance-tldr.json >/dev/null
 	@python3 -c 'import json, pathlib; scope={line.strip() for line in pathlib.Path("macOS-posix-utilities.txt").read_text().splitlines() if line.strip()}; data=set(json.loads(pathlib.Path("skill/sayance-tldr.json").read_text())); assert len(scope)==142, len(scope); assert len(data)==142, len(data); assert scope==data, sorted(scope ^ data)'
 	@test "$$(cat VERSION)" = "$$(cat skill/VERSION)"
+	@version="$$(cat VERSION)"; grep -q "^  version: $$version$$" skill/SKILL.md
+	@version="$$(cat VERSION)"; grep -q "^  version: $$version$$" profiles/omarchy/SKILL.md
 
 verify:
-	python3 -m py_compile skill/sayance-lookup
+	python3 -m py_compile skill/sayance-lookup profiles/omarchy/sayance-lookup
 	$(MAKE) test-data
 	$(MAKE) test
 	$(MAKE) test-product
 	$(MAKE) test-product-negative
+	$(MAKE) test-profiles

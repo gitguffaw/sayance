@@ -87,26 +87,60 @@ directory is on your `PATH` before restarting your agent:
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
+Both profiles use the existing `~/.claude/skills/sayance`,
+`~/.codex/skills/sayance`, and `~/.local/bin/sayance-lookup` destinations.
+Omarchy is an explicit profile choice, not a new destination.
+
+### macOS / POSIX (default)
+
 Install for both Claude Code and Codex:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/v1.0.2/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/v1.1.0/install.sh | bash
 ```
 
 Install for one agent:
 
 ```bash
 # Claude Code only
-curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/v1.0.2/install.sh | bash -s claude
+curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/v1.1.0/install.sh | bash -s claude
 
 # Codex only
-curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/v1.0.2/install.sh | bash -s codex
+curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/v1.1.0/install.sh | bash -s codex
+```
+
+### Omarchy
+
+Select the Omarchy profile explicitly. Agent targets remain `claude`, `codex`,
+or the default `all`:
+
+```bash
+# Claude Code + Codex
+curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/v1.1.0/install.sh | SAYANCE_PROFILE=omarchy bash
+
+# Claude Code only
+curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/v1.1.0/install.sh | SAYANCE_PROFILE=omarchy bash -s claude
+
+# Codex only
+curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/v1.1.0/install.sh | SAYANCE_PROFILE=omarchy bash -s codex
 ```
 
 Track the current `main` branch instead of a release tag:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/main/install.sh | SAYANCE_REF=main bash
+
+# Omarchy from main
+curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/main/install.sh | SAYANCE_REF=main SAYANCE_PROFILE=omarchy bash
+```
+
+The previous release remains available at its immutable `v1.0.2` URLs for
+users who need that exact product version:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/v1.0.2/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/v1.0.2/install.sh | bash -s claude
+curl -fsSL https://raw.githubusercontent.com/gitguffaw/sayance/v1.0.2/install.sh | bash -s codex
 ```
 
 ## Source Install
